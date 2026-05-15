@@ -1,0 +1,279 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign up · GurmukhiOCR{% endblock %}
+{% block head_extra %}
+    <style>
+        .pw-requirements {
+            margin: 0.65rem 0 0;
+            padding: 0.65rem 0.75rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.12);
+        }
+        body.light-mode .pw-requirements {
+            background: rgba(0, 0, 0, 0.03);
+        }
+        .pw-requirements-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--faint);
+            margin-bottom: 0.45rem;
+        }
+        .pw-rule-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .pw-rule {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.45rem;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            color: var(--muted);
+            transition: color 0.15s ease;
+        }
+        .pw-rule.is-met {
+            color: var(--text);
+        }
+        .pw-rule-mark {
+            flex-shrink: 0;
+            width: 1.05rem;
+            text-align: center;
+            font-size: 0.72rem;
+            line-height: 1.35;
+            color: var(--faint);
+            transition: color 0.15s ease;
+        }
+        .pw-rule.is-met .pw-rule-mark {
+            color: #4ade80;
+            font-weight: 800;
+        }
+        .pw-rule.is-met .pw-rule-mark::before {
+            content: '✓';
+        }
+        .pw-rule:not(.is-met) .pw-rule-mark::before {
+            content: '○';
+            opacity: 0.45;
+        }
+        #signupSubmit:disabled {
+            opacity: 0.4;
+            filter: grayscale(0.25);
+            box-shadow: none;
+        }
+        #signupSubmit:disabled:hover {
+            box-shadow: none;
+        }
+    </style>
+{% endblock %}
+{% block auth_body %}
+        <div class="auth-card">
+            <p class="auth-kicker">Get started</p>
+            <h1>Create an account</h1>
+            <p class="auth-lede">Free to use. No card required. Check your inbox to confirm your account before signing in.</p>
+            <form class="auth-form" id="signupForm" action="#" method="post">
+                <div class="field">
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+                </div>
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" placeholder="••••••••" required minlength="8" maxlength="128">
+                </div>
+                <div class="field">
+                    <label for="password2">Confirm password</label>
+                    <input id="password2" name="password2" type="password" autocomplete="new-password" placeholder="••••••••" required minlength="8" maxlength="128">
+                </div>
+                <div class="pw-requirements" id="pwRequirements" aria-live="polite">
+                    <p class="pw-requirements-title">Password strength</p>
+                    <ul class="pw-rule-list">
+                        <li class="pw-rule" id="pwRuleLen" data-rule="len">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>At least 8 characters</span>
+                        </li>
+                        <li class="pw-rule" id="pwRuleUpper" data-rule="upper">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>One uppercase letter (A–Z)</span>
+                        </li>
+                        <li class="pw-rule" id="pwRuleLower" data-rule="lower">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>One lowercase letter (a–z)</span>
+                        </li>
+                        <li class="pw-rule" id="pwRuleDigit" data-rule="digit">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>One number (0–9)</span>
+                        </li>
+                        <li class="pw-rule" id="pwRuleSymbol" data-rule="symbol">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>One symbol (e.g. !@#$%)</span>
+                        </li>
+                        <li class="pw-rule" id="pwRuleMatch" data-rule="match">
+                            <span class="pw-rule-mark" aria-hidden="true"></span>
+                            <span>Both password fields match</span>
+                        </li>
+                    </ul>
+                </div>
+                <p id="authFeedback" class="auth-feedback" role="alert" hidden></p>
+                <button type="submit" class="btn-primary" id="signupSubmit" disabled>Create account</button>
+            </form>
+            <p class="auth-footer">Already have an account? <a href="/login">Log in</a></p>
+        </div>
+{% endblock %}
+{% block scripts_extra %}
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const cfgEl = document.getElementById('supabase-config');
+        let supabase = null;
+        if (cfgEl) {
+            try {
+                const cfg = JSON.parse(cfgEl.textContent);
+                const key = cfg.publishableKey || cfg.anonKey;
+                if (cfg.url && key) {
+                    supabase = createClient(cfg.url, key);
+                }
+            } catch (e) {
+                console.warn('Supabase config parse failed', e);
+            }
+        }
+
+        function showAuthFeedback(el, message, kind, useHtml) {
+            if (!el) return;
+            el.classList.remove('is-error', 'is-success');
+            if (!message) {
+                el.textContent = '';
+                el.hidden = true;
+                return;
+            }
+            el.hidden = false;
+            if (useHtml) {
+                el.innerHTML = message;
+            } else {
+                el.textContent = message;
+            }
+            if (kind === 'error') el.classList.add('is-error');
+            if (kind === 'success') el.classList.add('is-success');
+        }
+
+        const form = document.getElementById('signupForm');
+        const feedback = document.getElementById('authFeedback');
+        const submitBtn = document.getElementById('signupSubmit');
+        const pwInput = document.getElementById('password');
+        const pw2Input = document.getElementById('password2');
+
+        function evaluatePasswordRules(password, password2) {
+            const p = password || '';
+            const p2 = password2 || '';
+            return {
+                len: p.length >= 8,
+                upper: /[A-Z]/.test(p),
+                lower: /[a-z]/.test(p),
+                digit: /[0-9]/.test(p),
+                symbol: /[^A-Za-z0-9]/.test(p),
+                match: p.length > 0 && p === p2,
+            };
+        }
+
+        function allRulesMet(r) {
+            return r.len && r.upper && r.lower && r.digit && r.symbol && r.match;
+        }
+
+        let signupSubmitting = false;
+
+        function updateSignupPasswordUI() {
+            if (!form || !submitBtn) return;
+            const pw = form.password ? form.password.value : '';
+            const pw2 = form.password2 ? form.password2.value : '';
+            const r = evaluatePasswordRules(pw, pw2);
+            const ids = {
+                len: 'pwRuleLen',
+                upper: 'pwRuleUpper',
+                lower: 'pwRuleLower',
+                digit: 'pwRuleDigit',
+                symbol: 'pwRuleSymbol',
+                match: 'pwRuleMatch',
+            };
+            Object.keys(ids).forEach(function (key) {
+                const el = document.getElementById(ids[key]);
+                if (el) el.classList.toggle('is-met', !!r[key]);
+            });
+            submitBtn.disabled = signupSubmitting || !allRulesMet(r);
+        }
+
+        if (form && submitBtn && pwInput && pw2Input) {
+            ['input', 'blur', 'paste'].forEach(function (evt) {
+                pwInput.addEventListener(evt, function () {
+                    setTimeout(updateSignupPasswordUI, 0);
+                });
+                pw2Input.addEventListener(evt, function () {
+                    setTimeout(updateSignupPasswordUI, 0);
+                });
+            });
+            updateSignupPasswordUI();
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                showAuthFeedback(feedback, '', null);
+                if (!supabase) {
+                    showAuthFeedback(
+                        feedback,
+                        'Supabase is not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in your environment (or legacy SUPABASE_ANON_KEY / NEXT_PUBLIC_* equivalents).',
+                        'error'
+                    );
+                    return;
+                }
+                const email = form.email.value.trim();
+                const password = form.password.value;
+                const password2 = form.password2.value;
+                if (!email || !password) {
+                    showAuthFeedback(feedback, 'Enter email and password.', 'error');
+                    return;
+                }
+                const rules = evaluatePasswordRules(password, password2);
+                if (!allRulesMet(rules)) {
+                    showAuthFeedback(
+                        feedback,
+                        'Use a stronger password: meet every item in the checklist below, including matching both fields.',
+                        'error'
+                    );
+                    return;
+                }
+                signupSubmitting = true;
+                updateSignupPasswordUI();
+                const prev = submitBtn.textContent;
+                submitBtn.textContent = 'Creating account…';
+                try {
+                    const { data, error } = await supabase.auth.signUp({
+                        email,
+                        password,
+                    });
+                    if (error) {
+                        showAuthFeedback(feedback, error.message, 'error');
+                        return;
+                    }
+                    if (data.session) {
+                        showAuthFeedback(feedback, 'Account ready. Redirecting…', 'success');
+                        window.location.href = '/dashboard2';
+                    } else {
+                        showAuthFeedback(
+                            feedback,
+                            'Your confirmation email will come from <strong>Supabase Auth</strong>. Check your inbox to confirm your account, then return here to log in.',
+                            'success',
+                            true
+                        );
+                    }
+                } catch (err) {
+                    showAuthFeedback(feedback, (err && err.message) || 'Something went wrong.', 'error');
+                } finally {
+                    signupSubmitting = false;
+                    submitBtn.textContent = prev;
+                    updateSignupPasswordUI();
+                }
+            });
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,78 @@
+<div class="modal-overlay legal-modal-overlay" id="legalPrivacyModal" role="dialog" aria-modal="true" aria-labelledby="legalPrivacyTitle" hidden>
+    <div class="modal-dialog">
+        <button type="button" class="modal-close legal-modal-close" aria-label="Close">&times;</button>
+        <h2 id="legalPrivacyTitle">Privacy policy</h2>
+        <div class="legal-modal-body">
+            {% include "_legal_privacy_body.html" %}
+        </div>
+    </div>
+</div>
+<div class="modal-overlay legal-modal-overlay" id="legalTermsModal" role="dialog" aria-modal="true" aria-labelledby="legalTermsTitle" hidden>
+    <div class="modal-dialog">
+        <button type="button" class="modal-close legal-modal-close" aria-label="Close">&times;</button>
+        <h2 id="legalTermsTitle">Terms of service</h2>
+        <div class="legal-modal-body">
+            {% include "_legal_terms_body.html" %}
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+        var modals = {
+            privacy: document.getElementById('legalPrivacyModal'),
+            terms: document.getElementById('legalTermsModal'),
+        };
+        var openId = null;
+
+        function openLegal(which) {
+            var el = modals[which];
+            if (!el) return;
+            if (openId && modals[openId] && modals[openId] !== el) {
+                closeLegal(openId);
+            }
+            openId = which;
+            el.hidden = false;
+            el.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            var closeBtn = el.querySelector('.legal-modal-close');
+            if (closeBtn) closeBtn.focus();
+        }
+
+        function closeLegal(which) {
+            var el = modals[which];
+            if (!el) return;
+            el.hidden = true;
+            el.classList.remove('is-open');
+            if (openId === which) {
+                openId = null;
+                document.body.style.overflow = '';
+            }
+        }
+
+        document.querySelectorAll('[data-legal-open]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var which = btn.getAttribute('data-legal-open');
+                if (which) openLegal(which);
+            });
+        });
+
+        Object.keys(modals).forEach(function (which) {
+            var el = modals[which];
+            if (!el) return;
+            var closeBtn = el.querySelector('.legal-modal-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function () {
+                    closeLegal(which);
+                });
+            }
+            el.addEventListener('click', function (e) {
+                if (e.target === el) closeLegal(which);
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape' || !openId) return;
+            closeLegal(openId);
+        });
+    })();
+</script>

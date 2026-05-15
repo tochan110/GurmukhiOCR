@@ -1,0 +1,50 @@
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+    (function () {
+        var cfgEl = document.getElementById('supabase-config');
+        var guest = document.getElementById('navAuthGuest');
+        var user = document.getElementById('navAuthUser');
+        var logoutBtn = document.getElementById('navLogoutBtn');
+        var heroOpenDashboardCta = document.getElementById('heroOpenDashboardCta');
+        if (!cfgEl || !guest) return;
+        try {
+            var cfg = JSON.parse(cfgEl.textContent);
+            var key = cfg.publishableKey || cfg.anonKey;
+            if (!cfg.url || !key) return;
+            var supabase = createClient(cfg.url, key);
+            function applyAuthNav(session) {
+                if (session) {
+                    guest.classList.add('is-hidden');
+                    if (user) user.classList.remove('is-hidden');
+                } else {
+                    guest.classList.remove('is-hidden');
+                    if (user) user.classList.add('is-hidden');
+                }
+                if (heroOpenDashboardCta) {
+                    heroOpenDashboardCta.setAttribute('href', session ? '/dashboard2' : '/signup');
+                }
+            }
+            supabase.auth.getSession().then(function (_ref) {
+                applyAuthNav(_ref.data && _ref.data.session);
+            });
+            supabase.auth.onAuthStateChange(function (_event, session) {
+                applyAuthNav(session);
+            });
+            if (logoutBtn && user) {
+                logoutBtn.addEventListener('click', function () {
+                    logoutBtn.disabled = true;
+                    supabase.auth
+                        .signOut()
+                        .catch(function (err) {
+                            console.warn('Sign out failed', err);
+                        })
+                        .finally(function () {
+                            window.location.href = '/';
+                        });
+                });
+            }
+        } catch (e) {
+            console.warn('Supabase nav session check failed', e);
+        }
+    })();
+</script>

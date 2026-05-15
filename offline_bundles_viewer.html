@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Offline Gurmukhi OCR Bundles Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg-primary: linear-gradient(135deg, #2a2a3a 0%, #1f1f2e 50%, #2d2d3d 100%);
+            --bg-secondary: rgba(10, 10, 18, 0.85);
+            --bg-tertiary: #11121b;
+            --bg-editable: #1a1b25;
+            --text-primary: #e8e8e8;
+            --text-secondary: rgba(220, 220, 240, 0.8);
+            --text-tertiary: rgba(210, 210, 230, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --shadow: 0 16px 30px rgba(0, 0, 0, 0.65);
+            --header-bg: linear-gradient(135deg, #1a1a24 0%, #2a2a3a 100%);
+        }
+
+        body.light-mode {
+            --bg-primary: linear-gradient(135deg, #f5f5f7 0%, #e8e8ea 50%, #f0f0f2 100%);
+            --bg-secondary: rgba(255, 255, 255, 0.9);
+            --bg-tertiary: #ffffff;
+            --bg-editable: #f8f8f8;
+            --text-primary: #1a1a1a;
+            --text-secondary: rgba(60, 60, 80, 0.9);
+            --text-tertiary: rgba(80, 80, 100, 0.8);
+            --border-color: rgba(0, 0, 0, 0.1);
+            --border-hover: rgba(0, 0, 0, 0.15);
+            --shadow: 0 16px 30px rgba(0, 0, 0, 0.1);
+            --header-bg: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        header {
+            background: var(--header-bg);
+            padding: 1.5rem 2rem;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.light-mode header {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-hover);
+        }
+
+        header h1 {
+            font-size: 1.7rem;
+            font-weight: 600;
+        }
+
+        header p {
+            margin-top: 0.4rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .top-bar {
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .folder-btn {
+            background: var(--bg-secondary);
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+
+        .folder-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-hover);
+        }
+
+        .folder-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .folder-info {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .folder-path {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.8rem;
+            color: var(--text-tertiary);
+            margin-left: 0.5rem;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            gap: 1.25rem;
+            padding: 0 2rem 2rem;
+            min-height: 0;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-radius: 18px;
+            padding: 1rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .bundles-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        .bundle-item {
+            padding: 0.6rem 0.7rem;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 0.35rem;
+            background: var(--bg-tertiary);
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.05s ease;
+            font-size: 0.9rem;
+        }
+
+        body.light-mode .bundle-item {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .bundle-item:hover {
+            background: var(--bg-editable);
+            border-color: var(--border-hover);
+        }
+
+        .bundle-item.active {
+            background: rgba(143, 148, 251, 0.18);
+            border-color: rgba(143, 148, 251, 0.9);
+        }
+
+        body.light-mode .bundle-item.active {
+            background: rgba(143, 148, 251, 0.25);
+            border-color: rgba(143, 148, 251, 1);
+        }
+
+        .bundle-name {
+            display: block;
+            font-weight: 500;
+        }
+
+        .bundle-meta {
+            display: block;
+            margin-top: 0.2rem;
+            font-size: 0.72rem;
+            color: var(--text-tertiary);
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            gap: 1.25rem;
+            min-height: 0;
+        }
+
+        .pdf-panel,
+        .text-panel {
+            flex: 1;
+            background: var(--bg-secondary);
+            border-radius: 18px;
+            padding: 0.75rem 0.9rem 0.9rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .panel-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .page-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+        }
+
+        .page-btn {
+            padding: 0.25rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--bg-tertiary);
+            border-color: var(--border-hover);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .page-info {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .pdf-viewer-wrapper {
+            flex: 1;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: background 0.3s ease;
+        }
+
+        .pdf-viewer {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: var(--bg-tertiary);
+        }
+
+        .empty-state {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .edit-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .edit-btn, .save-btn, .cancel-btn {
+            padding: 0.4rem 0.8rem;
+            background: rgba(58, 74, 106, 0.6);
+            color: var(--text-primary);
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        body.light-mode .edit-btn, body.light-mode .save-btn, body.light-mode .cancel-btn {
+            background: rgba(58, 74, 106, 0.8);
+        }
+
+        .edit-btn:hover, .save-btn:hover, .cancel-btn:hover {
+            background: rgba(74, 90, 122, 0.8);
+            border-color: rgba(120, 160, 255, 0.5);
+        }
+
+        body.light-mode .edit-btn:hover, body.light-mode .save-btn:hover, body.light-mode .cancel-btn:hover {
+            background: rgba(74, 90, 122, 1);
+        }
+
+        .save-btn {
+            background: rgba(42, 90, 58, 0.6);
+        }
+
+        .save-btn:hover {
+            background: rgba(58, 106, 74, 0.8);
+        }
+
+        .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .cancel-btn {
+            background: rgba(90, 58, 42, 0.6);
+        }
+
+        .cancel-btn:hover {
+            background: rgba(106, 74, 58, 0.8);
+        }
+
+        .generate-txt-btn {
+            padding: 0.4rem 0.8rem;
+            background: rgba(90, 58, 106, 0.6);
+            color: var(--text-primary);
+            border: 1px solid rgba(160, 120, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        body.light-mode .generate-txt-btn {
+            background: rgba(90, 58, 106, 0.8);
+        }
+
+        .generate-txt-btn:hover {
+            background: rgba(106, 74, 122, 0.8);
+            border-color: rgba(160, 120, 255, 0.5);
+        }
+
+        body.light-mode .generate-txt-btn:hover {
+            background: rgba(106, 74, 122, 1);
+        }
+
+        .generate-txt-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .text-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+            font-size: 1.3rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            color: var(--text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .text-content.editable {
+            background: var(--bg-editable);
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            outline: none;
+        }
+
+        .text-content code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.85rem;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            padding: 0.4rem 2rem 0.6rem;
+        }
+
+        .status span {
+            opacity: 0.9;
+        }
+
+        @media (max-width: 960px) {
+            .main {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                flex: 0 0 auto;
+                max-height: 220px;
+            }
+            .content {
+                flex-direction: column;
+            }
+            .pdf-panel,
+            .text-panel {
+                height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div>
+        <h1>ਗੁਰਮੁੱਖੀ Optical ਅੱਖਰ ਪਛਾਣ – Offline Bundles Viewer</h1>
+        <p>Open and inspect OCR bundles (PDF + JSON) directly from the filesystem, without the Flask server.</p>
+    </div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">
+        <span id="themeIcon">🌙</span>
+        <span id="themeText">Dark</span>
+    </button>
+</header>
+
+<div class="top-bar">
+    <button class="folder-btn" id="selectFolderBtn">
+        📂 Select bundles folder
+    </button>
+    <div class="folder-info" id="folderInfo">
+        Click to select your <code>uploads/bundles</code> directory.
+    </div>
+    <div class="folder-path" id="folderPath" style="display: none;"></div>
+</div>
+
+<div class="status" id="statusBar">
+    <span>No folder selected.</span>
+</div>
+
+<div class="main">
+    <aside class="sidebar">
+        <div class="sidebar-title">File Bundles</div>
+        <div class="bundles-list" id="bundlesList">
+            <div class="empty-state">
+                Choose the <code>uploads/bundles</code> folder to load bundles.
+            </div>
+        </div>
+    </aside>
+
+    <section class="content">
+        <div class="pdf-panel">
+            <div class="panel-header">
+                <div class="panel-title">PDF Viewer</div>
+                <div class="page-info" id="pdfInfo">No bundle selected</div>
+            </div>
+            <div class="pdf-viewer-wrapper" id="pdfWrapper">
+                <div class="empty-state">
+                    Select a bundle to display its PDF.
+                </div>
+            </div>
+        </div>
+
+        <div class="text-panel">
+            <div class="panel-header">
+                <div class="panel-title">Extracted Text (per page)</div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <div class="edit-controls">
+                        <button class="edit-btn" id="editBtn" style="display: none;">Edit</button>
+                        <button class="save-btn" id="saveBtn" style="display: none;">Save</button>
+                        <button class="cancel-btn" id="cancelBtn" style="display: none;">Cancel</button>
+                        <button class="generate-txt-btn" id="generateTxtBtn" style="display: none;">Generate Text File</button>
+                    </div>
+                    <div class="page-controls">
+                        <button class="page-btn" id="prevPageBtn" disabled>← Prev</button>
+                        <span class="page-info" id="pageLabel">Page 0 / 0</span>
+                        <button class="page-btn" id="nextPageBtn" disabled>Next →</button>
+                    </div>
+                </div>
+            </div>
+            <div class="text-content" id="textContent">
+                Select a bundle to view page text.
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+(function() {
+    const selectFolderBtn = document.getElementById('selectFolderBtn');
+    const folderInfo = document.getElementById('folderInfo');
+    const folderPath = document.getElementById('folderPath');
+    const statusBar = document.getElementById('statusBar');
+    const bundlesList = document.getElementById('bundlesList');
+    const pdfWrapper = document.getElementById('pdfWrapper');
+    const pdfInfo = document.getElementById('pdfInfo');
+    const textContent = document.getElementById('textContent');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageLabel = document.getElementById('pageLabel');
+    const editBtn = document.getElementById('editBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const generateTxtBtn = document.getElementById('generateTxtBtn');
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
+
+    // Theme management
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-mode');
+            themeIcon.textContent = '☀️';
+            themeText.textContent = 'Light';
+        } else {
+            document.body.classList.remove('light-mode');
+            themeIcon.textContent = '🌙';
+            themeText.textContent = 'Dark';
+        }
+    }
+
+    themeToggle.addEventListener('click', () => {
+        const isLight = document.body.classList.toggle('light-mode');
+        if (isLight) {
+            localStorage.setItem('theme', 'light');
+            themeIcon.textContent = '☀️';
+            themeText.textContent = 'Light';
+        } else {
+            localStorage.setItem('theme', 'dark');
+            themeIcon.textContent = '🌙';
+            themeText.textContent = 'Dark';
+        }
+    });
+
+    // Initialize theme on load
+    initTheme();
+
+    let bundles = []; // { name, files: {pdf, editableJson, originalJson}, jsonData, originalJsonData, pageKeys, currentPage, pdfUrl, dirHandle }
+    let currentBundleIndex = -1;
+    let directoryHandle = null;
+    let isEditMode = false;
+    let originalTextData = null;
+
+    // Check if File System Access API is supported
+    const supportsFileSystemAccess = 'showDirectoryPicker' in window;
+    const isLocalFile = window.location.protocol === 'file:';
+
+    if (!supportsFileSystemAccess) {
+        selectFolderBtn.textContent = '📂 Select bundles folder (fallback)';
+        folderInfo.innerHTML = 'Your browser doesn\'t support direct file writing. Files will be downloaded when saving edits. <br>For direct file writing, use Chrome or Edge.';
+        selectFolderBtn.onclick = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.webkitdirectory = true;
+            input.multiple = true;
+            input.onchange = (e) => onFolderSelectedFallback(e);
+            input.click();
+        };
+    } else if (isLocalFile) {
+        folderInfo.innerHTML = '⚠️ File opened via file:// protocol. Direct file writing may not work. <br>For best results, serve this file via a local server (e.g., <code>python -m http.server</code>).';
+        selectFolderBtn.onclick = selectFolder;
+    } else {
+        selectFolderBtn.onclick = selectFolder;
+    }
+
+    prevPageBtn.addEventListener('click', () => changePage(-1));
+    nextPageBtn.addEventListener('click', () => changePage(1));
+    editBtn.addEventListener('click', enterEditMode);
+    saveBtn.addEventListener('click', saveEdits);
+    cancelBtn.addEventListener('click', exitEditMode);
+    generateTxtBtn.addEventListener('click', generateTextFile);
+
+    function setStatus(msg) {
+        statusBar.innerHTML = '<span>' + msg + '</span>';
+    }
+
+    async function selectFolder() {
+        try {
+            selectFolderBtn.disabled = true;
+            setStatus('Selecting folder...');
+            
+            // Request directory with write permission
+            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            const folderName = directoryHandle.name;
+            
+            folderPath.textContent = '📁 ' + folderName;
+            folderPath.style.display = 'block';
+            folderInfo.textContent = 'Scanning folder for bundles...';
+            setStatus('Scanning folder for bundles...');
+            
+            await scanDirectory(directoryHandle);
+            
+            console.log('Total bundles found:', bundles.length);
+            if (bundles.length === 0) {
+                folderInfo.textContent = 'No bundles found in the selected folder. Make sure you selected the bundles folder containing bundle subdirectories.';
+                setStatus('No bundles found. Check console for details.');
+            } else {
+                folderInfo.textContent = 'Found ' + bundles.length + ' bundle(s). Select one from the list.';
+                setStatus('Found ' + bundles.length + ' bundle(s). Select one from the list.');
+            }
+            renderBundlesList();
+            clearViewer();
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Error selecting folder:', err);
+                setStatus('Error: ' + err.message);
+                folderInfo.textContent = 'Error selecting folder. Please try again.';
+            } else {
+                setStatus('Folder selection cancelled.');
+            }
+        } finally {
+            selectFolderBtn.disabled = false;
+        }
+    }
+
+    async function scanDirectory(dirHandle) {
+        bundles = [];
+        let dirCount = 0;
+        let fileCount = 0;
+        
+        try {
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'directory') {
+                    dirCount++;
+                    // This is a bundle folder
+                    const bundleName = entry.name;
+                    const bundleFiles = {
+                        pdf: null,
+                        editableJson: null,
+                        originalJson: null
+                    };
+                    
+                    try {
+                        // Scan bundle folder for files
+                        for await (const fileEntry of entry.values()) {
+                            if (fileEntry.kind === 'file') {
+                                fileCount++;
+                                const fileName = fileEntry.name.toLowerCase();
+                                if (fileName.endsWith('.pdf')) {
+                                    bundleFiles.pdf = fileEntry;
+                                } else if (fileEntry.name === 'editable.json') {
+                                    bundleFiles.editableJson = fileEntry;
+                                } else if (fileEntry.name === 'original.json') {
+                                    bundleFiles.originalJson = fileEntry;
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error scanning bundle folder:', bundleName, err);
+                        setStatus('Error scanning ' + bundleName + ': ' + err.message);
+                    }
+                    
+                    // Only add bundle if it has at least one file
+                    if (bundleFiles.pdf || bundleFiles.editableJson || bundleFiles.originalJson) {
+                        bundles.push({
+                            name: bundleName,
+                            files: bundleFiles,
+                            dirHandle: entry,
+                            jsonData: null,
+                            pageKeys: [],
+                            currentPage: 1,
+                            pdfUrl: null
+                        });
+                        console.log('Found bundle:', bundleName, bundleFiles);
+                    } else {
+                        console.log('Skipping bundle (no files):', bundleName);
+                    }
+                } else if (entry.kind === 'file') {
+                    // Skip files at the root level
+                    console.log('Skipping root file:', entry.name);
+                }
+            }
+            
+            console.log('Scan complete. Found', bundles.length, 'bundles from', dirCount, 'directories');
+            bundles.sort((a, b) => a.name.localeCompare(b.name));
+        } catch (err) {
+            console.error('Error scanning directory:', err);
+            setStatus('Error scanning directory: ' + err.message);
+            throw err;
+        }
+    }
+
+    function onFolderSelectedFallback(event) {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) {
+            setStatus('No files selected.');
+            return;
+        }
+
+        // The relative paths are from the selected folder.
+        // Expect the user to choose `uploads/bundles`, so relativePath is: bundleName/file.ext
+        const bundleMap = new Map();
+
+        files.forEach(file => {
+            const rel = file.webkitRelativePath || file.name;
+            const parts = rel.split('/');
+            if (parts.length < 2) return;
+
+            const bundleName = parts[0]; // first folder under selected root
+            const fileName = parts.slice(1).join('/');
+
+            if (!bundleMap.has(bundleName)) {
+                bundleMap.set(bundleName, []);
+            }
+            bundleMap.get(bundleName).push({ file, fileName, relPath: rel });
+        });
+
+        bundles = [];
+        bundleMap.forEach((fileEntries, bundleName) => {
+            let pdfFile = null;
+            let editableJson = null;
+            let originalJson = null;
+
+            fileEntries.forEach(entry => {
+                const nameLower = entry.file.name.toLowerCase();
+                if (nameLower.endsWith('.pdf')) {
+                    pdfFile = entry.file;
+                } else if (entry.file.name === 'editable.json') {
+                    editableJson = entry.file;
+                } else if (entry.file.name === 'original.json') {
+                    originalJson = entry.file;
+                }
+            });
+
+            if (pdfFile || editableJson || originalJson) {
+                bundles.push({
+                    name: bundleName,
+                    files: { pdf: pdfFile, editableJson, originalJson },
+                    jsonData: null,
+                    pageKeys: [],
+                    currentPage: 1,
+                    pdfUrl: null
+                });
+            }
+        });
+
+        bundles.sort((a, b) => a.name.localeCompare(b.name));
+
+        folderInfo.textContent = 'Loaded ' + bundles.length + ' bundle(s) from selected folder.';
+        setStatus('Bundles loaded. Select one from the list.');
+        renderBundlesList();
+        clearViewer();
+    }
+
+    function renderBundlesList() {
+        bundlesList.innerHTML = '';
+        console.log('Rendering bundles list. Total bundles:', bundles.length);
+        
+        if (!bundles.length) {
+            bundlesList.innerHTML = '<div class="empty-state">No bundles found in the selected folder.</div>';
+            return;
+        }
+
+        bundles.forEach((bundle, index) => {
+            console.log('Rendering bundle', index, ':', bundle.name);
+            const item = document.createElement('div');
+            item.className = 'bundle-item' + (index === currentBundleIndex ? ' active' : '');
+            item.dataset.index = index;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'bundle-name';
+            nameSpan.textContent = bundle.name;
+            item.appendChild(nameSpan);
+
+            const metaSpan = document.createElement('span');
+            metaSpan.className = 'bundle-meta';
+            const hasPdf = bundle.files.pdf ? 'PDF' : 'no PDF';
+            const hasEditable = bundle.files.editableJson ? 'editable.json' : '';
+            const hasOriginal = bundle.files.originalJson ? 'original.json' : '';
+            metaSpan.textContent = [hasPdf, hasEditable, hasOriginal].filter(Boolean).join(' · ');
+            item.appendChild(metaSpan);
+
+            item.addEventListener('click', () => selectBundle(index));
+            bundlesList.appendChild(item);
+        });
+        
+        console.log('Finished rendering', bundles.length, 'bundles');
+    }
+
+    async function selectBundle(index) {
+        if (index < 0 || index >= bundles.length) return;
+
+        currentBundleIndex = index;
+        bundlesList.querySelectorAll('.bundle-item').forEach(el => {
+            el.classList.remove('active');
+        });
+        const active = bundlesList.querySelector('.bundle-item[data-index="' + index + '"]');
+        if (active) active.classList.add('active');
+
+        const bundle = bundles[index];
+        setStatus('Loading bundle: ' + bundle.name);
+
+        try {
+            // Load PDF
+            await loadPdfForBundle(bundle);
+            // Load JSON (editable first, then original)
+            await loadJsonForBundle(bundle);
+            updateTextForBundle(bundle);
+            setStatus('Loaded bundle: ' + bundle.name);
+            
+            // Reset edit mode when switching bundles
+            if (isEditMode) {
+                exitEditMode();
+            }
+        } catch (err) {
+            console.error(err);
+            textContent.textContent = 'Error loading bundle: ' + err.message;
+            pageLabel.textContent = 'Page 0 / 0';
+            prevPageBtn.disabled = true;
+            nextPageBtn.disabled = true;
+            editBtn.style.display = 'none';
+            setStatus('Error loading bundle: ' + err.message);
+        }
+    }
+
+    async function loadPdfForBundle(bundle) {
+        // Clear previous PDF
+        if (bundle.pdfUrl) {
+            URL.revokeObjectURL(bundle.pdfUrl);
+            bundle.pdfUrl = null;
+        }
+
+        pdfWrapper.innerHTML = '';
+        
+        let pdfFile = bundle.files.pdf;
+        
+        // If using File System Access API, get the file handle
+        if (pdfFile && pdfFile.kind === 'file') {
+            try {
+                pdfFile = await pdfFile.getFile();
+            } catch (err) {
+                console.error('Error getting PDF file:', err);
+                pdfWrapper.innerHTML = '<div class="empty-state">Error loading PDF file.</div>';
+                pdfInfo.textContent = 'Error';
+                return;
+            }
+        }
+        
+        if (!pdfFile) {
+            pdfWrapper.innerHTML = '<div class="empty-state">No PDF file found in this bundle.</div>';
+            pdfInfo.textContent = 'No PDF';
+            return;
+        }
+
+        const url = URL.createObjectURL(pdfFile);
+        bundle.pdfUrl = url;
+
+        const iframe = document.createElement('iframe');
+        iframe.className = 'pdf-viewer';
+        iframe.src = url;
+        pdfWrapper.appendChild(iframe);
+
+        pdfInfo.textContent = pdfFile.name;
+    }
+
+    async function loadJsonForBundle(bundle) {
+        if (bundle.jsonData) {
+            return;
+        }
+
+        // Load editable.json first (for display)
+        let jsonFileHandle = bundle.files.editableJson || bundle.files.originalJson;
+        if (!jsonFileHandle) {
+            textContent.textContent = 'No JSON file found in this bundle.';
+            bundle.jsonData = null;
+            bundle.pageKeys = [];
+            return;
+        }
+
+        // If using File System Access API, get the file handle
+        let jsonFile = jsonFileHandle;
+        if (jsonFileHandle.kind === 'file') {
+            try {
+                jsonFile = await jsonFileHandle.getFile();
+            } catch (err) {
+                console.error('Error getting JSON file:', err);
+                throw new Error('Error accessing JSON file: ' + err.message);
+            }
+        }
+
+        const raw = await jsonFile.text();
+        let data;
+        try {
+            data = JSON.parse(raw);
+        } catch (e) {
+            console.error('JSON parse error', e);
+            throw new Error('JSON parse error: ' + e.message);
+        }
+
+        bundle.jsonData = data;
+        
+        // Also load original.json if available (for merging edits)
+        if (bundle.files.originalJson && bundle.files.originalJson !== jsonFileHandle) {
+            try {
+                let originalFile = bundle.files.originalJson;
+                if (originalFile.kind === 'file') {
+                    originalFile = await originalFile.getFile();
+                }
+                const originalRaw = await originalFile.text();
+                bundle.originalJsonData = JSON.parse(originalRaw);
+            } catch (err) {
+                console.warn('Could not load original.json, will use editable.json for merging:', err);
+                bundle.originalJsonData = null;
+            }
+        } else {
+            bundle.originalJsonData = null;
+        }
+        
+        const keys = Object.keys(data).filter(k => /^page_\d+$/i.test(k));
+        keys.sort((a, b) => {
+            const na = parseInt(a.replace(/\D/g, ''), 10);
+            const nb = parseInt(b.replace(/\D/g, ''), 10);
+            return na - nb;
+        });
+        bundle.pageKeys = keys;
+        bundle.currentPage = keys.length ? 1 : 0;
+    }
+
+    function updateTextForBundle(bundle) {
+        // Don't update if in edit mode
+        if (isEditMode) {
+            return;
+        }
+        
+        if (!bundle.jsonData || !bundle.pageKeys.length) {
+            textContent.textContent = 'No page data found in JSON.';
+            pageLabel.textContent = 'Page 0 / 0';
+            prevPageBtn.disabled = true;
+            nextPageBtn.disabled = true;
+            editBtn.style.display = 'none';
+            return;
+        }
+
+        const totalPages = bundle.pageKeys.length;
+        let pageNum = bundle.currentPage;
+        if (!pageNum || pageNum < 1) pageNum = 1;
+        if (pageNum > totalPages) pageNum = totalPages;
+        bundle.currentPage = pageNum;
+
+        const pageKey = 'page_' + pageNum;
+        const pageData = bundle.jsonData[pageKey];
+
+        let text = '';
+        if (pageData) {
+            if (pageData.full_text) {
+                text = pageData.full_text;
+            } else if (pageData.text) {
+                text = pageData.text;
+            } else {
+                text = JSON.stringify(pageData, null, 2);
+            }
+        } else {
+            text = 'No data for ' + pageKey;
+        }
+
+        textContent.textContent = text;
+        pageLabel.textContent = 'Page ' + pageNum + ' / ' + totalPages;
+        prevPageBtn.disabled = pageNum <= 1;
+        nextPageBtn.disabled = pageNum >= totalPages;
+        
+        // Show edit and generate buttons if bundle is loaded
+        editBtn.style.display = 'block';
+        generateTxtBtn.style.display = 'block';
+    }
+
+    function changePage(delta) {
+        if (currentBundleIndex < 0) return;
+        const bundle = bundles[currentBundleIndex];
+        if (!bundle || !bundle.pageKeys.length) return;
+
+        let newPage = (bundle.currentPage || 1) + delta;
+        if (newPage < 1) newPage = 1;
+        if (newPage > bundle.pageKeys.length) newPage = bundle.pageKeys.length;
+        bundle.currentPage = newPage;
+        updateTextForBundle(bundle);
+    }
+
+    function clearViewer() {
+        pdfWrapper.innerHTML = '<div class="empty-state">Select a bundle to display its PDF.</div>';
+        pdfInfo.textContent = 'No bundle selected';
+        textContent.textContent = 'Select a bundle to view page text.';
+        pageLabel.textContent = 'Page 0 / 0';
+        prevPageBtn.disabled = true;
+        nextPageBtn.disabled = true;
+        currentBundleIndex = -1;
+        editBtn.style.display = 'none';
+        generateTxtBtn.style.display = 'none';
+        exitEditMode();
+    }
+
+    // Edit functionality
+    function enterEditMode() {
+        if (currentBundleIndex < 0) {
+            alert('Please select a bundle first');
+            return;
+        }
+        
+        const bundle = bundles[currentBundleIndex];
+        if (!bundle || !bundle.jsonData) {
+            alert('No data available to edit');
+            return;
+        }
+        
+        isEditMode = true;
+        originalTextData = JSON.parse(JSON.stringify(bundle.jsonData)); // Deep copy
+        
+        // Make text content editable
+        textContent.contentEditable = 'true';
+        textContent.classList.add('editable');
+        
+        // Get current page text
+        const pageKey = 'page_' + bundle.currentPage;
+        const pageData = bundle.jsonData[pageKey];
+        let text = '';
+        if (pageData && pageData.full_text) {
+            text = pageData.full_text;
+        } else if (pageData && pageData.text) {
+            text = pageData.text;
+        }
+        
+        // Set plain text (preserve newlines)
+        textContent.textContent = text;
+        
+        // Reset save button state
+        saveBtn.textContent = 'Save';
+        saveBtn.disabled = false;
+        
+        // Update button visibility
+        editBtn.style.display = 'none';
+        saveBtn.style.display = 'block';
+        cancelBtn.style.display = 'block';
+        
+        // Disable page navigation while editing
+        prevPageBtn.disabled = true;
+        nextPageBtn.disabled = true;
+    }
+
+    function exitEditMode() {
+        isEditMode = false;
+        textContent.contentEditable = 'false';
+        textContent.classList.remove('editable');
+        
+        // Restore original data
+        if (originalTextData && currentBundleIndex >= 0) {
+            bundles[currentBundleIndex].jsonData = JSON.parse(JSON.stringify(originalTextData));
+        }
+        
+        // Update button visibility
+        editBtn.style.display = 'block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        
+        // Re-enable page navigation
+        if (currentBundleIndex >= 0) {
+            const bundle = bundles[currentBundleIndex];
+            updateTextForBundle(bundle);
+        }
+    }
+
+    async function saveEdits() {
+        if (currentBundleIndex < 0) return;
+        
+        const bundle = bundles[currentBundleIndex];
+        if (!bundle || !bundle.jsonData) return;
+        
+        // Save current page edits
+        const pageKey = 'page_' + bundle.currentPage;
+        let editedText = textContent.innerText || textContent.textContent;
+        editedText = editedText.replace(/\s+$/, ''); // Remove trailing whitespace
+        
+        // Update bundleData with edited text from current page
+        if (bundle.jsonData[pageKey]) {
+            bundle.jsonData[pageKey].full_text = editedText;
+            bundle.jsonData[pageKey].text = editedText;
+        }
+        
+        // Show saving indicator
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+        
+        try {
+            // Merge edited text with original structure (preserve coordinates)
+            const originalData = bundle.originalJsonData || originalTextData;
+            if (originalData) {
+                bundle.jsonData = mergeEditedText(originalData, bundle.jsonData);
+            }
+            
+            // Write to editable.json file
+            let downloaded = false;
+            try {
+                await writeJsonFile(bundle);
+            } catch (writeError) {
+                // Check if file was downloaded as fallback
+                if (writeError.message.includes('downloaded instead') || writeError.message.includes('downloaded')) {
+                    downloaded = true;
+                    // Still update the data in memory
+                    originalTextData = JSON.parse(JSON.stringify(bundle.jsonData));
+                    exitEditMode();
+                    setStatus('File downloaded. Please manually replace editable.json in the bundle folder.');
+                    alert('File System Access API not available for direct writing.\n\nThe edited file has been downloaded. Please:\n1. Locate the downloaded editable.json file\n2. Replace the editable.json file in your bundle folder with the downloaded file.');
+                    return;
+                } else {
+                    throw writeError;
+                }
+            }
+            
+            // Update originalTextData to current state
+            originalTextData = JSON.parse(JSON.stringify(bundle.jsonData));
+            
+            // Exit edit mode
+            exitEditMode();
+            setStatus('Changes saved successfully');
+        } catch (error) {
+            console.error('Error saving:', error);
+            alert('Error saving changes: ' + error.message);
+            saveBtn.textContent = 'Save';
+            saveBtn.disabled = false;
+        }
+    }
+
+    async function writeJsonFile(bundle) {
+        // Check if we're using File System Access API
+        if (!supportsFileSystemAccess || !directoryHandle) {
+            // Fallback mode: download the file instead
+            downloadJsonFile(bundle);
+            const error = new Error('File System Access API not available. File downloaded instead.');
+            error.downloaded = true;
+            throw error;
+        }
+        
+        // Ensure we have a writable file handle
+        let fileHandle = bundle.files.editableJson;
+        
+        // Always get a fresh writable file handle from the directory
+        // This ensures we have write permissions
+        if (bundle.dirHandle) {
+            try {
+                // Get or create editable.json in the bundle directory with write permission
+                fileHandle = await bundle.dirHandle.getFileHandle('editable.json', { create: true });
+                // Update the bundle's file reference
+                bundle.files.editableJson = fileHandle;
+            } catch (err) {
+                console.error('Error getting file handle:', err);
+                // Try downloading as fallback
+                downloadJsonFile(bundle);
+                const error = new Error('Could not access editable.json file. File downloaded instead.');
+                error.downloaded = true;
+                throw error;
+            }
+        } else {
+            // No directory handle, try downloading
+            downloadJsonFile(bundle);
+            const error = new Error('No directory handle available. File downloaded instead.');
+            error.downloaded = true;
+            throw error;
+        }
+        
+        const jsonContent = JSON.stringify(bundle.jsonData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        
+        try {
+            // File System Access API - write to file
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            console.log('Successfully wrote editable.json');
+        } catch (err) {
+            console.error('Error writing file:', err);
+            // If write fails, try downloading as fallback
+            downloadJsonFile(bundle);
+            const error = new Error('Could not write file directly. File downloaded instead.');
+            error.downloaded = true;
+            throw error;
+        }
+    }
+
+    function compileOcrJsonDataToFullText(jsonData) {
+        if (!jsonData || typeof jsonData !== 'object') return '';
+        const pageKeys = Object.keys(jsonData).filter(k => /^page_\d+$/i.test(k)).sort((a, b) => {
+            const na = parseInt(a.replace(/\D/g, ''), 10) || 0;
+            const nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+            return na - nb;
+        });
+        const parts = [];
+        for (const pageKey of pageKeys) {
+            const pageData = jsonData[pageKey];
+            if (!pageData) continue;
+            const t = (pageData.full_text || pageData.text || '').trim();
+            if (t) parts.push(t);
+        }
+        return parts.join('\n\n').trim();
+    }
+
+    function downloadJsonFile(bundle) {
+        const jsonContent = JSON.stringify(bundle.jsonData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Use bundle name in filename for easier identification
+        const bundleName = bundle.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+        a.download = `${bundleName}_editable.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        const compiled = compileOcrJsonDataToFullText(bundle.jsonData);
+        if (compiled) {
+            const tb = new Blob([compiled], { type: 'text/plain;charset=utf-8' });
+            const u2 = URL.createObjectURL(tb);
+            const a2 = document.createElement('a');
+            a2.href = u2;
+            a2.download = `${bundleName}_FULL_TEXT.txt`;
+            document.body.appendChild(a2);
+            a2.click();
+            document.body.removeChild(a2);
+            URL.revokeObjectURL(u2);
+        }
+    }
+
+    // Port Python merge functions to JavaScript
+    function mergeEditedText(originalData, editedData) {
+        const updatedData = {};
+        
+        for (const pageKey in originalData) {
+            if (!editedData[pageKey]) {
+                updatedData[pageKey] = originalData[pageKey];
+                continue;
+            }
+            
+            const originalPage = originalData[pageKey];
+            const editedPage = editedData[pageKey];
+            const updatedPage = {
+                text: editedPage.text || originalPage.text || '',
+                full_text: editedPage.full_text || originalPage.full_text || '',
+                blocks: [],
+                paragraphs: [],
+                words: []
+            };
+            
+            const originalWords = originalPage.words || [];
+            const originalText = originalPage.full_text || originalPage.text || '';
+            const editedText = editedPage.full_text || editedPage.text || '';
+            
+            // If text hasn't changed, keep original structure
+            if (originalText === editedText) {
+                updatedData[pageKey] = JSON.parse(JSON.stringify(originalPage));
+                updatedData[pageKey].full_text = editedPage.full_text || originalPage.full_text || '';
+                updatedData[pageKey].text = editedPage.text || originalPage.text || '';
+            } else {
+                // Map edited text to words
+                const updatedWords = mapTextToWords(originalWords, originalText, editedText);
+                updatedPage.words = updatedWords;
+                
+                // Rebuild paragraphs and blocks
+                let wordIdxCounter = 0;
+                const updatedParagraphs = [];
+                const updatedBlocks = [];
+                
+                for (const block of originalPage.blocks || []) {
+                    const updatedBlock = {
+                        bounding_box: block.bounding_box || {},
+                        paragraphs: []
+                    };
+                    
+                    for (const para of block.paragraphs || []) {
+                        const paraWordCount = (para.words || []).length;
+                        const updatedParaWords = updatedWords.slice(wordIdxCounter, wordIdxCounter + paraWordCount);
+                        wordIdxCounter += paraWordCount;
+                        
+                        const updatedParaText = updatedParaWords.map(w => w.text || '').join(' ');
+                        
+                        const updatedPara = {
+                            text: updatedParaText,
+                            bounding_box: para.bounding_box || {},
+                            words: updatedParaWords
+                        };
+                        updatedBlock.paragraphs.push(updatedPara);
+                        updatedParagraphs.push(updatedPara);
+                    }
+                    
+                    updatedBlocks.push(updatedBlock);
+                }
+                
+                updatedPage.paragraphs = updatedParagraphs;
+                updatedPage.blocks = updatedBlocks;
+            }
+            
+            updatedData[pageKey] = updatedPage;
+        }
+        
+        return updatedData;
+    }
+
+    function mapTextToWords(originalWords, originalText, editedText) {
+        if (!originalWords || originalWords.length === 0) {
+            const editedWordsList = editedText.split(/\s+/).filter(w => w);
+            return editedWordsList.map(word => ({
+                text: word,
+                bounding_box: { vertices: [] },
+                confidence: null
+            }));
+        }
+        
+        // Normalize whitespace for word mapping
+        const originalTextNormalized = originalText.split(/\s+/).filter(w => w).join(' ');
+        const editedTextNormalized = editedText.split(/\s+/).filter(w => w).join(' ');
+        
+        const originalWordsList = originalTextNormalized.split(/\s+/);
+        const editedWordsList = editedTextNormalized.split(/\s+/);
+        
+        const updatedWords = [];
+        let originalIdx = 0;
+        
+        for (const editedWord of editedWordsList) {
+            if (originalIdx < originalWords.length) {
+                const updatedWord = JSON.parse(JSON.stringify(originalWords[originalIdx]));
+                updatedWord.text = editedWord;
+                updatedWords.push(updatedWord);
+                originalIdx++;
+            } else {
+                // New word added - use last word's bounding box
+                const lastWord = originalWords[originalWords.length - 1];
+                const newWord = {
+                    text: editedWord,
+                    bounding_box: lastWord ? JSON.parse(JSON.stringify(lastWord.bounding_box || { vertices: [] })) : { vertices: [] },
+                    confidence: null
+                };
+                updatedWords.push(newWord);
+            }
+        }
+        
+        return updatedWords;
+    }
+
+    // Generate text file from editable.json
+    async function generateTextFile() {
+        if (currentBundleIndex < 0) {
+            alert('Please select a bundle first');
+            return;
+        }
+        
+        const bundle = bundles[currentBundleIndex];
+        if (!bundle || !bundle.jsonData) {
+            alert('No data available to generate text file');
+            return;
+        }
+        
+        generateTxtBtn.disabled = true;
+        generateTxtBtn.textContent = 'Generating...';
+        setStatus('Generating text file...');
+        
+        try {
+            // Extract all text from all pages
+            let fullText = '';
+            const pageKeys = bundle.pageKeys || Object.keys(bundle.jsonData).filter(k => /^page_\d+$/i.test(k)).sort();
+            
+            for (const pageKey of pageKeys) {
+                const pageData = bundle.jsonData[pageKey];
+                if (pageData) {
+                    const pageText = pageData.full_text || pageData.text || '';
+                    if (pageText) {
+                        fullText += pageText + '\n\n';
+                    }
+                }
+            }
+            
+            // Remove trailing newlines
+            fullText = fullText.trim();
+            
+            if (!fullText) {
+                alert('No text content found in bundle');
+                generateTxtBtn.disabled = false;
+                generateTxtBtn.textContent = 'Generate Text File';
+                setStatus('No text content found');
+                return;
+            }
+            
+            // Write text file
+            await writeTextFile(bundle, fullText);
+            
+            setStatus('Text file generated successfully');
+            generateTxtBtn.textContent = 'Generate Text File';
+        } catch (error) {
+            console.error('Error generating text file:', error);
+            alert('Error generating text file: ' + error.message);
+            setStatus('Error generating text file');
+            generateTxtBtn.textContent = 'Generate Text File';
+        } finally {
+            generateTxtBtn.disabled = false;
+        }
+    }
+
+    function getBookName(bundleName) {
+        // Extract book name from bundle name (remove timestamp pattern)
+        // Bundle name format: BookName_YYYYMMDD_HHMMSS
+        // Match pattern: _ followed by 8 digits, underscore, 6 digits at the end
+        const timestampPattern = /_\d{8}_\d{6}$/;
+        let bookName = bundleName.replace(timestampPattern, '');
+        
+        // If no timestamp pattern found, try to remove last underscore and numbers
+        if (bookName === bundleName) {
+            // Try pattern: _ followed by numbers at the end
+            bookName = bundleName.replace(/_\d+$/, '');
+        }
+        
+        // If still no change, use the bundle name as-is
+        if (bookName === bundleName) {
+            bookName = bundleName;
+        }
+        
+        // Sanitize for filename
+        return bookName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    }
+
+    async function writeTextFile(bundle, textContent) {
+        const bookName = getBookName(bundle.name);
+        const fileName = `${bookName}_FULL_TEXT.txt`;
+        
+        // Check if we're using File System Access API
+        if (!supportsFileSystemAccess || !directoryHandle) {
+            // Fallback mode: download the file instead
+            downloadTextFile(bundle, textContent, fileName);
+            throw new Error('File System Access API not available. File downloaded instead.');
+        }
+        
+        // Get or create text file in bundle directory
+        let textFileHandle;
+        if (bundle.dirHandle) {
+            try {
+                // Try to get existing text file (to delete it first)
+                try {
+                    textFileHandle = await bundle.dirHandle.getFileHandle(fileName);
+                    // Delete the old file by creating a new one (overwrites)
+                    textFileHandle = await bundle.dirHandle.getFileHandle(fileName, { create: true });
+                } catch (err) {
+                    // File doesn't exist, create it
+                    textFileHandle = await bundle.dirHandle.getFileHandle(fileName, { create: true });
+                }
+            } catch (err) {
+                console.error('Error getting text file handle:', err);
+                downloadTextFile(bundle, textContent, fileName);
+                throw new Error('Could not access text file. File downloaded instead.');
+            }
+        } else {
+            downloadTextFile(bundle, textContent, fileName);
+            throw new Error('No directory handle available. File downloaded instead.');
+        }
+        
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        
+        try {
+            // Write to file
+            const writable = await textFileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            console.log('Successfully wrote', fileName);
+        } catch (err) {
+            console.error('Error writing text file:', err);
+            downloadTextFile(bundle, textContent, fileName);
+            throw new Error('Could not write file directly. File downloaded instead.');
+        }
+    }
+
+    function downloadTextFile(bundle, textContent, fileName) {
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+})();
+</script>
+</body>
+</html>
+

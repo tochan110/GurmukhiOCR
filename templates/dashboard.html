@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Gurmukhi OCR</title>
+    <style>
+        :root {
+            --bg-primary: linear-gradient(135deg, #2a2a3a 0%, #1f1f2e 50%, #2d2d3d 100%);
+            --bg-secondary: linear-gradient(135deg, #2d2d3d 0%, #353545 100%);
+            --bg-tertiary: rgba(30, 30, 40, 0.7);
+            --bg-sidebar: linear-gradient(135deg, #1e1e2e 0%, #252538 100%);
+            --bg-editable: rgba(30, 30, 40, 0.5);
+            --bg-editable-focus: rgba(35, 35, 50, 0.7);
+            --text-primary: #e8e8e8;
+            --text-secondary: #d8d8d8;
+            --text-tertiary: rgba(200, 200, 220, 0.8);
+            --border-color: rgba(255, 255, 255, 0.12);
+            --border-light: rgba(255, 255, 255, 0.08);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.3);
+            --header-bg: linear-gradient(135deg, #1a1a24 0%, #2a2a3a 100%);
+        }
+
+        body.light-mode {
+            --bg-primary: linear-gradient(135deg, #f5f5f7 0%, #e8e8ea 50%, #f0f0f2 100%);
+            --bg-secondary: linear-gradient(135deg, #ffffff 0%, #f8f8fa 100%);
+            --bg-tertiary: rgba(255, 255, 255, 0.9);
+            --bg-sidebar: linear-gradient(135deg, #f0f0f2 0%, #f5f5f7 100%);
+            --bg-editable: rgba(255, 255, 255, 0.8);
+            --bg-editable-focus: rgba(255, 255, 255, 1);
+            --text-primary: #1a1a1a;
+            --text-secondary: #2a2a2a;
+            --text-tertiary: rgba(60, 60, 80, 0.9);
+            --border-color: rgba(0, 0, 0, 0.1);
+            --border-light: rgba(0, 0, 0, 0.08);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.05);
+            --header-bg: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.3s ease;
+        }
+
+        .header {
+            background: var(--header-bg);
+            color: var(--text-primary);
+            padding: 1.5rem 2rem;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-light);
+            transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.light-mode .header {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-titles {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.2rem;
+            min-width: 0;
+        }
+
+        .header-app-name {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+            text-decoration: none;
+            line-height: 1.2;
+            transition: color 0.2s ease;
+        }
+
+        .header-app-name:hover {
+            color: rgba(140, 170, 255, 0.95);
+        }
+
+        body.light-mode .header-app-name:hover {
+            color: #3d5ccc;
+        }
+
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+        }
+
+        .header h1.header-script {
+            font-size: clamp(1.05rem, 2.5vw, 1.35rem);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            margin: 0;
+            line-height: 1.25;
+        }
+
+        body.light-mode .header h1.header-script {
+            text-shadow: none;
+        }
+
+        .nav {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-item {
+            padding: 0.5rem 1.5rem;
+            color: var(--text-tertiary);
+            text-decoration: none;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .nav-item.active {
+            color: var(--text-primary);
+            background: rgba(120, 160, 255, 0.2);
+            border: 2px solid rgba(120, 160, 255, 0.5);
+        }
+
+        body.light-mode .nav-item.active {
+            background: rgba(120, 160, 255, 0.3);
+        }
+
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .upload-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 900px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        body.light-mode .upload-card {
+            box-shadow: var(--shadow);
+        }
+
+
+        form {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .title-container {
+            display: flex;
+            flex-direction: column;
+            margin-right: auto;
+            line-height: 1.2;
+        }
+
+        .title-text {
+            color: #e8e8e8;
+            font-size: 1.4rem;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+        }
+
+        .title-subtitle {
+            color: rgba(200, 200, 220, 0.8);
+            font-size: 0.85rem;
+            font-weight: 400;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            margin-top: 0.1rem;
+        }
+
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-input-label {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #3a4a6a 0%, #2a3a5a 100%);
+            color: #e8e8e8;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            white-space: nowrap;
+            height: 48px;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(135deg, #4a5a7a 0%, #3a4a6a 100%);
+            border-color: rgba(120, 160, 255, 0.5);
+        }
+
+        .file-input-label:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .submit-btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #2a3a5a 0%, #1a2a4a 100%);
+            color: #e8e8e8;
+            border: 1px solid rgba(120, 160, 255, 0.4);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            height: 48px;
+            display: flex;
+            align-items: center;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(135deg, #3a4a6a 0%, #2a3a5a 100%);
+            border-color: rgba(120, 160, 255, 0.6);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .file-name {
+            color: rgba(160, 190, 255, 1);
+            font-size: 0.85rem;
+            font-style: italic;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .toggle-label {
+            color: #d8d8d8;
+            font-size: 0.9rem;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .toggle-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: rgba(120, 160, 255, 0.8);
+        }
+
+        .result-container {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-align: left;
+            width: 100%;
+            max-width: 900px;
+            transition: background 0.3s ease;
+        }
+
+        body.light-mode .result-container {
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-title {
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode .result-title {
+            text-shadow: none;
+        }
+
+        .result-text {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode .result-text {
+            text-shadow: none;
+        }
+
+        .viewer-section {
+            width: 100%;
+            max-width: 1400px;
+            margin-top: 3rem;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-sidebar);
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+            overflow-y: auto;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            max-height: 80vh;
+            transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .sidebar-title {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        body.light-mode .sidebar-title {
+            text-shadow: none;
+        }
+
+        .bundle-item {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-light);
+        }
+
+        body.light-mode .bundle-item {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .bundle-item:hover {
+            background: var(--bg-editable);
+            border-color: rgba(120, 160, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .bundle-item.active {
+            background: rgba(120, 160, 255, 0.15);
+            border-color: rgba(120, 160, 255, 0.5);
+        }
+
+        body.light-mode .bundle-item.active {
+            background: rgba(120, 160, 255, 0.25);
+        }
+
+        .bundle-name {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .bundle-date {
+            color: var(--text-tertiary);
+            font-size: 0.75rem;
+        }
+
+        .viewer-content {
+            flex: 1;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .pdf-viewer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #1e1e2e 0%, #252538 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-height: 80vh;
+            min-height: 0;
+        }
+
+        .bundle-pdf-iframe {
+            flex: 1;
+            width: 100%;
+            min-height: 22rem;
+            border: 0;
+            border-radius: 8px;
+            background: #0f0f14;
+        }
+
+        .ocr-page-nav {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .ocr-page-nav.is-visible {
+            display: flex;
+        }
+
+        .pdf-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .page-btn {
+            padding: 0.5rem 1.5rem;
+            background: linear-gradient(135deg, #3a4a6a 0%, #2a3a5a 100%);
+            color: #e8e8e8;
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4a5a7a 0%, #3a4a6a 100%);
+            border-color: rgba(120, 160, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            color: #d8d8d8;
+            font-size: 0.95rem;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .pdf-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: white;
+            margin: 0 auto;
+        }
+
+        .text-panel {
+            width: 400px;
+            background: linear-gradient(135deg, #1e1e2e 0%, #252538 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 2rem;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-height: 80vh;
+        }
+
+        .text-panel-title {
+            color: #e8e8e8;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .edit-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .edit-btn, .save-btn, .cancel-btn {
+            padding: 0.4rem 1rem;
+            background: linear-gradient(135deg, #3a4a6a 0%, #2a3a5a 100%);
+            color: var(--text-primary);
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        body.light-mode .edit-btn, body.light-mode .save-btn, body.light-mode .cancel-btn {
+            background: linear-gradient(135deg, #5a6a8a 0%, #4a5a7a 100%);
+            color: #ffffff;
+        }
+
+        .edit-btn:hover, .save-btn:hover, .cancel-btn:hover {
+            background: linear-gradient(135deg, #4a5a7a 0%, #3a4a6a 100%);
+            border-color: rgba(120, 160, 255, 0.5);
+        }
+
+        body.light-mode .edit-btn:hover, body.light-mode .save-btn:hover, body.light-mode .cancel-btn:hover {
+            background: linear-gradient(135deg, #6a7a9a 0%, #5a6a8a 100%);
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #2a5a3a 0%, #1a4a2a 100%);
+        }
+
+        body.light-mode .save-btn {
+            background: linear-gradient(135deg, #3a7a4a 0%, #2a6a3a 100%);
+        }
+
+        .save-btn:hover {
+            background: linear-gradient(135deg, #3a6a4a 0%, #2a5a3a 100%);
+        }
+
+        body.light-mode .save-btn:hover {
+            background: linear-gradient(135deg, #4a8a5a 0%, #3a7a4a 100%);
+        }
+
+        .cancel-btn {
+            background: linear-gradient(135deg, #5a3a2a 0%, #4a2a1a 100%);
+        }
+
+        body.light-mode .cancel-btn {
+            background: linear-gradient(135deg, #7a5a4a 0%, #6a4a3a 100%);
+        }
+
+        .cancel-btn:hover {
+            background: linear-gradient(135deg, #6a4a3a 0%, #5a3a2a 100%);
+        }
+
+        body.light-mode .cancel-btn:hover {
+            background: linear-gradient(135deg, #8a6a5a 0%, #7a5a4a 100%);
+        }
+
+        .generate-txt-btn {
+            padding: 0.4rem 1rem;
+            background: linear-gradient(135deg, #5a3a6a 0%, #4a2a5a 100%);
+            color: var(--text-primary);
+            border: 1px solid rgba(160, 120, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        body.light-mode .generate-txt-btn {
+            background: linear-gradient(135deg, #7a5a8a 0%, #6a4a7a 100%);
+            color: #ffffff;
+        }
+
+        .generate-txt-btn:hover {
+            background: linear-gradient(135deg, #6a4a7a 0%, #5a3a6a 100%);
+            border-color: rgba(160, 120, 255, 0.5);
+        }
+
+        body.light-mode .generate-txt-btn:hover {
+            background: linear-gradient(135deg, #8a6a9a 0%, #7a5a8a 100%);
+        }
+
+        .generate-txt-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .search-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            background: rgba(30, 30, 40, 0.7);
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            border-radius: 8px;
+            color: #e8e8e8;
+            font-size: 0.9rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: rgba(120, 160, 255, 0.6);
+            background: rgba(35, 35, 50, 0.9);
+        }
+
+        .search-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: rgba(200, 200, 220, 0.8);
+        }
+
+        .search-nav-btn {
+            padding: 0.4rem 0.8rem;
+            background: linear-gradient(135deg, #3a4a6a 0%, #2a3a5a 100%);
+            color: #e8e8e8;
+            border: 1px solid rgba(120, 160, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-nav-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4a5a7a 0%, #3a4a6a 100%);
+            border-color: rgba(120, 160, 255, 0.5);
+        }
+
+        .search-nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .text-content {
+            color: var(--text-secondary);
+            font-size: 1.3rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            transition: color 0.3s ease;
+        }
+
+        body.light-mode .text-content {
+            text-shadow: none;
+        }
+
+        .text-content.editable {
+            background: var(--bg-editable);
+            border: 1px solid rgba(120, 160, 255, 0.4);
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 200px;
+            outline: none;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .text-content.editable:focus {
+            border-color: rgba(120, 160, 255, 0.6);
+            background: var(--bg-editable-focus);
+        }
+
+        .text-content .highlight {
+            background: rgba(255, 255, 0, 0.4);
+            color: #fff;
+            padding: 2px 0;
+            border-radius: 3px;
+        }
+
+        .text-content .highlight.current {
+            background: rgba(120, 160, 255, 0.6);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-tertiary);
+            font-size: 1.1rem;
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--text-tertiary);
+            padding: 2rem;
+        }
+
+        .vision-cloud-error {
+            background: rgba(55, 38, 28, 0.65);
+            border: 1px solid rgba(255, 170, 100, 0.45);
+            border-radius: 10px;
+            padding: 1rem 1.15rem;
+            margin-top: 0.35rem;
+            max-width: 100%;
+            text-align: left;
+        }
+        body.light-mode .vision-cloud-error {
+            background: rgba(255, 248, 240, 0.98);
+            border-color: rgba(200, 120, 40, 0.55);
+        }
+        .vision-cloud-error h4 {
+            margin: 0 0 0.6rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #ffb86c;
+        }
+        body.light-mode .vision-cloud-error h4 {
+            color: #a65a00;
+        }
+        .vision-cloud-error p {
+            margin: 0.4rem 0 0;
+            font-size: 0.95rem;
+            line-height: 1.45;
+            color: var(--text-secondary);
+        }
+        .vision-cloud-error a {
+            display: inline-block;
+            margin-top: 0.65rem;
+            color: #8ab4ff;
+            font-weight: 500;
+        }
+        body.light-mode .vision-cloud-error a {
+            color: #1a56db;
+        }
+        .vision-cloud-error .vision-cloud-error-foot {
+            font-size: 0.82rem;
+            margin-top: 0.85rem;
+            color: var(--text-tertiary);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="header-titles">
+                <a href="/" class="header-app-name">GurmukhiOCR</a>
+                <h1 class="header-script">ਗੁਰਮੁੱਖੀ optical ਅੱਖਰ ਪਛਾਣ</h1>
+            </div>
+            <div class="nav">
+                <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">
+                    <span id="themeIcon">🌙</span>
+                    <span id="themeText">Dark</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <form action="/pdf" method="post" enctype="multipart/form-data" class="upload-card" id="uploadCard">
+            <div class="title-container">
+                <span class="title-text">ਚਿੱਤ੍ਰ ਚੜ੍ਹਾਓ</span>
+                <span class="title-subtitle">(Upload PDF)</span>
+            </div>
+            <input type="file" id="fileInput" name="file" accept="application/pdf" required>
+            <div class="file-name" id="fileName"></div>
+            <label for="fileInput" class="file-input-label">Choose File</label>
+            <button type="submit" class="submit-btn" id="submitBtn" disabled>Upload</button>
+        </form>
+        
+        <div class="result-container" id="resultContainer" style="display: none;">
+            <h3 class="result-title">Extracted Text:</h3>
+            <div class="result-text" id="resultText"></div>
+        </div>
+
+        <div class="viewer-section" id="viewerSection">
+            <div class="sidebar">
+                <h2 class="sidebar-title">Saved bundles</h2>
+                <p style="font-size:0.8rem;color:var(--text-tertiary);margin-bottom:0.75rem;line-height:1.35;">New OCR is not stored on this server. This list only shows older data folders if present.</p>
+                <div id="bundlesList">
+                    <div class="loading">Loading bundles...</div>
+                </div>
+            </div>
+
+            <div class="viewer-content">
+                <div class="pdf-viewer" id="pdfViewer">
+                    <div class="empty-state">Select a file bundle to view</div>
+                </div>
+
+                <div class="text-panel" id="textPanel">
+                    <h3 class="text-panel-title">
+                        <span>Extracted Text</span>
+                        <div class="edit-controls" id="editControls">
+                            <button class="edit-btn" id="editBtn">Edit</button>
+                            <button class="save-btn" id="saveBtn" style="display: none;">Save</button>
+                            <button class="cancel-btn" id="cancelBtn" style="display: none;">Cancel</button>
+                            <button class="generate-txt-btn" id="generateTxtBtn" style="display: none;">Generate Text File</button>
+                        </div>
+                    </h3>
+                    <div class="ocr-page-nav" id="ocrPageNav">
+                        <button type="button" class="page-btn" id="ocrPagePrev">← Prev</button>
+                        <span class="page-info" id="ocrPageInfo">OCR page 1 of 1</span>
+                        <button type="button" class="page-btn" id="ocrPageNext">Next →</button>
+                    </div>
+                    <div class="search-container">
+                        <div class="search-bar">
+                            <input type="text" class="search-input" id="searchInput" placeholder="Search text...">
+                        </div>
+                        <div class="search-nav" id="searchNav" style="display: none;">
+                            <button class="search-nav-btn" id="prevMatchBtn" disabled>← Previous</button>
+                            <span id="matchInfo">0 / 0</span>
+                            <button class="search-nav-btn" id="nextMatchBtn" disabled>Next →</button>
+                        </div>
+                    </div>
+                    <div class="text-content" id="textContent">
+                        Select a file bundle to view extracted text
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (async function ensureOcrCredentials() {
+            try {
+                const r = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                const d = await r.json();
+                if (!d.has_credentials) {
+                    window.location.replace('/setup-credentials');
+                }
+            } catch (e) {
+                console.warn('Auth status check failed', e);
+            }
+        })();
+
+        function redirectIfUnauthorized(response) {
+            if (response.status === 401) {
+                return response.json().then(d => {
+                    if (d.needs_credentials) window.location.replace('/setup-credentials');
+                    return Promise.reject(new Error(d.error || 'Google OCR key required'));
+                });
+            }
+            return response;
+        }
+
+        /** Same page order and fields as offline_bundles_viewer / generateTextFile: full_text || text, blank line between pages. */
+        function compileOcrJsonDataToFullText(data) {
+            if (!data || typeof data !== 'object') return '';
+            const pageKeys = Object.keys(data).filter(k => /^page_\d+$/i.test(k)).sort((a, b) => {
+                const na = parseInt(a.replace(/\D/g, ''), 10) || 0;
+                const nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+                return na - nb;
+            });
+            const parts = [];
+            for (const pageKey of pageKeys) {
+                const pageData = data[pageKey];
+                if (!pageData) continue;
+                const t = (pageData.full_text || pageData.text || '').trim();
+                if (t) parts.push(t);
+            }
+            return parts.join('\n\n').trim();
+        }
+
+        /** Triggers a browser download; user picks folder if the browser offers "Save As". */
+        function downloadJsonBlob(data, filename) {
+            const text = JSON.stringify(data, null, 2);
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'ocr-result.json';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function downloadPlainTextBlob(text, filename) {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'ocr-result.txt';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function buildVisionCloudErrorEl(payload) {
+            const box = document.createElement('div');
+            box.className = 'vision-cloud-error';
+            const h = document.createElement('h4');
+            h.textContent = payload.error_title || 'Google Cloud setup';
+            box.appendChild(h);
+            const p = document.createElement('p');
+            p.textContent = payload.error || 'Vision API could not be used with this key.';
+            box.appendChild(p);
+            if (payload.console_url) {
+                const a = document.createElement('a');
+                a.href = payload.console_url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.textContent = 'Open Google Cloud Console (Vision API)';
+                box.appendChild(a);
+            }
+            const foot = document.createElement('p');
+            foot.className = 'vision-cloud-error-foot';
+            foot.textContent =
+                'Visit /setup-credentials to upload a Google Vision service account JSON from the correct Google Cloud project (Vision API enabled, billing active if required, IAM roles for Vision).';
+            box.appendChild(foot);
+            return box;
+        }
+
+        function showVisionConfigurationError(resultTextEl, payload) {
+            resultTextEl.textContent = '';
+            resultTextEl.appendChild(buildVisionCloudErrorEl(payload));
+        }
+
+        function showUploadError(resultTextEl, err) {
+            if (err && err.error_type === 'cloud_configuration') {
+                showVisionConfigurationError(resultTextEl, err);
+            } else {
+                const msg = (err && err.error) || (err && err.message) || 'Unknown error';
+                resultTextEl.textContent = 'Error: ' + msg;
+            }
+        }
+
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const submitBtn = document.getElementById('submitBtn');
+
+        function resetUploadUI() {
+            fileInput.value = '';
+            fileName.textContent = '';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Upload';
+            submitBtn.style.opacity = '1';
+        }
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            // Validate PDF file
+            if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                alert('Please select a PDF file');
+                fileInput.value = '';
+                fileName.textContent = '';
+                submitBtn.disabled = true;
+                return;
+            }
+            
+            fileName.textContent = file.name;
+            submitBtn.disabled = false;
+        }
+
+        // Handle form submission with loading state
+        document.getElementById('uploadCard').addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            
+            const btn = document.getElementById('submitBtn');
+            const resultContainer = document.getElementById('resultContainer');
+            const resultText = document.getElementById('resultText');
+            
+            if (!btn.disabled && fileInput.files.length > 0) {
+                btn.disabled = true;
+                btn.textContent = 'Processing...';
+                btn.style.opacity = '0.7';
+                
+                // Hide previous results
+                resultContainer.style.display = 'none';
+                resultText.textContent = 'Extracting text...';
+                
+                // Show progress indicator
+                const progressDiv = document.createElement('div');
+                progressDiv.id = 'ocrProgress';
+                progressDiv.style.cssText = 'margin-top: 1rem; padding: 1rem; background: rgba(30, 30, 40, 0.7); border-radius: 8px; border: 1px solid rgba(120, 160, 255, 0.3);';
+                progressDiv.innerHTML = '<div style="color: #e8e8e8; font-size: 0.9rem;">Initializing OCR...</div>';
+                resultContainer.appendChild(progressDiv);
+                resultContainer.style.display = 'block';
+                
+                // Get the file
+                const file = fileInput.files[0];
+                
+                // Create FormData - we'll use the same one for both requests
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Update progress function
+                function updateProgress(message) {
+                    const progressDiv = document.getElementById('ocrProgress');
+                    if (progressDiv) {
+                        progressDiv.innerHTML = `<div style="color: #e8e8e8; font-size: 0.9rem;">${message}</div>`;
+                    }
+                    console.log('[OCR Progress]', message);
+                }
+                
+                // First, get JSON data for display (this is faster and shows results immediately)
+                updateProgress('Uploading PDF and starting OCR processing...');
+                console.log('[Upload] Starting /pdf-json request...');
+                
+                // Very large PDFs: one OCR pass, JSON returned as download only (no server storage)
+                const shouldDownloadOnly = file.size > 50 * 1024 * 1024; // 50MB
+
+                if (shouldDownloadOnly) {
+                    console.log('[Upload] Large file: using /pdf ZIP download (JSON + compiled text)');
+                    updateProgress('Large file: OCR runs once; a ZIP with JSON and full text will download (not stored on server)...');
+                    const formData2 = new FormData();
+                    formData2.append('file', file);
+                    const baseStem = (file.name || 'document').replace(/\.pdf$/i, '');
+                    const dlName = baseStem.replace(/[^\w\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 120) || 'document';
+                    const zipName = dlName + '_ocr_export.zip';
+                    return fetch('/pdf', {
+                        method: 'POST',
+                        body: formData2,
+                        credentials: 'same-origin'
+                    }).then(redirectIfUnauthorized).then(response => {
+                        if (!response.ok) {
+                            return response.text().then(text => {
+                                let parsed = null;
+                                try {
+                                    parsed = JSON.parse(text);
+                                } catch (x) { /* not JSON */ }
+                                if (parsed && typeof parsed === 'object') {
+                                    return Promise.reject(parsed);
+                                }
+                                throw new Error(text || 'OCR failed');
+                            });
+                        }
+                        updateProgress('OCR complete. Saving ZIP (JSON + compiled text) to your computer...');
+                        return response.blob();
+                    }).then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = zipName;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        resultText.textContent = 'Large document: a ZIP with the full OCR JSON and a compiled _FULL_TEXT.txt was downloaded. Nothing was stored on the server.';
+                        resultContainer.style.display = 'block';
+                        updateProgress('Done. Check your Downloads folder or the folder your browser used.');
+                        resetUploadUI();
+                    }).catch(error => {
+                        console.error('[Upload] Error:', error);
+                        const progressDiv = document.getElementById('ocrProgress');
+                        if (progressDiv) progressDiv.remove();
+                        showUploadError(resultText, error);
+                        resultContainer.style.display = 'block';
+                        const errMsg = (error && error.error) || (error && error.message) || 'Unknown error';
+                        updateProgress('Error: ' + errMsg);
+                        resetUploadUI();
+                    });
+                }
+
+                fetch('/pdf-json', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                })
+                .then(redirectIfUnauthorized)
+                .then(response => {
+                    console.log('[Upload] /pdf-json response received, status:', response.status);
+                    if (!response.ok) {
+                        return response.json().then(err => Promise.reject(err));
+                    }
+                    console.log('[Upload] Parsing JSON response...');
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('[Upload] JSON parsed successfully, pages:', Object.keys(data).length);
+
+                    if (data.error_type === 'cloud_configuration') {
+                        const progressDiv = document.getElementById('ocrProgress');
+                        if (progressDiv) progressDiv.remove();
+                        showVisionConfigurationError(resultText, data);
+                        resultContainer.style.display = 'block';
+                        updateProgress(data.error_title || 'Google Cloud configuration');
+                        resetUploadUI();
+                        return;
+                    }
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    const progressDiv = document.getElementById('ocrProgress');
+                    if (progressDiv) {
+                        progressDiv.remove();
+                    }
+
+                    const pageCount = Object.keys(data).filter(k => k.startsWith('page_')).length;
+                    const baseName = (file.name || 'document').replace(/\.pdf$/i, '');
+                    const outName = baseName + '.json';
+
+                    if (data && pageCount > 0) {
+                        if (pageCount > 50) {
+                            resultText.textContent =
+                                'Preview (truncated). The full OCR JSON was downloaded as ' + outName +
+                                ' and compiled text as ' + baseName + '_FULL_TEXT.txt' +
+                                ' (your browser’s default download location, or a folder you chose in Save As).\n\n' +
+                                JSON.stringify(data, null, 2).substring(0, 14000) +
+                                '\n\n… [open the downloaded .json for the complete result]';
+                        } else {
+                            resultText.textContent = JSON.stringify(data, null, 2);
+                        }
+                        resultContainer.style.display = 'block';
+                        downloadJsonBlob(data, outName);
+                        const compiled = compileOcrJsonDataToFullText(data);
+                        if (compiled) {
+                            downloadPlainTextBlob(compiled, baseName + '_FULL_TEXT.txt');
+                        }
+                        updateProgress('Done. JSON and compiled text downloaded; nothing was stored on the server.');
+                    } else {
+                        resultText.textContent = 'No data received';
+                        resultContainer.style.display = 'block';
+                        updateProgress('Warning: No text data extracted');
+                    }
+
+                    resetUploadUI();
+                })
+                .catch(error => {
+                    console.error('[Upload] Error:', error);
+                    const errorMsg = (error && error.error) || (error && error.message) || 'Unknown error';
+
+                    if (error && (error.name === 'TimeoutError' || (error.message && error.message.includes('timeout')))) {
+                        console.error('[Upload] Request timed out - file may be too large');
+                        updateProgress('Request timed out. The file may be too large. Try the large-file path or split the PDF.');
+                    }
+
+                    const progressDiv = document.getElementById('ocrProgress');
+                    if (progressDiv) {
+                        progressDiv.remove();
+                    }
+
+                    showUploadError(resultText, error);
+                    resultContainer.style.display = 'block';
+                    updateProgress('Error: ' + errorMsg);
+                    resetUploadUI();
+                });
+            }
+        });
+
+        // Theme management
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.body.classList.add('light-mode');
+                themeIcon.textContent = '☀️';
+                themeText.textContent = 'Light';
+            } else {
+                document.body.classList.remove('light-mode');
+                themeIcon.textContent = '🌙';
+                themeText.textContent = 'Dark';
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const isLight = document.body.classList.toggle('light-mode');
+            if (isLight) {
+                localStorage.setItem('theme', 'light');
+                themeIcon.textContent = '☀️';
+                themeText.textContent = 'Light';
+            } else {
+                localStorage.setItem('theme', 'dark');
+                themeIcon.textContent = '🌙';
+                themeText.textContent = 'Dark';
+            }
+        });
+
+        // Initialize theme on load
+        initTheme();
+
+        // Viewer functionality
+        let currentBundle = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let bundleData = null;
+
+        // Load bundles on page load
+        loadBundles();
+
+        function loadBundles() {
+            fetch('/api/bundles', { credentials: 'same-origin' })
+                .then(redirectIfUnauthorized)
+                .then(response => response.json())
+                .then(bundles => {
+                    const bundlesList = document.getElementById('bundlesList');
+                    if (bundles.length === 0) {
+                        bundlesList.innerHTML = '<div class="empty-state">No file bundles found</div>';
+                        generateTxtBtn.style.display = 'none';
+                        return;
+                    }
+
+                    bundlesList.innerHTML = bundles.map(bundle => {
+                        const date = new Date(bundle.created * 1000).toLocaleString();
+                        return `
+                            <div class="bundle-item" data-bundle-id="${bundle.id}">
+                                <div class="bundle-name">${bundle.name}</div>
+                                <div class="bundle-date">${date}</div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Add click handlers
+                    document.querySelectorAll('.bundle-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            document.querySelectorAll('.bundle-item').forEach(i => i.classList.remove('active'));
+                            item.classList.add('active');
+                            loadBundle(item.dataset.bundleId);
+                        });
+                    });
+                })
+                .catch(error => {
+                    document.getElementById('bundlesList').innerHTML = 
+                        '<div class="empty-state">Error loading bundles</div>';
+                });
+        }
+
+        function loadBundle(bundleId) {
+            currentBundle = bundleId;
+            currentPage = 1;
+
+            searchMatches = [];
+            currentMatchIndex = -1;
+            currentSearchTerm = '';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchNav').style.display = 'none';
+
+            const pdfViewer = document.getElementById('pdfViewer');
+            pdfViewer.innerHTML = '<div class="loading">Loading document…</div>';
+
+            const infoP = fetch(`/api/bundle/${bundleId}/pdf/info`)
+                .then(redirectIfUnauthorized)
+                .then((response) => {
+                    if (!response.ok) throw new Error('PDF info failed');
+                    return response.json();
+                });
+            const jsonP = fetch(`/api/bundle/${bundleId}/json`)
+                .then(redirectIfUnauthorized)
+                .then((response) => {
+                    if (!response.ok) throw new Error('JSON failed');
+                    return response.json();
+                });
+
+            Promise.all([infoP, jsonP])
+                .then(([info, data]) => {
+                    totalPages = info.page_count || 1;
+                    bundleData = data;
+                    pdfViewer.innerHTML = '';
+                    const iframe = document.createElement('iframe');
+                    iframe.className = 'bundle-pdf-iframe';
+                    iframe.title = 'Original PDF';
+                    iframe.src = `/api/bundle/${bundleId}/original`;
+                    pdfViewer.appendChild(iframe);
+                    updateOcrPageNav();
+                    setOcrPage(1);
+                    generateTxtBtn.style.display = 'block';
+                })
+                .catch((error) => {
+                    console.error('Error loading bundle:', error);
+                    pdfViewer.innerHTML = '<div class="empty-state">Error loading document</div>';
+                    bundleData = null;
+                    document.getElementById('textContent').textContent = 'Error loading bundle';
+                    generateTxtBtn.style.display = 'none';
+                    document.getElementById('ocrPageNav').classList.remove('is-visible');
+                });
+        }
+
+        function updateOcrPageNav() {
+            const nav = document.getElementById('ocrPageNav');
+            const prev = document.getElementById('ocrPagePrev');
+            const next = document.getElementById('ocrPageNext');
+            const label = document.getElementById('ocrPageInfo');
+            if (!nav || !prev || !next || !label) return;
+            if (totalPages <= 1) {
+                nav.classList.remove('is-visible');
+                return;
+            }
+            nav.classList.add('is-visible');
+            prev.disabled = currentPage <= 1;
+            next.disabled = currentPage >= totalPages;
+            label.textContent = `OCR page ${currentPage} of ${totalPages}`;
+        }
+
+        function setOcrPage(pageNum) {
+            if (isEditMode && bundleData) {
+                const pageKey = `page_${currentPage}`;
+                if (bundleData[pageKey]) {
+                    bundleData[pageKey].full_text = textContent.textContent.trim();
+                    bundleData[pageKey].text = textContent.textContent.trim();
+                }
+            }
+            currentPage = pageNum;
+            if (currentPage < 1) currentPage = 1;
+            if (totalPages >= 1 && currentPage > totalPages) currentPage = totalPages;
+            updateOcrPageNav();
+            if (!isEditMode) {
+                updateText(currentPage);
+                if (currentSearchTerm && searchMatches.length > 0 && currentMatchIndex >= 0) {
+                    const match = searchMatches[currentMatchIndex];
+                    if (match.page === currentPage) {
+                        setTimeout(() => {
+                            const highlighted = document.querySelector('.highlight.current');
+                            if (highlighted) {
+                                highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 200);
+                    }
+                }
+            } else {
+                const pageKey = `page_${currentPage}`;
+                const pageData = bundleData[pageKey];
+                let text = '';
+                if (pageData && pageData.full_text) {
+                    text = pageData.full_text;
+                } else if (pageData && pageData.text) {
+                    text = pageData.text;
+                }
+                textContent.textContent = text;
+            }
+        }
+
+        function updateText(pageNum) {
+            const textContent = document.getElementById('textContent');
+            if (!bundleData) {
+                textContent.textContent = 'No text data available';
+                return;
+            }
+
+            // Don't update if in edit mode
+            if (isEditMode) {
+                return;
+            }
+
+            const pageKey = `page_${pageNum}`;
+            const pageData = bundleData[pageKey];
+
+            let text = '';
+            if (pageData && pageData.full_text) {
+                text = pageData.full_text;
+            } else if (pageData && pageData.text) {
+                text = pageData.text;
+            } else {
+                text = 'No text found for this page';
+            }
+
+            // Apply search highlighting if there's an active search
+            if (searchMatches.length > 0 && currentSearchTerm) {
+                textContent.innerHTML = highlightText(text, pageNum);
+            } else {
+                textContent.textContent = text;
+            }
+        }
+
+        // Search functionality
+        let searchMatches = [];
+        let currentMatchIndex = -1;
+        let currentSearchTerm = '';
+
+        function searchAllPages(searchTerm) {
+            if (!bundleData || !searchTerm.trim()) {
+                searchMatches = [];
+                currentMatchIndex = -1;
+                currentSearchTerm = '';
+                document.getElementById('searchNav').style.display = 'none';
+                updateText(currentPage);
+                return;
+            }
+
+            currentSearchTerm = searchTerm.trim();
+            searchMatches = [];
+            
+            // Search through all pages
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                const pageKey = `page_${pageNum}`;
+                const pageData = bundleData[pageKey];
+                
+                if (!pageData) continue;
+                
+                const text = pageData.full_text || pageData.text || '';
+                if (!text) continue;
+                
+                // Case-insensitive search with regex
+                const regex = new RegExp(escapeRegex(searchTerm), 'gi');
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    searchMatches.push({
+                        page: pageNum,
+                        index: match.index,
+                        length: match[0].length
+                    });
+                }
+            }
+
+            if (searchMatches.length > 0) {
+                currentMatchIndex = 0;
+                navigateToMatch(0);
+            } else {
+                currentMatchIndex = -1;
+                document.getElementById('matchInfo').textContent = '0 / 0';
+                document.getElementById('prevMatchBtn').disabled = true;
+                document.getElementById('nextMatchBtn').disabled = true;
+            }
+        }
+
+        function escapeRegex(str) {
+            return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function highlightText(text, pageNum) {
+            if (!currentSearchTerm) return escapeHtml(text);
+            
+            // Find all matches on this page
+            const pageMatches = searchMatches.filter(m => m.page === pageNum);
+            if (pageMatches.length === 0) {
+                return escapeHtml(text);
+            }
+            
+            // Find which match on this page is the current one
+            const currentMatch = currentMatchIndex >= 0 ? searchMatches[currentMatchIndex] : null;
+            const currentMatchOnPage = currentMatch && currentMatch.page === pageNum ? currentMatch : null;
+            
+            // Build highlighted HTML
+            let highlighted = '';
+            let lastIndex = 0;
+            
+            // Sort matches by index
+            const sortedMatches = [...pageMatches].sort((a, b) => a.index - b.index);
+            
+            sortedMatches.forEach((match) => {
+                // Add text before match
+                highlighted += escapeHtml(text.substring(lastIndex, match.index));
+                
+                // Check if this is the current match
+                const isCurrent = currentMatchOnPage && 
+                                 currentMatchOnPage.index === match.index &&
+                                 currentMatchOnPage.length === match.length;
+                
+                // Add highlighted match
+                const matchText = text.substring(match.index, match.index + match.length);
+                const className = isCurrent ? 'highlight current' : 'highlight';
+                highlighted += `<span class="${className}">${escapeHtml(matchText)}</span>`;
+                
+                lastIndex = match.index + match.length;
+            });
+            
+            // Add remaining text
+            highlighted += escapeHtml(text.substring(lastIndex));
+            
+            return highlighted;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function navigateToMatch(matchIndex) {
+            if (matchIndex < 0 || matchIndex >= searchMatches.length) return;
+            
+            currentMatchIndex = matchIndex;
+            const match = searchMatches[matchIndex];
+            
+            // Navigate to the page if needed
+            if (match.page !== currentPage) {
+                setOcrPage(match.page);
+            } else {
+                // Just update the text highlighting
+                updateText(match.page);
+            }
+            
+            // Update navigation UI
+            document.getElementById('searchNav').style.display = 'flex';
+            document.getElementById('matchInfo').textContent = `${matchIndex + 1} / ${searchMatches.length}`;
+            document.getElementById('prevMatchBtn').disabled = matchIndex === 0;
+            document.getElementById('nextMatchBtn').disabled = matchIndex === searchMatches.length - 1;
+            
+            // Scroll to highlighted match after a short delay
+            setTimeout(() => {
+                const highlighted = document.querySelector('.highlight.current');
+                if (highlighted) {
+                    highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 200);
+        }
+
+        // Search input event listeners
+        const searchInput = document.getElementById('searchInput');
+        const prevMatchBtn = document.getElementById('prevMatchBtn');
+        const nextMatchBtn = document.getElementById('nextMatchBtn');
+
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value;
+            searchAllPages(term);
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                    // Shift+Enter: previous match
+                    if (currentMatchIndex > 0) {
+                        navigateToMatch(currentMatchIndex - 1);
+                    }
+                } else {
+                    // Enter: next match
+                    if (currentMatchIndex < searchMatches.length - 1) {
+                        navigateToMatch(currentMatchIndex + 1);
+                    }
+                }
+            }
+        });
+
+        prevMatchBtn.addEventListener('click', () => {
+            if (currentMatchIndex > 0) {
+                navigateToMatch(currentMatchIndex - 1);
+            }
+        });
+
+        nextMatchBtn.addEventListener('click', () => {
+            if (currentMatchIndex < searchMatches.length - 1) {
+                navigateToMatch(currentMatchIndex + 1);
+            }
+        });
+
+        document.getElementById('ocrPagePrev').addEventListener('click', () => {
+            if (currentPage > 1) setOcrPage(currentPage - 1);
+        });
+        document.getElementById('ocrPageNext').addEventListener('click', () => {
+            if (currentPage < totalPages) setOcrPage(currentPage + 1);
+        });
+
+        // Edit functionality
+        let isEditMode = false;
+        let originalTextData = null;
+        const editBtn = document.getElementById('editBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const generateTxtBtn = document.getElementById('generateTxtBtn');
+        const textContent = document.getElementById('textContent');
+
+        editBtn.addEventListener('click', () => {
+            if (!bundleData || !currentBundle) {
+                alert('Please select a file bundle first');
+                return;
+            }
+            
+            enterEditMode();
+        });
+
+        saveBtn.addEventListener('click', () => {
+            saveEdits();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            exitEditMode();
+        });
+
+        generateTxtBtn.addEventListener('click', () => {
+            if (!bundleData || !currentBundle) {
+                alert('Please select a file bundle first');
+                return;
+            }
+            generateTextFile();
+        });
+
+        function enterEditMode() {
+            if (!bundleData) return;
+            
+            isEditMode = true;
+            originalTextData = JSON.parse(JSON.stringify(bundleData)); // Deep copy
+            
+            // Make text content editable
+            textContent.contentEditable = 'true';
+            textContent.classList.add('editable');
+            
+            // Get current page text
+            const pageKey = `page_${currentPage}`;
+            const pageData = bundleData[pageKey];
+            let text = '';
+            if (pageData && pageData.full_text) {
+                text = pageData.full_text;
+            } else if (pageData && pageData.text) {
+                text = pageData.text;
+            }
+            
+            // Set plain text (no HTML highlighting) - preserve newlines
+            textContent.textContent = text;
+            
+            // Reset save button state
+            saveBtn.textContent = 'Save';
+            saveBtn.disabled = false;
+            
+            // Update button visibility
+            editBtn.style.display = 'none';
+            saveBtn.style.display = 'block';
+            cancelBtn.style.display = 'block';
+            
+            // Disable search while editing
+            document.getElementById('searchInput').disabled = true;
+        }
+
+        function exitEditMode() {
+            isEditMode = false;
+            textContent.contentEditable = 'false';
+            textContent.classList.remove('editable');
+            
+            // Restore original data
+            if (originalTextData) {
+                bundleData = JSON.parse(JSON.stringify(originalTextData));
+            }
+            
+            // Update button visibility
+            editBtn.style.display = 'block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            
+            // Re-enable search
+            document.getElementById('searchInput').disabled = false;
+            
+            // Refresh display
+            updateText(currentPage);
+        }
+
+        function saveEdits() {
+            if (!bundleData || !currentBundle) return;
+            
+            // Save current page edits before saving all
+            const pageKey = `page_${currentPage}`;
+            // Preserve newlines - innerText preserves line breaks in contentEditable
+            let editedText = textContent.innerText || textContent.textContent;
+            // Remove only trailing whitespace, preserve leading and internal newlines
+            editedText = editedText.replace(/\s+$/, '');
+            
+            // Update bundleData with edited text from current page
+            if (bundleData[pageKey]) {
+                bundleData[pageKey].full_text = editedText;
+                bundleData[pageKey].text = editedText;
+            }
+            
+            // Show saving indicator
+            saveBtn.textContent = 'Saving...';
+            saveBtn.disabled = true;
+            
+            // Send entire bundleData to backend (includes all pages)
+            fetch(`/api/bundle/${currentBundle}/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bundleData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error saving: ' + data.error);
+                    saveBtn.textContent = 'Save';
+                    saveBtn.disabled = false;
+                } else {
+                    // Success - reload bundle data to get updated structure
+                    fetch(`/api/bundle/${currentBundle}/json`)
+                        .then(response => response.json())
+                        .then(updatedData => {
+                            bundleData = updatedData;
+                            originalTextData = JSON.parse(JSON.stringify(updatedData));
+                            exitEditMode();
+                        })
+                        .catch(error => {
+                            console.error('Error reloading data:', error);
+                            exitEditMode();
+                            alert('Saved, but error reloading data. Please refresh.');
+                        });
+                }
+            })
+            .catch(error => {
+                console.error('Error saving:', error);
+                alert('Error saving changes: ' + error.message);
+                saveBtn.textContent = 'Save';
+                saveBtn.disabled = false;
+            });
+        }
+
+        // Generate text file from editable.json
+        function generateTextFile() {
+            if (!bundleData || !currentBundle) {
+                alert('Please select a file bundle first');
+                return;
+            }
+            
+            generateTxtBtn.disabled = true;
+            generateTxtBtn.textContent = 'Generating...';
+            
+            // Extract all text from all pages
+            let fullText = '';
+            const pageKeys = Object.keys(bundleData).filter(k => /^page_\d+$/i.test(k)).sort((a, b) => {
+                const na = parseInt(a.replace(/\D/g, ''), 10);
+                const nb = parseInt(b.replace(/\D/g, ''), 10);
+                return na - nb;
+            });
+            
+            for (const pageKey of pageKeys) {
+                const pageData = bundleData[pageKey];
+                if (pageData) {
+                    const pageText = pageData.full_text || pageData.text || '';
+                    if (pageText) {
+                        fullText += pageText + '\n\n';
+                    }
+                }
+            }
+            
+            // Remove trailing newlines
+            fullText = fullText.trim();
+            
+            if (!fullText) {
+                alert('No text content found in bundle');
+                generateTxtBtn.disabled = false;
+                generateTxtBtn.textContent = 'Generate Text File';
+                return;
+            }
+            
+            // Call backend to generate text file
+            fetch(`/api/bundle/${currentBundle}/generate-text`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: fullText })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    alert('Error generating text file: ' + data.error);
+                } else {
+                    alert('Text file generated successfully!');
+                }
+                generateTxtBtn.disabled = false;
+                generateTxtBtn.textContent = 'Generate Text File';
+            })
+            .catch(error => {
+                console.error('Error generating text file:', error);
+                const errorMsg = error.error || error.message || 'Unknown error';
+                alert('Error generating text file: ' + errorMsg);
+                generateTxtBtn.disabled = false;
+                generateTxtBtn.textContent = 'Generate Text File';
+            });
+        }
+
+    </script>
+</body>
+</html>
+

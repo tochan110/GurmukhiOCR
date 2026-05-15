@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+
+# Environment and secrets (never commit)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Google Cloud / API credentials
+*.json
+!package.json
+!package-lock.json
+
+# User uploads and session-stored OCR keys
+uploads/
+
+# Logs and OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Local PDFs used for testing
+*.pdf
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/

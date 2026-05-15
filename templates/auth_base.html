@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GurmukhiOCR{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg0: #07080c;
+            --bg1: #0e1018;
+            --stroke: rgba(255, 255, 255, 0.06);
+            --text: #e8eaef;
+            --muted: rgba(200, 206, 220, 0.72);
+            --faint: rgba(160, 168, 190, 0.45);
+            --accent: #6b8cff;
+            --accent-dim: rgba(107, 140, 255, 0.14);
+            --glow: rgba(107, 140, 255, 0.35);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { -webkit-font-smoothing: antialiased; }
+        body {
+            min-height: 100vh;
+            font-family: "DM Sans", system-ui, sans-serif;
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 50% -20%, rgba(107, 140, 255, 0.12), transparent 55%),
+                radial-gradient(900px 600px at 100% 60%, rgba(120, 200, 255, 0.06), transparent 50%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+            display: flex;
+            flex-direction: column;
+            transition: color 0.25s ease, background 0.35s ease;
+        }
+        body.light-mode {
+            --stroke: rgba(0, 0, 0, 0.08);
+            --text: #14161c;
+            --muted: rgba(50, 55, 70, 0.78);
+            --faint: rgba(70, 78, 98, 0.55);
+            --accent-dim: rgba(74, 108, 220, 0.1);
+            --glow: rgba(74, 108, 220, 0.25);
+            color: var(--text);
+            background: radial-gradient(1100px 720px at 50% -15%, rgba(90, 120, 230, 0.14), transparent 52%),
+                radial-gradient(880px 560px at 95% 55%, rgba(100, 190, 255, 0.12), transparent 48%),
+                radial-gradient(600px 400px at 5% 80%, rgba(130, 160, 255, 0.06), transparent 45%),
+                linear-gradient(180deg, #f6f7fb 0%, #eceef4 45%, #e8eaf0 100%);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem 1.75rem;
+            border-bottom: 1px solid var(--stroke);
+            transition: border-color 0.25s ease;
+        }
+        .nav-brand {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            text-decoration: none;
+            white-space: nowrap;
+            transition: color 0.2s ease;
+        }
+        .nav-brand:hover { color: var(--accent); }
+        .top-nav {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .nav-auth-guest {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .nav-auth-guest.is-hidden {
+            display: none !important;
+        }
+        .nav-auth-user {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .nav-auth-user.is-hidden {
+            display: none !important;
+        }
+        .nav-logout-btn {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+            letter-spacing: 0.02em;
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.2s ease;
+        }
+        .nav-logout-btn:hover:not(:disabled) {
+            color: var(--text);
+        }
+        .nav-logout-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        .top a:not(.nav-brand) {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+            text-decoration: none;
+            letter-spacing: 0.02em;
+            transition: color 0.2s ease;
+        }
+        .top a:not(.nav-brand):hover { color: var(--text); }
+        .top a.nav-active {
+            color: var(--text);
+            font-weight: 600;
+        }
+        body.light-mode .top a.nav-active {
+            color: #1a2d6e;
+        }
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--stroke);
+            border-radius: 999px;
+            padding: 0.45rem 0.95rem;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        body.light-mode .theme-toggle {
+            background: rgba(255, 255, 255, 0.75);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+        .theme-toggle:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        body.light-mode .theme-toggle:hover { background: #fff; }
+        .auth-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1.25rem 3rem;
+        }
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem 1.75rem 1.75rem;
+            border-radius: 18px;
+            border: 1px solid rgba(107, 140, 255, 0.14);
+            background: rgba(255, 255, 255, 0.03);
+            text-align: left;
+            transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        body.light-mode .auth-card {
+            background: rgba(255, 255, 255, 0.82);
+            border-color: rgba(90, 120, 230, 0.14);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        }
+        .auth-kicker {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--faint);
+            margin-bottom: 0.5rem;
+        }
+        .auth-card h1 {
+            font-size: 1.45rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            margin-bottom: 0.35rem;
+        }
+        .auth-lede {
+            font-size: 0.9rem;
+            color: var(--muted);
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+        .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
+        .field { display: flex; flex-direction: column; gap: 0.35rem; }
+        .field label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+        .field input {
+            width: 100%;
+            padding: 0.75rem 0.85rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        body.light-mode .field input {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+        .field input::placeholder { color: var(--faint); opacity: 0.85; }
+        .field input:hover { border-color: rgba(107, 140, 255, 0.35); }
+        .field input:focus {
+            outline: none;
+            border-color: rgba(107, 140, 255, 0.55);
+            box-shadow: 0 0 0 3px rgba(107, 140, 255, 0.15);
+        }
+        body.light-mode .field input:focus {
+            box-shadow: 0 0 0 3px rgba(74, 108, 220, 0.15);
+        }
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            margin-top: 0.25rem;
+            padding: 0.85rem 1.25rem;
+            border: none;
+            border-radius: 999px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(135deg, #7a96ff 0%, #5a74e8 100%);
+            box-shadow: 0 4px 24px rgba(90, 116, 232, 0.35);
+            transition: transform 0.15s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 6px 28px rgba(107, 140, 255, 0.45);
+        }
+        .btn-primary:active { transform: scale(0.99); }
+        body.light-mode .btn-primary {
+            box-shadow: 0 4px 20px rgba(74, 108, 220, 0.28);
+        }
+        .btn-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .auth-feedback {
+            font-size: 0.875rem;
+            line-height: 1.45;
+            margin: 0;
+            min-height: 1.25em;
+        }
+        .auth-feedback[hidden] {
+            display: none !important;
+        }
+        .auth-feedback.is-error {
+            color: #ff9a9a;
+        }
+        body.light-mode .auth-feedback.is-error {
+            color: #c53030;
+        }
+        .auth-feedback.is-success {
+            color: #9dffb8;
+        }
+        body.light-mode .auth-feedback.is-success {
+            color: #276749;
+        }
+        .auth-footer {
+            margin-top: 1.35rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--stroke);
+            font-size: 0.88rem;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.5;
+        }
+        .auth-footer a {
+            color: var(--accent);
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .auth-footer a:hover { text-decoration: underline; }
+        .auth-note {
+            font-size: 0.8rem;
+            color: var(--faint);
+            margin-top: 0.75rem;
+            line-height: 1.45;
+            text-align: center;
+        }
+        .auth-note code {
+            font-size: 0.78em;
+            font-family: ui-monospace, monospace;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 0.08em 0.32em;
+            border-radius: 4px;
+        }
+        body.light-mode .auth-note code {
+            background: rgba(0, 0, 0, 0.06);
+        }
+        .field-row {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .field-row a {
+            font-size: 0.82rem;
+            color: var(--muted);
+            text-decoration: none;
+        }
+        .field-row a:hover { color: var(--accent); }
+    </style>
+    {% include "_email_modal_styles.html" %}
+    {% include "_legal_footer_styles.html" %}
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
+    <header class="top">
+        <a href="/" class="nav-brand">GurmukhiOCR</a>
+        <nav class="top-nav" aria-label="Main">
+            <span class="nav-auth-guest" id="navAuthGuest">
+                <a href="/login" class="{% if active_page|default('') == 'login' %}nav-active{% endif %}">Log in</a>
+                <a href="/signup" class="{% if active_page|default('') == 'signup' %}nav-active{% endif %}">Sign up</a>
+            </span>
+            <span class="nav-auth-user is-hidden" id="navAuthUser">
+                <a href="/dashboard2">Dashboard</a>
+                <button type="button" class="nav-logout-btn" id="navLogoutBtn">Log out</button>
+            </span>
+            <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">
+                <span id="themeIcon">🌙</span>
+                <span id="themeLabel">Dark</span>
+            </button>
+        </nav>
+    </header>
+    <main class="auth-main">
+        {% block auth_body %}{% endblock %}
+    </main>
+    {% include "_site_footer_legal.html" %}
+    {% include "_legal_modals.html" %}
+    <script>
+        (function () {
+            var body = document.body;
+            var icon = document.getElementById('themeIcon');
+            var label = document.getElementById('themeLabel');
+            var btn = document.getElementById('themeToggle');
+            function applyTheme(name) {
+                if (name === 'light') {
+                    body.classList.add('light-mode');
+                    icon.textContent = '☀️';
+                    label.textContent = 'Light';
+                } else {
+                    body.classList.remove('light-mode');
+                    icon.textContent = '🌙';
+                    label.textContent = 'Dark';
+                }
+            }
+            applyTheme(localStorage.getItem('theme') || 'dark');
+            btn.addEventListener('click', function () {
+                var next = body.classList.contains('light-mode') ? 'dark' : 'light';
+                localStorage.setItem('theme', next);
+                applyTheme(next);
+            });
+        })();
+    </script>
+    {% include "_supabase_nav_session.html" %}
+    {% block scripts_extra %}{% endblock %}
+</body>
+</html>

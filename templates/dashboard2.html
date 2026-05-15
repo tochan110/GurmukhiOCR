@@ -1,0 +1,2484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard · GurmukhiOCR</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+Gurmukhi:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg0: #07080c;
+            --bg1: #0e1018;
+            --stroke: rgba(255, 255, 255, 0.06);
+            --text: #e8eaef;
+            --muted: rgba(200, 206, 220, 0.72);
+            --faint: rgba(160, 168, 190, 0.45);
+            --accent: #6b8cff;
+            --accent-dim: rgba(107, 140, 255, 0.14);
+            --glow: rgba(107, 140, 255, 0.35);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { -webkit-font-smoothing: antialiased; }
+        body {
+            min-height: 100vh;
+            font-family: "DM Sans", system-ui, sans-serif;
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 50% -20%, rgba(107, 140, 255, 0.12), transparent 55%),
+                radial-gradient(900px 600px at 100% 60%, rgba(120, 200, 255, 0.06), transparent 50%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+            display: flex;
+            flex-direction: column;
+            transition: color 0.25s ease, background 0.35s ease;
+        }
+        body.light-mode {
+            --stroke: rgba(0, 0, 0, 0.08);
+            --text: #14161c;
+            --muted: rgba(50, 55, 70, 0.78);
+            --faint: rgba(70, 78, 98, 0.55);
+            --accent-dim: rgba(74, 108, 220, 0.1);
+            --glow: rgba(74, 108, 220, 0.25);
+            color: var(--text);
+            background: radial-gradient(1100px 720px at 50% -15%, rgba(90, 120, 230, 0.14), transparent 52%),
+                radial-gradient(880px 560px at 95% 55%, rgba(100, 190, 255, 0.12), transparent 48%),
+                radial-gradient(600px 400px at 5% 80%, rgba(130, 160, 255, 0.06), transparent 45%),
+                linear-gradient(180deg, #f6f7fb 0%, #eceef4 45%, #e8eaf0 100%);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem 1.75rem;
+            border-bottom: 1px solid var(--stroke);
+            transition: border-color 0.25s ease;
+        }
+        .nav-brand {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            text-decoration: none;
+            white-space: nowrap;
+            transition: color 0.2s ease;
+        }
+        .nav-brand:hover { color: var(--accent); }
+        .top-nav {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .nav-auth-guest {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .nav-auth-guest.is-hidden {
+            display: none !important;
+        }
+        .nav-auth-user {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .nav-auth-user.is-hidden {
+            display: none !important;
+        }
+        .nav-logout-btn {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+            letter-spacing: 0.02em;
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.2s ease;
+        }
+        .nav-logout-btn:hover:not(:disabled) {
+            color: var(--text);
+        }
+        .nav-logout-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--stroke);
+            border-radius: 999px;
+            padding: 0.45rem 0.95rem;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        body.light-mode .theme-toggle {
+            background: rgba(255, 255, 255, 0.75);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+        .theme-toggle:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        body.light-mode .theme-toggle:hover {
+            background: #fff;
+        }
+        .top a:not(.nav-brand) {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+            text-decoration: none;
+            letter-spacing: 0.02em;
+            transition: color 0.2s ease;
+        }
+        .top a:not(.nav-brand):hover { color: var(--text); }
+        .top a.nav-active {
+            color: var(--text);
+            font-weight: 600;
+        }
+        body.light-mode .top a.nav-active {
+            color: #1a2d6e;
+        }
+        .dash2-body-stack {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            margin-top: 0.65rem;
+            padding-top: 0.45rem;
+        }
+        .dash2-subnav-wrap {
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 60;
+            padding: 0.35rem 0 0.85rem;
+            background: rgba(14, 16, 24, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--stroke);
+            box-shadow: none;
+        }
+        body.light-mode .dash2-subnav-wrap {
+            background: rgba(246, 247, 251, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+        .dash2-subnav-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem 1.5rem;
+            width: 100%;
+            max-width: min(1180px, 100%);
+            margin: 0 auto;
+            padding: 0 clamp(0.75rem, 3vw, 2rem);
+            flex-wrap: wrap;
+        }
+        .dash2-subnav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem 1rem;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+        .dash2-subnav-page-title {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.15rem;
+            min-width: 0;
+        }
+        .dash2-subnav-kicker {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--faint);
+            line-height: 1.2;
+        }
+        .dash2-subnav-heading {
+            font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            color: var(--text);
+        }
+        body.light-mode .dash2-subnav-heading {
+            color: #14161c;
+        }
+        .dash2-subnav-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            flex-shrink: 0;
+        }
+        .dash2-subnav-inner {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            padding: 0.28rem;
+            border-radius: 999px;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        }
+        body.light-mode .dash2-subnav-inner {
+            background: rgba(255, 255, 255, 0.88);
+            box-shadow: 0 8px 28px rgba(30, 50, 100, 0.12);
+        }
+        .dash2-subnav-tab {
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font-family: inherit;
+            font-size: 0.86rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            padding: 0.55rem 1.35rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .dash2-subnav-tab:hover {
+            color: var(--text);
+            background: rgba(107, 140, 255, 0.1);
+        }
+        .dash2-subnav-tab.is-active {
+            color: var(--text);
+            background: var(--accent-dim);
+            box-shadow: 0 0 0 1px rgba(107, 140, 255, 0.25);
+        }
+        body.light-mode .dash2-subnav-tab.is-active {
+            color: #1a2d6e;
+        }
+        .dash2-subnav-back {
+            display: none;
+            align-items: center;
+            gap: 0.35rem;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.86rem;
+            font-weight: 600;
+            padding: 0.55rem 1.2rem;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        body.light-mode .dash2-subnav-back {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 16px rgba(30, 50, 100, 0.1);
+        }
+        .dash2-subnav-back:hover {
+            border-color: rgba(107, 140, 255, 0.4);
+            background: rgba(107, 140, 255, 0.12);
+        }
+        .dash2-subnav-wrap.dash2-subnav-wrap--viewer .dash2-subnav-inner {
+            display: none;
+        }
+        .dash2-subnav-wrap.dash2-subnav-wrap--viewer .dash2-subnav-back {
+            display: inline-flex;
+        }
+        main.dash2-main {
+            flex: 1;
+            width: 100%;
+            max-width: none;
+            margin: 0 auto;
+            padding: 0 clamp(1rem, 3vw, 2.5rem) 2rem;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: auto;
+        }
+        body.dash2--viewer-open main.dash2-main {
+            padding-top: clamp(0.85rem, 2.2vh, 1.35rem);
+        }
+        .dash2-workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .dash2-pane {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .dash2-pane.is-active {
+            display: flex;
+        }
+        .dash2-pane--upload {
+            align-items: center;
+            justify-content: center;
+            padding: clamp(1rem, 4vh, 3rem) 0;
+        }
+        .dash2-pane--upload-inner {
+            width: 100%;
+            max-width: 36rem;
+        }
+        .dash2-pane--files {
+            padding: 0.5rem 0 0;
+        }
+        .dash2-pane--files .dash2-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: clamp(1.1rem, 2vw, 1.75rem);
+            border-radius: 20px;
+        }
+        .dash2-pane--files .dash2-files-list {
+            flex: 1;
+            min-height: 12rem;
+            max-height: none;
+        }
+        .dash2-pane--files .dash2-file-ul {
+            max-height: none;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .dash2-pane--viewer {
+            padding: clamp(0.55rem, 1.4vh, 0.95rem) 0 0;
+        }
+        .dash2-head {
+            flex-shrink: 0;
+            margin-bottom: 1.1rem;
+            padding-top: 0.35rem;
+        }
+        body.dash2--viewer-open .dash2-head {
+            display: none;
+        }
+        .dash2-sub {
+            font-size: 0.95rem;
+            color: var(--muted);
+            line-height: 1.55;
+            max-width: 36rem;
+        }
+        .dash2-quota-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .dash2-quota-label {
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .dash2-quota-value {
+            font-weight: 700;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+            min-width: 1.25em;
+        }
+        .dash2-subnav-actions .dash2-quota-row {
+            margin-right: 0.15rem;
+        }
+        .dash2-quota-row.dash2-quota-row--stack {
+            flex-direction: column;
+            align-items: flex-end;
+            white-space: normal;
+            gap: 0.3rem;
+        }
+        .dash2-quota-row--stack .dash2-quota-line {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            white-space: nowrap;
+        }
+        .dash2-quota-more {
+            border: none;
+            background: none;
+            padding: 0;
+            margin: 0;
+            font: inherit;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--muted);
+            text-decoration: underline;
+            text-underline-offset: 0.14em;
+            cursor: pointer;
+            text-align: right;
+            max-width: 11rem;
+            line-height: 1.35;
+        }
+        .dash2-quota-more:hover {
+            color: var(--text);
+        }
+        body.light-mode .dash2-quota-more {
+            color: rgba(50, 55, 70, 0.78);
+        }
+        .dash2-upload-quota-more-wrap {
+            margin: 0.5rem 0 0;
+        }
+        .dash2-upload-quota-summary .dash2-quota-more {
+            font-size: 0.8rem;
+            max-width: none;
+            text-align: left;
+        }
+        #dash2HigherLimitsModal.modal-overlay {
+            z-index: 12050;
+        }
+        .dash2-panel {
+            border-radius: 16px;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.02);
+            padding: 1.35rem 1.4rem 1.5rem;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+        body.light-mode .dash2-panel {
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .dash2-panel h2 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 0.35rem;
+        }
+        .dash2-pane--upload .dash2-panel h2 {
+            font-size: clamp(1.2rem, 2.5vw, 1.45rem);
+        }
+        .dash2-panel-desc {
+            font-size: 0.86rem;
+            color: var(--muted);
+            line-height: 1.5;
+            margin-bottom: 1.1rem;
+        }
+        .dash2-upload-quota-summary {
+            font-size: 0.86rem;
+            line-height: 1.55;
+            color: var(--muted);
+            margin: 0.25rem 0 1.1rem;
+        }
+        .dash2-upload-quota-summary[hidden] {
+            display: none !important;
+        }
+        .dash2-upload-quota-summary p {
+            margin: 0 0 0.35rem;
+        }
+        .dash2-upload-quota-summary p:last-child {
+            margin-bottom: 0;
+        }
+        .dash2-upload-quota-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.35rem 0.65rem;
+            margin: 0 0 0.5rem;
+        }
+        .dash2-upload-quota-sep {
+            color: var(--faint);
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .dash2-upload-quota-summary strong {
+            color: var(--text);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .dash2-upload-quota-line--secondary {
+            font-size: 0.82rem;
+            opacity: 0.95;
+        }
+        .dash2-files-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .dash2-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.55rem 1rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid rgba(107, 140, 255, 0.28);
+            background: var(--accent-dim);
+            color: var(--text);
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        .dash2-btn:hover {
+            border-color: rgba(107, 140, 255, 0.45);
+            background: rgba(107, 140, 255, 0.22);
+        }
+        body.light-mode .dash2-btn {
+            border-color: rgba(74, 108, 220, 0.22);
+            background: rgba(74, 108, 220, 0.08);
+        }
+        .dash2-files-list {
+            min-height: 8rem;
+            border-radius: 12px;
+            border: 1px dashed rgba(107, 140, 255, 0.22);
+            background: rgba(0, 0, 0, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .dash2-files-list.dash2-files-list--populated {
+            align-items: stretch;
+            justify-content: flex-start;
+            text-align: left;
+            padding: 0;
+        }
+        body.light-mode .dash2-files-list {
+            background: rgba(74, 108, 220, 0.04);
+            border-color: rgba(74, 108, 220, 0.18);
+        }
+        .dash2-files-list-inner {
+            width: 100%;
+            padding: 1rem 1.1rem;
+        }
+        .dash2-files-list--populated .dash2-files-list-inner {
+            padding: 0;
+        }
+        .dash2-empty {
+            font-size: 0.88rem;
+            color: var(--muted);
+            line-height: 1.55;
+            max-width: 18rem;
+            margin: 0 auto;
+        }
+        .dash2-empty a {
+            color: var(--accent);
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .dash2-empty a:hover {
+            text-decoration: underline;
+        }
+        .dash2-file-ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .dash2-pane--files .dash2-panel h2 {
+            font-size: clamp(1.1rem, 2vw, 1.3rem);
+        }
+        .dash2-file-row {
+            padding: 0.85rem 1.1rem;
+            border-bottom: 1px solid var(--stroke);
+        }
+        .dash2-file-row:last-child {
+            border-bottom: none;
+        }
+        .dash2-file-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+            word-break: break-word;
+            line-height: 1.35;
+        }
+        .dash2-file-meta {
+            font-size: 0.76rem;
+            color: var(--faint);
+            margin-top: 0.25rem;
+            line-height: 1.4;
+        }
+        .dash2-files-error {
+            font-size: 0.86rem;
+            color: #f0a8a8;
+            line-height: 1.5;
+            max-width: 22rem;
+            margin: 0 auto;
+        }
+        body.light-mode .dash2-files-error {
+            color: #b83232;
+        }
+        .dash2-upload-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.85rem;
+            min-height: clamp(14rem, 42vh, 26rem);
+            border-radius: 20px;
+            border: 1px dashed rgba(107, 140, 255, 0.35);
+            background: rgba(107, 140, 255, 0.06);
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease;
+            padding: clamp(1.25rem, 4vw, 2.25rem);
+            text-align: center;
+        }
+        .dash2-upload-label:hover {
+            border-color: rgba(107, 140, 255, 0.55);
+            background: rgba(107, 140, 255, 0.1);
+        }
+        body.light-mode .dash2-upload-label {
+            background: rgba(74, 108, 220, 0.06);
+            border-color: rgba(74, 108, 220, 0.28);
+        }
+        .dash2-upload-label input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .dash2-upload-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            background: linear-gradient(145deg, rgba(107, 140, 255, 0.2) 0%, rgba(120, 200, 255, 0.1) 100%);
+            border: 1px solid rgba(107, 140, 255, 0.25);
+        }
+        .dash2-upload-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+        .dash2-upload-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .dash2-upload-hint {
+            font-size: 0.92rem;
+            color: var(--muted);
+            line-height: 1.5;
+            max-width: 22rem;
+        }
+        .dash2-footnote {
+            margin-top: 0.85rem;
+            font-size: 0.78rem;
+            color: var(--faint);
+            line-height: 1.45;
+        }
+        .dash2-upload-status--error {
+            color: #f0a8a8;
+        }
+        body.light-mode .dash2-upload-status--error {
+            color: #b83232;
+        }
+        .dash2-upload-label.is-busy {
+            pointer-events: none;
+            opacity: 0.65;
+        }
+        .dash2-viewer-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+        .dash2-viewer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.95rem;
+            padding-top: 0.15rem;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .dash2-viewer-title {
+            font-size: clamp(0.88rem, 1.45vw, 1.05rem);
+            font-weight: 600;
+            letter-spacing: -0.015em;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+        .dash2-btn--ghost {
+            background: transparent;
+            border-color: var(--stroke);
+        }
+        .dash2-viewer-split {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 1.08fr 0.92fr;
+            gap: clamp(0.75rem, 2vw, 1.5rem);
+            align-items: stretch;
+        }
+        @media (max-width: 900px) {
+            .dash2-viewer-split {
+                grid-template-columns: 1fr;
+            }
+        }
+        .dash2-viewer-doc,
+        .dash2-viewer-text {
+            border-radius: 18px;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.02);
+            padding: clamp(1rem, 2vw, 1.35rem);
+            min-height: 0;
+            height: 100%;
+            max-height: none;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        body.light-mode .dash2-viewer-doc,
+        body.light-mode .dash2-viewer-text {
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .dash2-viewer-text {
+            position: relative;
+        }
+        .dash2-viewer-subtitle {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .dash2-pdf-viewer {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid rgba(107, 140, 255, 0.18);
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.65rem;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        body.light-mode .dash2-pdf-viewer {
+            background: rgba(74, 108, 220, 0.06);
+        }
+        .dash2-pdf-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .dash2-page-btn {
+            padding: 0.5rem 1.15rem;
+            border-radius: 999px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid rgba(107, 140, 255, 0.35);
+            background: var(--accent-dim);
+            color: var(--text);
+        }
+        .dash2-page-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .dash2-page-info {
+            font-size: 0.92rem;
+            color: var(--muted);
+            min-width: 7rem;
+            text-align: center;
+        }
+        .dash2-pdf-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            background: #fff;
+        }
+        .dash2-pdf-iframe {
+            flex: 1;
+            width: 100%;
+            min-height: 0;
+            height: 100%;
+            border: 0;
+            border-radius: 10px;
+            background: #1a1a22;
+        }
+        .dash2-original-image {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            background: #fff;
+        }
+        @keyframes dash2-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .dash2-spinner {
+            display: block;
+            width: 2rem;
+            height: 2rem;
+            border: 3px solid rgba(107, 140, 255, 0.22);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: dash2-spin 0.7s linear infinite;
+            flex-shrink: 0;
+        }
+        body.light-mode .dash2-spinner {
+            border-color: rgba(74, 108, 220, 0.2);
+            border-top-color: #4a6cdc;
+        }
+        .dash2-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.95rem;
+            color: var(--muted);
+            font-size: 0.88rem;
+            padding: 2rem 1rem;
+            min-height: 9rem;
+            text-align: center;
+        }
+        .dash2-loading-text {
+            max-width: 15rem;
+            line-height: 1.45;
+        }
+        .dash2-save-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.85rem;
+            padding: 1rem;
+            text-align: center;
+            border-radius: 18px;
+            background: rgba(7, 8, 12, 0.58);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+        .dash2-save-overlay[hidden] {
+            display: none !important;
+        }
+        body.light-mode .dash2-save-overlay {
+            background: rgba(255, 255, 255, 0.82);
+            color: rgba(50, 55, 70, 0.85);
+        }
+        .dash2-ocr-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            margin-bottom: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .dash2-text-panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.65rem;
+            flex-wrap: wrap;
+        }
+        .dash2-edit-controls {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .dash2-mini-btn--with-icon {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .dash2-copy-icon {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+        .dash2-mini-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .dash2-mini-btn {
+            padding: 0.45rem 0.95rem;
+            border-radius: 10px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid rgba(107, 140, 255, 0.35);
+            background: var(--accent-dim);
+            color: var(--text);
+        }
+        .dash2-mini-btn--primary {
+            background: linear-gradient(135deg, #7a96ff 0%, #5a74e8 100%);
+            color: #fff;
+            border-color: transparent;
+        }
+        .dash2-search-bar {
+            margin-bottom: 0.5rem;
+        }
+        .dash2-search-input {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.15);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+        body.light-mode .dash2-search-input {
+            background: #fff;
+        }
+        .dash2-search-nav {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.6rem;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+        .dash2-search-nav.is-visible {
+            display: flex;
+        }
+        .dash2-text-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.1rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.12);
+            font-size: clamp(1rem, 1.1vw + 0.85rem, 1.2rem);
+            line-height: 1.65;
+            white-space: pre-wrap;
+            text-align: left;
+            color: var(--text);
+            font-family: "Noto Sans Gurmukhi", "DM Sans", system-ui, sans-serif;
+        }
+        body.light-mode .dash2-text-content {
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .dash2-text-content.dash2-text-content--editable {
+            outline: none;
+            border-color: rgba(107, 140, 255, 0.45);
+            background: rgba(107, 140, 255, 0.08);
+        }
+        body.light-mode .dash2-text-content.dash2-text-content--editable {
+            background: rgba(74, 108, 220, 0.1);
+        }
+        .dash2-text-content .highlight {
+            background: rgba(255, 220, 120, 0.35);
+            border-radius: 2px;
+        }
+        .dash2-text-content .highlight.current {
+            background: rgba(255, 180, 60, 0.55);
+            box-shadow: 0 0 0 2px rgba(255, 160, 60, 0.4);
+        }
+        body.light-mode .dash2-text-content .highlight.current {
+            background: rgba(255, 200, 100, 0.65);
+        }
+        .dash2-file-row--selectable {
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .dash2-file-row--selectable:hover {
+            background: rgba(107, 140, 255, 0.08);
+        }
+        .dash2-file-row--selectable.dash2-file-row--active {
+            background: rgba(107, 140, 255, 0.14);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        body.light-mode .dash2-file-row--selectable.dash2-file-row--active {
+            background: rgba(74, 108, 220, 0.12);
+        }
+        footer.dash2-footer {
+            flex-shrink: 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem 0.55rem;
+            padding: 1.25rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--faint);
+            border-top: 1px solid var(--stroke);
+        }
+        .dash2-footer-tag {
+            color: var(--faint);
+        }
+        .dash2-footer-dot {
+            color: var(--faint);
+            user-select: none;
+        }
+        .dash2-footer-privacy-btn {
+            border: none;
+            background: none;
+            padding: 0;
+            font: inherit;
+            font-size: inherit;
+            color: var(--muted);
+            text-decoration: underline;
+            text-underline-offset: 0.18em;
+            cursor: pointer;
+        }
+        .dash2-footer-privacy-btn:hover {
+            color: var(--text);
+        }
+        body.light-mode .dash2-footer-privacy-btn {
+            color: rgba(50, 55, 70, 0.85);
+        }
+        .dash2-modal-root {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .dash2-modal-root[hidden] {
+            display: none !important;
+        }
+        .dash2-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        body.light-mode .dash2-modal-backdrop {
+            background: rgba(20, 22, 28, 0.4);
+        }
+        .dash2-modal-panel {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 28rem;
+            max-height: min(85vh, 32rem);
+            overflow: auto;
+            padding: 1.35rem 1.4rem 1.25rem;
+            border-radius: 16px;
+            border: 1px solid var(--stroke);
+            background: var(--bg1);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+        }
+        body.light-mode .dash2-modal-panel {
+            background: #fff;
+            box-shadow: 0 24px 50px rgba(30, 50, 100, 0.18);
+        }
+        .dash2-modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin: 0 0 0.85rem;
+            color: var(--text);
+        }
+        .dash2-modal-body {
+            font-size: 0.88rem;
+            line-height: 1.55;
+            color: var(--muted);
+        }
+        .dash2-modal-body p {
+            margin: 0 0 0.75rem;
+        }
+        .dash2-modal-body p:last-child {
+            margin-bottom: 0;
+        }
+        .dash2-modal-body strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+        .dash2-modal-actions {
+            margin-top: 1.15rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .dash2-help-fab {
+            position: fixed;
+            bottom: max(1.1rem, env(safe-area-inset-bottom, 0px));
+            right: max(1.1rem, env(safe-area-inset-right, 0px));
+            z-index: 9990;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3.1rem;
+            height: 3.1rem;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #7a96ff 0%, #5a74e8 100%);
+            color: #fff;
+            cursor: pointer;
+            box-shadow:
+                0 4px 14px rgba(0, 0, 0, 0.38),
+                0 10px 32px rgba(107, 140, 255, 0.42);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .dash2-help-fab:hover {
+            transform: scale(1.06);
+            box-shadow:
+                0 6px 20px rgba(0, 0, 0, 0.45),
+                0 14px 40px rgba(107, 140, 255, 0.55);
+        }
+        body.light-mode .dash2-help-fab {
+            box-shadow:
+                0 4px 16px rgba(30, 50, 100, 0.24),
+                0 10px 28px rgba(74, 108, 220, 0.38);
+        }
+        body.light-mode .dash2-help-fab:hover {
+            box-shadow:
+                0 6px 22px rgba(30, 50, 100, 0.3),
+                0 14px 36px rgba(74, 108, 220, 0.48);
+        }
+        .dash2-help-fab:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+        .dash2-help-fab svg {
+            display: block;
+        }
+    </style>
+    {% include "_email_modal_styles.html" %}
+    {% include "_legal_footer_styles.html" %}
+</head>
+<body>
+    <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
+    <header class="top">
+        <a href="/" class="nav-brand">GurmukhiOCR</a>
+        <nav class="top-nav" aria-label="Main">
+            <span class="nav-auth-guest" id="navAuthGuest">
+                <a href="/login">Log in</a>
+                <a href="/signup">Sign up</a>
+            </span>
+            <span class="nav-auth-user is-hidden" id="navAuthUser">
+                <a href="/dashboard2" class="nav-active">Dashboard</a>
+                <button type="button" class="nav-logout-btn" id="navLogoutBtn">Log out</button>
+            </span>
+            <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">
+                <span id="themeIcon">🌙</span>
+                <span id="themeLabel">Dark</span>
+            </button>
+        </nav>
+    </header>
+    <div class="dash2-body-stack">
+        <div class="dash2-subnav-wrap" id="dash2SubnavWrap" aria-label="Workspace">
+            <div class="dash2-subnav-bar">
+                <div class="dash2-subnav-brand">
+                    <h1 class="dash2-subnav-page-title">
+                        <span class="dash2-subnav-kicker">Workspace</span>
+                        <span class="dash2-subnav-heading">Dashboard</span>
+                    </h1>
+                </div>
+                <div class="dash2-subnav-actions">
+                    <div class="dash2-quota-row dash2-quota-row--stack" id="dash2QuotaRow" hidden>
+                        <div class="dash2-quota-line">
+                            <span class="dash2-quota-label">Pages remaining</span>
+                            <span class="dash2-quota-value" id="dash2PagesRemaining">—</span>
+                        </div>
+                        <button type="button" class="dash2-quota-more" id="dash2QuotaContactNav">
+                            Need more pages? Contact us.
+                        </button>
+                    </div>
+                    <div class="dash2-subnav-inner" id="dash2SubnavBrowse">
+                        <button type="button" class="dash2-subnav-tab is-active" data-dash2-tab="upload" id="dash2TabUpload">
+                            Upload file
+                        </button>
+                        <button type="button" class="dash2-subnav-tab" data-dash2-tab="files" id="dash2TabFiles">View files</button>
+                    </div>
+                    <button type="button" class="dash2-subnav-back" id="dash2SubnavBack">← Back to files</button>
+                </div>
+            </div>
+        </div>
+        <main class="dash2-main">
+
+            <div class="dash2-workspace" id="dash2Workspace">
+                <div id="dash2PaneUpload" class="dash2-pane dash2-pane--upload is-active" role="tabpanel" aria-labelledby="dash2TabUpload">
+                    <div class="dash2-pane--upload-inner">
+                        <section class="dash2-panel" aria-labelledby="dash2-upload-heading">
+                            <h2 id="dash2-upload-heading">Upload new file</h2>
+                            <div class="dash2-upload-quota-summary" id="dash2UploadQuotaSummary" hidden>
+                                <p class="dash2-upload-quota-row">
+                                    <span>
+                                        <strong id="dash2UploadQuotaNum">—</strong> pages remaining this month:
+                                    </span>
+                                    <span class="dash2-upload-quota-line--secondary" id="dash2UploadQuotaResetLine">
+                                        Resets in <span id="dash2UploadQuotaReset">—</span>.
+                                    </span>
+                                </p>
+                                <p class="dash2-upload-quota-more-wrap">
+                                    <button type="button" class="dash2-quota-more" id="dash2QuotaContactUpload">
+                                        Need more pages? Contact us here.
+                                    </button>
+                                </p>
+                            </div>
+                            <label class="dash2-upload-label" id="dash2UploadLabel">
+                                <span class="dash2-upload-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                </span>
+                                <span class="dash2-upload-title">Choose file</span>
+                                <span class="dash2-upload-hint">One PDF (multi-page) or one image (PNG, JPEG, WebP, GIF).</span>
+                                <input type="file" id="dash2FileInput" name="file" accept=".pdf,application/pdf,image/*" />
+                            </label>
+                            <p class="dash2-footnote" id="dash2UploadStatus">
+                                Your uploaded file will be appear in your files list. Choose the View Files tab above.
+                            </p>
+                        </section>
+                    </div>
+                </div>
+                <div id="dash2PaneFiles" class="dash2-pane dash2-pane--files" role="tabpanel" aria-labelledby="dash2TabFiles">
+                    <section class="dash2-panel" aria-labelledby="dash2-files-heading">
+                        <h2 id="dash2-files-heading">My files</h2>
+                        <p class="dash2-panel-desc">Refresh to reload the list.</p>
+                        <div class="dash2-files-toolbar">
+                            <button type="button" class="dash2-btn" id="dash2ViewFilesBtn">Refresh</button>
+                        </div>
+                        <div class="dash2-files-list" id="dash2FilesList" role="status" aria-live="polite" tabindex="-1">
+                            <div class="dash2-files-list-inner" id="dash2FilesListRoot">
+                                <p class="dash2-empty">Loading files…</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <div id="dash2PaneViewer" class="dash2-pane dash2-pane--viewer" role="region" aria-label="File viewer">
+                    <section class="dash2-viewer-wrap" id="dash2ViewerWrap">
+                        <div class="dash2-viewer-head">
+                            <h2 class="dash2-viewer-title" id="dash2ViewerTitle">Document</h2>
+                            <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2ExportTxtBtn" style="display: none">
+                                Export Text File
+                            </button>
+                        </div>
+                        <div class="dash2-viewer-split">
+                            <div class="dash2-viewer-doc">
+                                <h3 class="dash2-viewer-subtitle">Original</h3>
+                                <div class="dash2-pdf-viewer" id="dash2PdfViewer">
+                                    <p class="dash2-empty">Select a file from the list.</p>
+                                </div>
+                            </div>
+                            <div class="dash2-viewer-text">
+                                <div class="dash2-text-panel-head">
+                                    <h3 class="dash2-viewer-subtitle">OCR text (Editable)</h3>
+                                    <div class="dash2-edit-controls" id="dash2EditControls">
+                                        <button type="button" class="dash2-mini-btn dash2-mini-btn--with-icon" id="dash2CopyTextBtn" disabled title="Copy OCR text for this page" aria-label="Copy OCR text to clipboard">
+                                            <svg class="dash2-copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                            </svg>
+                                            <span class="dash2-copy-btn-label">Copy</span>
+                                        </button>
+                                        <button type="button" class="dash2-mini-btn" id="dash2EditBtn">Edit</button>
+                                        <button type="button" class="dash2-mini-btn dash2-mini-btn--primary" id="dash2SaveBtn" style="display: none">
+                                            Save
+                                        </button>
+                                        <button type="button" class="dash2-mini-btn" id="dash2CancelBtn" style="display: none">Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="dash2-ocr-nav" id="dash2OcrNav" hidden>
+                                    <button type="button" class="dash2-page-btn" id="dash2OcrPrev">← Prev</button>
+                                    <span class="dash2-page-info" id="dash2OcrPageInfo">OCR page 1 of 1</span>
+                                    <button type="button" class="dash2-page-btn" id="dash2OcrNext">Next →</button>
+                                </div>
+                                <div class="dash2-search-bar">
+                                    <input
+                                        type="text"
+                                        class="dash2-search-input"
+                                        id="dash2SearchInput"
+                                        placeholder="Search in OCR text…"
+                                        autocomplete="off"
+                                    />
+                                </div>
+                                <div class="dash2-search-nav" id="dash2SearchNav">
+                                    <button type="button" class="dash2-mini-btn" id="dash2PrevMatchBtn" disabled>← Prev</button>
+                                    <span id="dash2MatchInfo">0 / 0</span>
+                                    <button type="button" class="dash2-mini-btn" id="dash2NextMatchBtn" disabled>Next →</button>
+                                </div>
+                                <div class="dash2-text-content" id="dash2TextContent">Select a file from the list.</div>
+                                <div id="dash2SaveOverlay" class="dash2-save-overlay" hidden>
+                                    <span class="dash2-spinner" aria-hidden="true"></span>
+                                    <span>Saving changes…</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+    {% include "_site_footer_legal.html" %}
+    {% include "_legal_modals.html" %}
+    <div class="modal-overlay" id="dash2HigherLimitsModal" role="dialog" aria-modal="true" aria-labelledby="dash2HigherLimitsModalTitle">
+        <div class="modal-dialog">
+            <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="dash2HigherLimitsModalTitle">Larger-volume OCR</h2>
+            <p class="modal-body">
+                To discuss high-volume OCR, schedule a meeting, or request a custom quote, email us at
+                <span class="modal-email-slot" title="Contact email coming soon"></span>
+                from the address you use with GurmukhiOCR, and we will follow up.
+            </p>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var overlay = document.getElementById('dash2HigherLimitsModal');
+            var navBtn = document.getElementById('dash2QuotaContactNav');
+            var uploadBtn = document.getElementById('dash2QuotaContactUpload');
+            if (!overlay) return;
+            var closeBtn = overlay.querySelector('.modal-close');
+            function open() {
+                overlay.classList.add('is-open');
+                document.body.style.overflow = 'hidden';
+                if (closeBtn) closeBtn.focus();
+            }
+            function close() {
+                overlay.classList.remove('is-open');
+                document.body.style.overflow = '';
+            }
+            function wireOpen(btn) {
+                if (btn) btn.addEventListener('click', open);
+            }
+            wireOpen(navBtn);
+            wireOpen(uploadBtn);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) close();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && overlay.classList.contains('is-open')) close();
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var body = document.body;
+            var icon = document.getElementById('themeIcon');
+            var label = document.getElementById('themeLabel');
+            var btn = document.getElementById('themeToggle');
+            if (!btn || !icon || !label) return;
+            function applyTheme(name) {
+                if (name === 'light') {
+                    body.classList.add('light-mode');
+                    icon.textContent = '☀️';
+                    label.textContent = 'Light';
+                } else {
+                    body.classList.remove('light-mode');
+                    icon.textContent = '🌙';
+                    label.textContent = 'Dark';
+                }
+            }
+            applyTheme(localStorage.getItem('theme') || 'dark');
+            btn.addEventListener('click', function () {
+                var next = body.classList.contains('light-mode') ? 'dark' : 'light';
+                localStorage.setItem('theme', next);
+                applyTheme(next);
+            });
+        })();
+        (function () {
+            var viewBtn = document.getElementById('dash2ViewFilesBtn');
+            var listEl = document.getElementById('dash2FilesList');
+            if (!viewBtn || !listEl) return;
+            viewBtn.addEventListener('click', function () {
+                listEl.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                var pv = document.getElementById('dash2PaneViewer');
+                if (!pv || !pv.classList.contains('is-active')) {
+                    var t = document.getElementById('dash2TabFiles');
+                    if (t) t.click();
+                }
+            });
+        })();
+    </script>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function dash2LoadingBlock(label) {
+            return (
+                '<div class="dash2-loading" role="status" aria-live="polite">' +
+                '<span class="dash2-spinner" aria-hidden="true"></span>' +
+                '<span class="dash2-loading-text">' +
+                escapeHtml(label) +
+                '</span></div>'
+            );
+        }
+
+        function fileDisplayName(row) {
+            return (
+                row.file_name ||
+                row.original_filename ||
+                row.filename ||
+                row.name ||
+                row.title ||
+                (row.id != null ? 'File ' + String(row.id).slice(0, 8) : 'Untitled')
+            );
+        }
+
+        function formatWhen(iso) {
+            if (!iso) return '';
+            try {
+                return new Date(iso).toLocaleString(undefined, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                });
+            } catch (e) {
+                return String(iso);
+            }
+        }
+
+        function fileMetaLine(row) {
+            var parts = [];
+            if (row.created_at) parts.push(formatWhen(row.created_at));
+            if (row.status) parts.push(String(row.status));
+            if (row.mime_type) parts.push(String(row.mime_type));
+            return parts.join(' · ');
+        }
+
+        function setListShell(listShell, populated) {
+            listShell.classList.toggle('dash2-files-list--populated', populated);
+        }
+
+        async function renderFilesInto(supabase, root, listShell) {
+            root.innerHTML = '<p class="dash2-empty">Loading files…</p>';
+            setListShell(listShell, false);
+
+            var userRes = await supabase.auth.getUser();
+            var user = userRes.data && userRes.data.user;
+            if (userRes.error) {
+                root.innerHTML =
+                    '<p class="dash2-files-error">' +
+                    escapeHtml(userRes.error.message || 'Could not verify session.') +
+                    '</p>';
+                setListShell(listShell, false);
+                return;
+            }
+            if (!user) {
+                root.innerHTML =
+                    '<p class="dash2-empty">Sign in to see your files from the library. <a href="/login">Log in</a></p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var q = await supabase
+                .from('files')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (q.error) {
+                root.innerHTML =
+                    '<p class="dash2-files-error">' + escapeHtml(q.error.message || String(q.error)) + '</p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var rows = q.data || [];
+            if (!rows.length) {
+                root.innerHTML =
+                    '<div class="dash2-files-list-inner"><p class="dash2-empty">No files in your library yet. Uploads will appear here once they are saved to Supabase.</p></div>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var html =
+                '<ul class="dash2-file-ul">' +
+                rows
+                    .map(function (row) {
+                        var name = escapeHtml(fileDisplayName(row));
+                        var meta = escapeHtml(fileMetaLine(row));
+                        var fid = row.id != null ? escapeHtml(String(row.id)) : '';
+                        return (
+                            '<li class="dash2-file-row dash2-file-row--selectable" data-file-id="' +
+                            fid +
+                            '" role="button" tabindex="0">' +
+                            '<div class="dash2-file-name">' +
+                            name +
+                            '</div>' +
+                            (meta
+                                ? '<div class="dash2-file-meta">' + meta + '</div>'
+                                : '') +
+                            '</li>'
+                        );
+                    })
+                    .join('') +
+                '</ul>';
+            root.innerHTML = html;
+            setListShell(listShell, true);
+        }
+
+        (async function () {
+            var cfgEl = document.getElementById('supabase-config');
+            var root = document.getElementById('dash2FilesListRoot');
+            var listShell = document.getElementById('dash2FilesList');
+            if (!cfgEl || !root || !listShell) return;
+
+            var cfg;
+            try {
+                cfg = JSON.parse(cfgEl.textContent);
+            } catch (e) {
+                return;
+            }
+            var key = cfg.publishableKey || cfg.anonKey;
+            if (!cfg.url || !key) {
+                root.innerHTML =
+                    '<p class="dash2-empty">Supabase is not configured on this page.</p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var supabase = createClient(cfg.url, key);
+            try {
+                var dash2Gate = await supabase.auth.getSession();
+                if (!dash2Gate.data || !dash2Gate.data.session) {
+                    window.location.replace('/signup');
+                    return;
+                }
+            } catch (_gateErr) {
+                window.location.replace('/signup');
+                return;
+            }
+
+            var quotaRow = document.getElementById('dash2QuotaRow');
+            var quotaVal = document.getElementById('dash2PagesRemaining');
+            var uploadQuotaSummary = document.getElementById('dash2UploadQuotaSummary');
+            var uploadQuotaNum = document.getElementById('dash2UploadQuotaNum');
+            var uploadQuotaReset = document.getElementById('dash2UploadQuotaReset');
+            var dash2NextResetAtIso = null;
+            var dash2QuotaRefetching = false;
+
+            function setDash2PagesRemaining(n) {
+                if (!quotaVal || !quotaRow) return;
+                quotaRow.hidden = false;
+                quotaVal.textContent = n == null ? '—' : String(n);
+                if (uploadQuotaNum && uploadQuotaSummary && !uploadQuotaSummary.hidden && n != null) {
+                    uploadQuotaNum.textContent = String(n);
+                }
+            }
+
+            function formatResetsInCountdown(iso) {
+                if (!iso) return '';
+                var end = Date.parse(iso);
+                if (Number.isNaN(end)) return '';
+                var ms = end - Date.now();
+                if (ms <= 0) return '';
+                var days = Math.floor(ms / 86400000);
+                var hours = Math.floor((ms % 86400000) / 3600000);
+                if (days > 0 && hours > 0) {
+                    return (
+                        days +
+                        ' day' +
+                        (days === 1 ? '' : 's') +
+                        ' and ' +
+                        hours +
+                        ' hour' +
+                        (hours === 1 ? '' : 's')
+                    );
+                }
+                if (days > 0) return days + ' day' + (days === 1 ? '' : 's');
+                if (hours > 0) return hours + ' hour' + (hours === 1 ? '' : 's');
+                return 'less than an hour';
+            }
+
+            function updateDash2UploadQuotaCountdown() {
+                if (!uploadQuotaReset) return;
+                if (!dash2NextResetAtIso) {
+                    uploadQuotaReset.textContent = '—';
+                    return;
+                }
+                var end = Date.parse(dash2NextResetAtIso);
+                if (Number.isNaN(end)) {
+                    uploadQuotaReset.textContent = '—';
+                    return;
+                }
+                if (end - Date.now() <= 0) {
+                    uploadQuotaReset.textContent = 'checking for reset…';
+                    if (!dash2QuotaRefetching) {
+                        dash2QuotaRefetching = true;
+                        refreshPagesRemainingDisplay().finally(function () {
+                            dash2QuotaRefetching = false;
+                        });
+                    }
+                    return;
+                }
+                uploadQuotaReset.textContent = formatResetsInCountdown(dash2NextResetAtIso);
+            }
+
+            function applyDash2QuotaFromApi(d) {
+                var n = d && d.pages_remaining != null ? d.pages_remaining : null;
+                var iso = d && d.next_reset_at ? String(d.next_reset_at) : null;
+                if (!quotaVal || !quotaRow) return;
+                if (n == null || !iso) {
+                    quotaRow.hidden = false;
+                    quotaVal.textContent = n != null ? String(n) : '—';
+                    dash2NextResetAtIso = null;
+                    if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
+                    if (uploadQuotaReset) uploadQuotaReset.textContent = '—';
+                    return;
+                }
+                quotaRow.hidden = false;
+                quotaVal.textContent = String(n);
+                dash2NextResetAtIso = iso;
+                if (uploadQuotaSummary && uploadQuotaNum) {
+                    uploadQuotaSummary.hidden = false;
+                    uploadQuotaNum.textContent = String(n);
+                    updateDash2UploadQuotaCountdown();
+                }
+            }
+
+            async function refreshPagesRemainingDisplay() {
+                if (!quotaVal || !quotaRow) return;
+                try {
+                    var sr = await supabase.auth.getSession();
+                    var s = sr.data && sr.data.session;
+                    if (!s || !s.access_token) {
+                        quotaRow.hidden = true;
+                        dash2NextResetAtIso = null;
+                        if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
+                        return;
+                    }
+                    quotaRow.hidden = false;
+                    quotaVal.textContent = '…';
+                    if (uploadQuotaReset) uploadQuotaReset.textContent = '…';
+                    var r = await fetch('/api/me/pages', {
+                        headers: { Authorization: 'Bearer ' + s.access_token },
+                        credentials: 'same-origin',
+                    });
+                    var d = await r.json().catch(function () {
+                        return {};
+                    });
+                    if (r.ok && d.pages_remaining != null) {
+                        applyDash2QuotaFromApi(d);
+                    } else {
+                        quotaVal.textContent = d.pages_remaining != null ? String(d.pages_remaining) : '—';
+                        dash2NextResetAtIso = null;
+                        if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
+                    }
+                } catch (e) {
+                    quotaVal.textContent = '—';
+                    dash2NextResetAtIso = null;
+                    if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
+                }
+            }
+
+            setInterval(updateDash2UploadQuotaCountdown, 60000);
+
+            function refresh() {
+                renderFilesInto(supabase, root, listShell);
+                refreshPagesRemainingDisplay();
+            }
+
+            refresh();
+            supabase.auth.onAuthStateChange(function (_event, session) {
+                if (!session) {
+                    window.location.replace('/signup');
+                    return;
+                }
+                refresh();
+            });
+
+            listShell.addEventListener('dash2-refresh-files', refresh);
+
+            function initDash2FileViewer(sb, listRoot, listShellForEvents) {
+                var wrap = document.getElementById('dash2ViewerWrap');
+                var vTitle = document.getElementById('dash2ViewerTitle');
+                var pdfBox = document.getElementById('dash2PdfViewer');
+                var textEl = document.getElementById('dash2TextContent');
+                var searchInput = document.getElementById('dash2SearchInput');
+                var searchNav = document.getElementById('dash2SearchNav');
+                var matchInfo = document.getElementById('dash2MatchInfo');
+                var prevMatchBtn = document.getElementById('dash2PrevMatchBtn');
+                var nextMatchBtn = document.getElementById('dash2NextMatchBtn');
+                var editBtn = document.getElementById('dash2EditBtn');
+                var saveBtn = document.getElementById('dash2SaveBtn');
+                var cancelBtn = document.getElementById('dash2CancelBtn');
+                var exportTxtBtn = document.getElementById('dash2ExportTxtBtn');
+                var ocrNav = document.getElementById('dash2OcrNav');
+                var ocrPrev = document.getElementById('dash2OcrPrev');
+                var ocrNext = document.getElementById('dash2OcrNext');
+                var ocrPageInfo = document.getElementById('dash2OcrPageInfo');
+                var saveOverlay = document.getElementById('dash2SaveOverlay');
+                var copyBtn = document.getElementById('dash2CopyTextBtn');
+                if (!wrap || !pdfBox || !textEl || !listRoot || !exportTxtBtn || !ocrNav || !ocrPrev || !ocrNext || !ocrPageInfo)
+                    return;
+
+                function applyWorkspaceMode(mode) {
+                    var paneUpload = document.getElementById('dash2PaneUpload');
+                    var paneFiles = document.getElementById('dash2PaneFiles');
+                    var paneViewer = document.getElementById('dash2PaneViewer');
+                    var subWrap = document.getElementById('dash2SubnavWrap');
+                    var tabU = document.getElementById('dash2TabUpload');
+                    var tabF = document.getElementById('dash2TabFiles');
+                    if (!paneUpload || !paneFiles || !paneViewer || !subWrap) return;
+                    [paneUpload, paneFiles, paneViewer].forEach(function (p) {
+                        p.classList.remove('is-active');
+                    });
+                    document.body.classList.toggle('dash2--viewer-open', mode === 'viewer');
+                    if (mode === 'viewer') {
+                        paneViewer.classList.add('is-active');
+                        subWrap.classList.add('dash2-subnav-wrap--viewer');
+                        if (tabU) tabU.classList.remove('is-active');
+                        if (tabF) tabF.classList.remove('is-active');
+                    } else {
+                        subWrap.classList.remove('dash2-subnav-wrap--viewer');
+                        if (mode === 'upload') paneUpload.classList.add('is-active');
+                        if (mode === 'files') paneFiles.classList.add('is-active');
+                        if (tabU) tabU.classList.toggle('is-active', mode === 'upload');
+                        if (tabF) tabF.classList.toggle('is-active', mode === 'files');
+                    }
+                    var mainEl = document.querySelector('main.dash2-main');
+                    if (mainEl) mainEl.scrollTop = 0;
+                }
+
+                function teardownViewer() {
+                    revokeBlob();
+                    ocrNav.hidden = true;
+                    docKind = 'pdf';
+                    fileId = null;
+                    bundleData = null;
+                    exportTxtBtn.style.display = 'none';
+                    setActiveRow(null);
+                    searchInput.value = '';
+                    searchMatches = [];
+                    currentMatchIndex = -1;
+                    currentSearchTerm = '';
+                    searchNav.classList.remove('is-visible');
+                    isEditMode = false;
+                    textEl.contentEditable = 'false';
+                    textEl.classList.remove('dash2-text-content--editable');
+                    editBtn.style.display = 'inline-block';
+                    saveBtn.style.display = 'none';
+                    cancelBtn.style.display = 'none';
+                    searchInput.disabled = false;
+                    if (saveOverlay) saveOverlay.hidden = true;
+                    pdfBox.innerHTML = '<p class="dash2-empty">Select a file from the list.</p>';
+                    textEl.textContent = 'Select a file from the list.';
+                    syncCopyTextBtnState();
+                }
+
+                var fileId = null;
+                var bundleData = null;
+                var currentPage = 1;
+                var totalPages = 0;
+                var docKind = 'pdf';
+                var isEditMode = false;
+                var originalSnapshot = null;
+                var lastBlobUrl = null;
+                var searchMatches = [];
+                var currentMatchIndex = -1;
+                var currentSearchTerm = '';
+                var copyBtnRevertTimer = null;
+
+                function syncCopyTextBtnState() {
+                    if (!copyBtn) return;
+                    if (copyBtnRevertTimer) {
+                        clearTimeout(copyBtnRevertTimer);
+                        copyBtnRevertTimer = null;
+                    }
+                    var lab = copyBtn.querySelector('.dash2-copy-btn-label');
+                    if (lab) lab.textContent = 'Copy';
+                    copyBtn.disabled = !(fileId && bundleData);
+                }
+
+                function getVisibleOcrPlainText() {
+                    if (!textEl) return '';
+                    var raw = textEl.innerText != null ? textEl.innerText : textEl.textContent;
+                    return String(raw || '').replace(/\s+$/, '');
+                }
+
+                function copyTextareaFallback(str) {
+                    var ta = document.createElement('textarea');
+                    ta.value = str;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                    } catch (_e) {}
+                    document.body.removeChild(ta);
+                }
+
+                function flashCopyButton() {
+                    if (!copyBtn) return;
+                    var lab = copyBtn.querySelector('.dash2-copy-btn-label');
+                    if (lab) lab.textContent = 'Copied!';
+                    if (copyBtnRevertTimer) clearTimeout(copyBtnRevertTimer);
+                    copyBtnRevertTimer = setTimeout(function () {
+                        copyBtnRevertTimer = null;
+                        var l2 = copyBtn && copyBtn.querySelector('.dash2-copy-btn-label');
+                        if (l2) l2.textContent = 'Copy';
+                    }, 1600);
+                }
+
+                async function copyOcrTextToClipboard() {
+                    if (!copyBtn || copyBtn.disabled) return;
+                    var t = getVisibleOcrPlainText();
+                    if (!t.trim() || t.indexOf('Select a file from the list.') === 0) return;
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(t);
+                        } else {
+                            copyTextareaFallback(t);
+                        }
+                        flashCopyButton();
+                    } catch (_err) {
+                        try {
+                            copyTextareaFallback(t);
+                            flashCopyButton();
+                        } catch (_e2) {
+                            alert('Could not copy to clipboard.');
+                        }
+                    }
+                }
+
+                function flushCurrentPageEditsIntoBundle() {
+                    if (!isEditMode || !bundleData) return;
+                    var pk0 = 'page_' + currentPage;
+                    if (bundleData[pk0]) {
+                        var ed = textEl.innerText || textEl.textContent;
+                        ed = ed.replace(/\s+$/, '');
+                        bundleData[pk0].full_text = ed;
+                        bundleData[pk0].text = ed;
+                    }
+                }
+
+                /** Same page order and fields as legacy dashboard / offline_bundles_viewer: full_text || text, blank line between pages. */
+                function compileOcrJsonDataToFullText(data) {
+                    if (!data || typeof data !== 'object') return '';
+                    var pageKeys = Object.keys(data).filter(function (k) {
+                        return /^page_\d+$/i.test(k);
+                    });
+                    pageKeys.sort(function (a, b) {
+                        var na = parseInt(a.replace(/\D/g, ''), 10) || 0;
+                        var nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+                        return na - nb;
+                    });
+                    var parts = [];
+                    for (var i = 0; i < pageKeys.length; i++) {
+                        var pageKey = pageKeys[i];
+                        var pageData = data[pageKey];
+                        if (!pageData) continue;
+                        var t = (pageData.full_text || pageData.text || '').trim();
+                        if (t) parts.push(t);
+                    }
+                    return parts.join('\n\n').trim();
+                }
+
+                function downloadPlainTextBlob(text, filename) {
+                    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename || 'ocr-result.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
+
+                function exportCompiledText() {
+                    if (!bundleData || !fileId) {
+                        alert('Open a file first.');
+                        return;
+                    }
+                    flushCurrentPageEditsIntoBundle();
+                    var full = compileOcrJsonDataToFullText(bundleData);
+                    if (!full) {
+                        alert('No text content to export.');
+                        return;
+                    }
+                    var raw = (vTitle.textContent || 'document').trim() || 'document';
+                    raw = raw.replace(/\.txt$/i, '');
+                    var stem = raw.replace(/\.pdf$/i, '');
+                    stem = stem.replace(/[\\/:*?"<>|]+/g, '_').trim();
+                    if (!stem.length) stem = 'ocr-result';
+                    if (stem.length > 120) stem = stem.slice(0, 120);
+                    downloadPlainTextBlob(full, stem + '.txt');
+                }
+
+                async function authHeaders() {
+                    var sr = await sb.auth.getSession();
+                    var s = sr.data && sr.data.session;
+                    if (!s || !s.access_token) throw new Error('Not signed in');
+                    return { Authorization: 'Bearer ' + s.access_token };
+                }
+
+                function revokeBlob() {
+                    if (lastBlobUrl) {
+                        URL.revokeObjectURL(lastBlobUrl);
+                        lastBlobUrl = null;
+                    }
+                }
+
+                function setActiveRow(li) {
+                    listRoot.querySelectorAll('.dash2-file-row--selectable').forEach(function (el) {
+                        el.classList.remove('dash2-file-row--active');
+                    });
+                    if (li) li.classList.add('dash2-file-row--active');
+                }
+
+                function escapeRe(str) {
+                    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                }
+
+                function dash2EscapeHtmlText(text) {
+                    var d = document.createElement('div');
+                    d.textContent = text == null ? '' : String(text);
+                    return d.innerHTML;
+                }
+
+                function highlightText(text, pageNum) {
+                    if (!currentSearchTerm) return dash2EscapeHtmlText(text);
+                    var pageMatches = searchMatches.filter(function (m) {
+                        return m.page === pageNum;
+                    });
+                    if (!pageMatches.length) return dash2EscapeHtmlText(text);
+                    var currentMatch =
+                        currentMatchIndex >= 0 ? searchMatches[currentMatchIndex] : null;
+                    var currentOnPage =
+                        currentMatch && currentMatch.page === pageNum ? currentMatch : null;
+                    var highlighted = '';
+                    var lastIndex = 0;
+                    var sorted = pageMatches.slice().sort(function (a, b) {
+                        return a.index - b.index;
+                    });
+                    sorted.forEach(function (match) {
+                        highlighted += dash2EscapeHtmlText(text.substring(lastIndex, match.index));
+                        var slice = text.substring(match.index, match.index + match.length);
+                        var isCur =
+                            currentOnPage &&
+                            currentOnPage.index === match.index &&
+                            currentOnPage.length === match.length;
+                        var cls = isCur ? 'highlight current' : 'highlight';
+                        highlighted += '<span class="' + cls + '">' + dash2EscapeHtmlText(slice) + '</span>';
+                        lastIndex = match.index + match.length;
+                    });
+                    highlighted += dash2EscapeHtmlText(text.substring(lastIndex));
+                    return highlighted;
+                }
+
+                function updateText(pageNum) {
+                    if (!bundleData) {
+                        textEl.textContent = 'No OCR data';
+                        return;
+                    }
+                    if (isEditMode) return;
+                    var pk = 'page_' + pageNum;
+                    var pageData = bundleData[pk];
+                    var text = '';
+                    if (pageData && pageData.full_text) text = pageData.full_text;
+                    else if (pageData && pageData.text) text = pageData.text;
+                    else text = 'No text for this page';
+                    if (searchMatches.length && currentSearchTerm) {
+                        textEl.innerHTML = highlightText(text, pageNum);
+                    } else {
+                        textEl.textContent = text;
+                    }
+                }
+
+                function searchAllPages(term) {
+                    if (!bundleData || !(term || '').trim()) {
+                        searchMatches = [];
+                        currentMatchIndex = -1;
+                        currentSearchTerm = '';
+                        searchNav.classList.remove('is-visible');
+                        updateText(currentPage);
+                        return;
+                    }
+                    currentSearchTerm = term.trim();
+                    searchMatches = [];
+                    for (var p = 1; p <= totalPages; p++) {
+                        var pk = 'page_' + p;
+                        var pd = bundleData[pk];
+                        if (!pd) continue;
+                        var t = pd.full_text || pd.text || '';
+                        if (!t) continue;
+                        var rx = new RegExp(escapeRe(currentSearchTerm), 'gi');
+                        var m;
+                        while ((m = rx.exec(t)) !== null) {
+                            searchMatches.push({ page: p, index: m.index, length: m[0].length });
+                        }
+                    }
+                    if (searchMatches.length) {
+                        currentMatchIndex = 0;
+                        navigateToMatch(0);
+                    } else {
+                        currentMatchIndex = -1;
+                        matchInfo.textContent = '0 / 0';
+                        prevMatchBtn.disabled = true;
+                        nextMatchBtn.disabled = true;
+                        searchNav.classList.add('is-visible');
+                        updateText(currentPage);
+                    }
+                }
+
+                function navigateToMatch(idx) {
+                    if (idx < 0 || idx >= searchMatches.length) return;
+                    currentMatchIndex = idx;
+                    var m = searchMatches[idx];
+                    if (m.page !== currentPage) {
+                        setOcrPage(m.page);
+                    } else {
+                        updateText(m.page);
+                    }
+                    searchNav.classList.add('is-visible');
+                    matchInfo.textContent = idx + 1 + ' / ' + searchMatches.length;
+                    prevMatchBtn.disabled = idx === 0;
+                    nextMatchBtn.disabled = idx === searchMatches.length - 1;
+                    setTimeout(function () {
+                        var el = textEl.querySelector('.highlight.current');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 200);
+                }
+
+                function updateOcrNav() {
+                    ocrNav.hidden = totalPages <= 1;
+                    if (totalPages <= 1) return;
+                    ocrPrev.disabled = currentPage <= 1;
+                    ocrNext.disabled = currentPage >= totalPages;
+                    ocrPageInfo.textContent = 'OCR page ' + currentPage + ' of ' + totalPages;
+                }
+
+                function setOcrPage(pageNum) {
+                    if (isEditMode && bundleData) {
+                        var pkSave = 'page_' + currentPage;
+                        if (bundleData[pkSave]) {
+                            var ed = textEl.innerText || textEl.textContent;
+                            ed = ed.replace(/\s+$/, '');
+                            bundleData[pkSave].full_text = ed;
+                            bundleData[pkSave].text = ed;
+                        }
+                    }
+                    currentPage = pageNum;
+                    if (currentPage < 1) currentPage = 1;
+                    if (totalPages >= 1 && currentPage > totalPages) currentPage = totalPages;
+                    updateOcrNav();
+                    if (!isEditMode) updateText(currentPage);
+                    else {
+                        var pk = 'page_' + currentPage;
+                        var pd = bundleData[pk];
+                        var tx = '';
+                        if (pd && pd.full_text) tx = pd.full_text;
+                        else if (pd && pd.text) tx = pd.text;
+                        textEl.textContent = tx;
+                    }
+                }
+
+                async function renderOriginalDocument(fid) {
+                    pdfBox.innerHTML = dash2LoadingBlock('Loading original…');
+                    revokeBlob();
+                    var ah = await authHeaders();
+                    var r = await fetch('/api/files/' + fid + '/original', {
+                        headers: ah,
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok) {
+                        var errj = {};
+                        try {
+                            errj = await r.json();
+                        } catch (e4) {}
+                        throw new Error(errj.error || r.statusText);
+                    }
+                    var blob = await r.blob();
+                    lastBlobUrl = URL.createObjectURL(blob);
+                    pdfBox.innerHTML = '';
+                    if (docKind === 'pdf') {
+                        var frame = document.createElement('iframe');
+                        frame.className = 'dash2-pdf-iframe';
+                        frame.title = 'Original PDF';
+                        frame.src = lastBlobUrl + '#view=FitH';
+                        pdfBox.appendChild(frame);
+                    } else {
+                        var img = document.createElement('img');
+                        img.className = 'dash2-original-image';
+                        img.src = lastBlobUrl;
+                        img.alt = 'Original';
+                        pdfBox.appendChild(img);
+                    }
+                }
+
+                async function openFile(fid, li) {
+                    try {
+                        if (!fid || !li) return;
+                        exportTxtBtn.style.display = 'none';
+                        if (copyBtn) {
+                            if (copyBtnRevertTimer) {
+                                clearTimeout(copyBtnRevertTimer);
+                                copyBtnRevertTimer = null;
+                            }
+                            copyBtn.disabled = true;
+                            var _copyLab = copyBtn.querySelector('.dash2-copy-btn-label');
+                            if (_copyLab) _copyLab.textContent = 'Copy';
+                        }
+                        fileId = fid;
+                        setActiveRow(li);
+                        if (saveOverlay) saveOverlay.hidden = true;
+                        applyWorkspaceMode('viewer');
+                        pdfBox.innerHTML = dash2LoadingBlock('Loading document…');
+                        textEl.contentEditable = 'false';
+                        textEl.classList.remove('dash2-text-content--editable');
+                        textEl.innerHTML = dash2LoadingBlock('Loading OCR text…');
+                        var nameEl = li.querySelector('.dash2-file-name');
+                        vTitle.textContent = nameEl ? nameEl.textContent : 'Document';
+                        revokeBlob();
+                        searchInput.value = '';
+                        searchMatches = [];
+                        currentMatchIndex = -1;
+                        currentSearchTerm = '';
+                        searchNav.classList.remove('is-visible');
+                        isEditMode = false;
+                        editBtn.style.display = 'inline-block';
+                        saveBtn.style.display = 'none';
+                        cancelBtn.style.display = 'none';
+                        searchInput.disabled = false;
+
+                        var ah = await authHeaders();
+                        var rj = await fetch('/api/files/' + fid + '/json', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                        });
+                        if (!rj.ok) {
+                            var ej = await rj.json().catch(function () {
+                                return {};
+                            });
+                            throw new Error(ej.error || 'Failed to load JSON');
+                        }
+                        bundleData = await rj.json();
+
+                        var ri = await fetch('/api/files/' + fid + '/pdf/info', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                        });
+                        if (!ri.ok) {
+                            var ei = await ri.json().catch(function () {
+                                return {};
+                            });
+                            throw new Error(ei.error || 'Failed to load document info');
+                        }
+                        var info = await ri.json();
+                        docKind = info.kind === 'image' ? 'image' : 'pdf';
+                        totalPages = info.page_count || 1;
+                        currentPage = 1;
+
+                        try {
+                            await renderOriginalDocument(fid);
+                        } catch (rendErr) {
+                            pdfBox.innerHTML =
+                                '<p class="dash2-files-error">' +
+                                escapeHtml(String((rendErr && rendErr.message) || rendErr)) +
+                                '</p>';
+                            throw rendErr;
+                        }
+                        setOcrPage(1);
+                        exportTxtBtn.style.display = 'inline-block';
+                        syncCopyTextBtnState();
+                        var mainScroll = document.querySelector('main.dash2-main');
+                        if (mainScroll) mainScroll.scrollTop = 0;
+                    } catch (e2) {
+                        alert(String((e2 && e2.message) || e2));
+                        teardownViewer();
+                        applyWorkspaceMode('files');
+                    }
+                }
+
+                function closeViewer() {
+                    teardownViewer();
+                    applyWorkspaceMode('files');
+                }
+
+                function enterEditMode() {
+                    if (!bundleData || !fileId) return;
+                    isEditMode = true;
+                    originalSnapshot = JSON.parse(JSON.stringify(bundleData));
+                    textEl.contentEditable = 'true';
+                    textEl.classList.add('dash2-text-content--editable');
+                    var pk = 'page_' + currentPage;
+                    var pd = bundleData[pk];
+                    var tx = '';
+                    if (pd && pd.full_text) tx = pd.full_text;
+                    else if (pd && pd.text) tx = pd.text;
+                    textEl.textContent = tx;
+                    editBtn.style.display = 'none';
+                    saveBtn.style.display = 'inline-block';
+                    cancelBtn.style.display = 'inline-block';
+                    saveBtn.textContent = 'Save';
+                    saveBtn.disabled = false;
+                    searchInput.disabled = true;
+                }
+
+                function exitEditMode() {
+                    isEditMode = false;
+                    textEl.contentEditable = 'false';
+                    textEl.classList.remove('dash2-text-content--editable');
+                    if (originalSnapshot) bundleData = JSON.parse(JSON.stringify(originalSnapshot));
+                    editBtn.style.display = 'inline-block';
+                    saveBtn.style.display = 'none';
+                    cancelBtn.style.display = 'none';
+                    searchInput.disabled = false;
+                    updateText(currentPage);
+                }
+
+                async function saveEdits() {
+                    if (!bundleData || !fileId) return;
+                    flushCurrentPageEditsIntoBundle();
+                    saveBtn.textContent = 'Saving…';
+                    saveBtn.disabled = true;
+                    if (saveOverlay) saveOverlay.hidden = false;
+                    try {
+                        var ah = await authHeaders();
+                        var rs = await fetch('/api/files/' + fileId + '/save', {
+                            method: 'POST',
+                            headers: Object.assign({ 'Content-Type': 'application/json' }, ah),
+                            credentials: 'same-origin',
+                            body: JSON.stringify(bundleData),
+                        });
+                        var out = await rs.json().catch(function () {
+                            return {};
+                        });
+                        if (!rs.ok) throw new Error(out.error || rs.statusText);
+                        var rj2 = await fetch('/api/files/' + fileId + '/json', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                        });
+                        bundleData = await rj2.json();
+                        originalSnapshot = JSON.parse(JSON.stringify(bundleData));
+                        exitEditMode();
+                    } catch (e3) {
+                        alert(String((e3 && e3.message) || e3));
+                        saveBtn.textContent = 'Save';
+                        saveBtn.disabled = false;
+                    } finally {
+                        if (saveOverlay) saveOverlay.hidden = true;
+                    }
+                }
+
+                var fileListEventRoot = listShellForEvents && listShellForEvents.nodeType ? listShellForEvents : listRoot;
+                fileListEventRoot.addEventListener('click', function (ev) {
+                    var li = ev.target.closest('.dash2-file-row--selectable');
+                    if (!li || !li.getAttribute('data-file-id')) return;
+                    var fid = li.getAttribute('data-file-id').trim();
+                    if (!fid) return;
+                    openFile(fid, li);
+                });
+
+                fileListEventRoot.addEventListener('keydown', function (ev) {
+                    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                    var li = ev.target.closest('.dash2-file-row--selectable');
+                    if (!li || !li.getAttribute('data-file-id')) return;
+                    ev.preventDefault();
+                    var fid = li.getAttribute('data-file-id').trim();
+                    if (fid) openFile(fid, li);
+                });
+
+                var tabUpload = document.getElementById('dash2TabUpload');
+                var tabFiles = document.getElementById('dash2TabFiles');
+                var subBack = document.getElementById('dash2SubnavBack');
+                if (tabUpload) {
+                    tabUpload.addEventListener('click', function () {
+                        teardownViewer();
+                        applyWorkspaceMode('upload');
+                    });
+                }
+                if (tabFiles) {
+                    tabFiles.addEventListener('click', function () {
+                        teardownViewer();
+                        applyWorkspaceMode('files');
+                    });
+                }
+                if (subBack) {
+                    subBack.addEventListener('click', closeViewer);
+                }
+                if (copyBtn) copyBtn.addEventListener('click', copyOcrTextToClipboard);
+                editBtn.addEventListener('click', enterEditMode);
+                cancelBtn.addEventListener('click', exitEditMode);
+                saveBtn.addEventListener('click', saveEdits);
+                exportTxtBtn.addEventListener('click', exportCompiledText);
+
+                searchInput.addEventListener('input', function (e) {
+                    searchAllPages(e.target.value);
+                });
+                searchInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
+                        } else {
+                            if (currentMatchIndex < searchMatches.length - 1)
+                                navigateToMatch(currentMatchIndex + 1);
+                        }
+                    }
+                });
+                prevMatchBtn.addEventListener('click', function () {
+                    if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
+                });
+                nextMatchBtn.addEventListener('click', function () {
+                    if (currentMatchIndex < searchMatches.length - 1)
+                        navigateToMatch(currentMatchIndex + 1);
+                });
+                ocrPrev.addEventListener('click', function () {
+                    if (currentPage > 1) setOcrPage(currentPage - 1);
+                });
+                ocrNext.addEventListener('click', function () {
+                    if (currentPage < totalPages) setOcrPage(currentPage + 1);
+                });
+            }
+
+            initDash2FileViewer(supabase, root, listShell);
+
+            function sanitizeForStoragePath(name) {
+                var base = (name && String(name).trim()) || 'upload.bin';
+                base = base.replace(/[/\\]/g, '_');
+                if (base.length > 220) base = base.slice(0, 220);
+                return base || 'upload.bin';
+            }
+
+            var fileInput = document.getElementById('dash2FileInput');
+            var uploadLabel = document.getElementById('dash2UploadLabel');
+            var uploadStatus = document.getElementById('dash2UploadStatus');
+
+            async function uploadSelectedFiles(filesArr) {
+                if (!fileInput || !uploadStatus) return;
+                var userRes = await supabase.auth.getUser();
+                var user = userRes.data && userRes.data.user;
+                if (userRes.error || !user) {
+                    uploadStatus.textContent = 'Sign in to upload files.';
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                    fileInput.value = '';
+                    return;
+                }
+                var sessRes = await supabase.auth.getSession();
+                var session = sessRes.data && sessRes.data.session;
+                if (!session || !session.access_token) {
+                    uploadStatus.textContent = 'Could not read your session. Try signing in again.';
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                    fileInput.value = '';
+                    return;
+                }
+                var accessToken = session.access_token;
+                uploadStatus.classList.remove('dash2-upload-status--error');
+                uploadStatus.textContent = 'Uploading and processing…';
+                if (uploadLabel) uploadLabel.classList.add('is-busy');
+                fileInput.disabled = true;
+                var errors = [];
+                for (var i = 0; i < filesArr.length; i++) {
+                    var file = filesArr[i];
+                    var safeName = sanitizeForStoragePath(file.name);
+                    var filePath = user.id + '/' + crypto.randomUUID() + '-' + safeName;
+                    var up = await supabase.storage.from('gbucket').upload(filePath, file);
+                    if (up.error) {
+                        errors.push(file.name + ' (storage): ' + up.error.message);
+                        continue;
+                    }
+                    var procRes = await fetch('/process', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + accessToken,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            file_path: filePath,
+                            file_name: file.name,
+                        }),
+                    });
+                    var procJson = {};
+                    try {
+                        procJson = await procRes.json();
+                    } catch (e2) {
+                        procJson = {};
+                    }
+                    if (!procRes.ok) {
+                        if (procJson.pages_remaining != null) {
+                            setDash2PagesRemaining(procJson.pages_remaining);
+                        }
+                        errors.push(
+                            file.name +
+                                ' (OCR/DB): ' +
+                                (procJson.error || procRes.statusText || String(procRes.status))
+                        );
+                    } else {
+                        if (procJson.pages_remaining != null) {
+                            setDash2PagesRemaining(procJson.pages_remaining);
+                        }
+                    }
+                }
+                fileInput.disabled = false;
+                fileInput.value = '';
+                if (uploadLabel) uploadLabel.classList.remove('is-busy');
+                if (errors.length) {
+                    uploadStatus.textContent = errors.join(' · ');
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                } else {
+                    uploadStatus.textContent =
+                        'Done: file uploaded to gbucket, OCR run, and row inserted into files.';
+                    listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                }
+            }
+
+            if (fileInput) {
+                fileInput.addEventListener('change', function () {
+                    var list = fileInput.files;
+                    if (!list || !list.length) return;
+                    uploadSelectedFiles([list[0]]);
+                });
+            }
+        })();
+    </script>
+    {% include "_supabase_nav_session.html" %}
+    <script async src="https://tally.so/widgets/embed.js"></script>
+    <button
+        type="button"
+        class="dash2-help-fab"
+        id="dash2HelpFeedbackBtn"
+        data-tally-open="pbJx1E"
+        aria-label="Help and feedback"
+        title="Help &amp; feedback"
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+    </button>
+</body>
+</html>
