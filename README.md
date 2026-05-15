@@ -39,7 +39,10 @@ gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} 'app:app'
 
 ### Render
 
-- The repo includes **`runtime.txt`** pinning **Python 3.12.x** so native deps (e.g. Pillow) install from wheels. Without it, Render may use a very new Python (e.g. 3.14) where older Pillow builds fail.
+- Render **does not** use `runtime.txt` for Python. Set the version with either:
+  - a **`.python-version`** file in the repo root (this repo pins `3.12.8`), or  
+  - the **`PYTHON_VERSION`** environment variable (e.g. `3.12.8`, fully qualified if using the dashboard option that requires it).
+- **Python 3.14** is the default on new Render services (as of their docs) and currently breaks `google-cloud-vision` / `protobuf` at import time; stay on **3.12.x** or **3.13.x** until those stacks support 3.14.
 - **Build command:** `pip install -r requirements.txt`
 - **Start command:** `gunicorn -w 2 --bind 0.0.0.0:$PORT app:app`
 

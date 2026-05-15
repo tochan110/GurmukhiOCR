@@ -1,1 +1,2 @@
+# Heroku-style runtime (Heroku only). Render uses .python-version or PYTHON_VERSION instead.
 python-3.12.8
