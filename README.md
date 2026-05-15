@@ -37,6 +37,12 @@ gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} 'app:app'
 6. Use HTTPS in front of the app (reverse proxy or platform TLS). Session cookies are marked `Secure` when `FLASK_ENV=production`.
 7. In Supabase: enable RLS on tables, restrict storage bucket policies, and use the **publishable** key only in the browser.
 
+### Render
+
+- The repo includes **`runtime.txt`** pinning **Python 3.12.x** so native deps (e.g. Pillow) install from wheels. Without it, Render may use a very new Python (e.g. 3.14) where older Pillow builds fail.
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `gunicorn -w 2 --bind 0.0.0.0:$PORT app:app`
+
 ## Security notes
 
 - **Supabase**: `SUPABASE_SECRET_KEY` is server-only. Never expose it in templates or client JS.
