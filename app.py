@@ -4,7 +4,7 @@ from google.cloud import vision
 from google.oauth2 import service_account
 import fitz  # PyMuPDF
 from PIL import Image, UnidentifiedImageError
-import io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request
+import io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request, math, traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import uuid
@@ -531,7 +531,7 @@ def _vision_response_to_page_data(response) -> dict:
                                         if word.bounding_box and word.bounding_box.vertices
                                         else []
                                     },
-                                    "confidence": getattr(word, "confidence", None),
+                                    "confidence": _safe_ocr_float(getattr(word, "confidence", None)),
                                 }
                             )
 
@@ -1118,6 +1118,44 @@ def _json_field_to_python(val):
     return val
 
 
+def _safe_ocr_float(val):
+    """Vision/confidence values must be JSON-safe (no NaN/inf)."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f):
+        return None
+    return f
+
+
+def _json_http_response(data, status=200):
+    """Build a UTF-8 JSON Response; allow_nan=False so clients can parse with fetch().json()."""
+    try:
+        body = json.dumps(
+            data,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            default=str,
+        )
+    except (TypeError, ValueError) as e:
+        print(f"[json-response] Serialization failed: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        return (
+            jsonify(
+                {
+                    "error": "Could not serialize document JSON (invalid floats or structure).",
+                    "error_type": "serialization",
+                }
+            ),
+            500,
+        )
+    return Response(body, mimetype="application/json; charset=utf-8", status=status)
+
+
 def _effective_edited_json_dict(row: dict) -> dict:
     ej = _json_field_to_python(row.get("edited_json"))
     if isinstance(ej, dict) and ej:
@@ -1307,17 +1345,22 @@ def _render_stored_document_page_png(file_bytes: bytes, kind: str, page_num: int
 
 @app.route("/api/files/<uuid:file_id>/json", methods=["GET"])
 def api_file_get_json(file_id):
-    token = _bearer_token_from_request()
-    if not token:
-        return jsonify({"error": "Missing Authorization bearer token."}), 401
-    user_id = supabase_access_token_to_user_id(token)
-    if not user_id:
-        return jsonify({"error": "Invalid or expired token."}), 401
-    row = _files_row_for_user(str(file_id), user_id)
-    if not row:
-        return jsonify({"error": "File not found."}), 404
-    data = _effective_edited_json_dict(row)
-    return jsonify(data)
+    try:
+        token = _bearer_token_from_request()
+        if not token:
+            return jsonify({"error": "Missing Authorization bearer token."}), 401
+        user_id = supabase_access_token_to_user_id(token)
+        if not user_id:
+            return jsonify({"error": "Invalid or expired token."}), 401
+        row = _files_row_for_user(str(file_id), user_id)
+        if not row:
+            return jsonify({"error": "File not found."}), 404
+        data = _effective_edited_json_dict(row)
+        return _json_http_response(data)
+    except Exception as e:
+        print(f"[api/files/{file_id}/json] error: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"error": str(e), "error_type": "server"}), 500
 
 
 @app.route("/api/files/<uuid:file_id>/pdf/info", methods=["GET"])

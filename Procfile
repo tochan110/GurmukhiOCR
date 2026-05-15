@@ -1,1 +1,1 @@
-web: gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} app:app
+web: gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30 --access-logfile - --error-logfile - app:app

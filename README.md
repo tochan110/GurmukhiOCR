@@ -44,7 +44,8 @@ gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} 'app:app'
   - the **`PYTHON_VERSION`** environment variable (e.g. `3.12.8`, fully qualified if using the dashboard option that requires it).
 - **Python 3.14** is the default on new Render services (as of their docs) and currently breaks `google-cloud-vision` / `protobuf` at import time; stay on **3.12.x** or **3.13.x** until those stacks support 3.14.
 - **Build command:** `pip install -r requirements.txt`
-- **Start command:** `gunicorn -w 2 --bind 0.0.0.0:$PORT app:app`
+- **Start command:** `gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30 --access-logfile - --error-logfile - app:app`  
+  The **120s timeout** avoids spurious **502** responses when loading large OCR JSON from the database (Render/gunicorn default is often 30s). If payloads are very large, upgrade instance memory or split storage for OCR JSON.
 
 ## Security notes
 
