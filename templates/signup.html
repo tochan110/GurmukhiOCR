@@ -68,6 +68,24 @@
         #signupSubmit:disabled:hover {
             box-shadow: none;
         }
+        .terms-consent {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.55rem;
+            font-size: 0.84rem;
+            line-height: 1.45;
+            color: var(--muted);
+        }
+        .terms-consent input {
+            flex-shrink: 0;
+            width: 1rem;
+            height: 1rem;
+            margin-top: 0.13rem;
+            accent-color: var(--accent);
+        }
+        .terms-consent .legal-inline-link {
+            font-size: inherit;
+        }
     </style>
 {% endblock %}
 {% block auth_body %}
@@ -117,6 +135,15 @@
                         </li>
                     </ul>
                 </div>
+                <label class="terms-consent" for="termsAccepted">
+                    <input id="termsAccepted" name="terms_accepted" type="checkbox" required>
+                    <span>
+                        I agree to the
+                        <button type="button" class="legal-inline-link" data-legal-open="terms">Terms of service</button>
+                        and
+                        <button type="button" class="legal-inline-link" data-legal-open="privacy">Privacy policy</button>.
+                    </span>
+                </label>
                 <p id="authFeedback" class="auth-feedback" role="alert" hidden></p>
                 <button type="submit" class="btn-primary" id="signupSubmit" disabled>Create account</button>
             </form>
@@ -164,6 +191,7 @@
         const submitBtn = document.getElementById('signupSubmit');
         const pwInput = document.getElementById('password');
         const pw2Input = document.getElementById('password2');
+        const termsInput = document.getElementById('termsAccepted');
 
         function evaluatePasswordRules(password, password2) {
             const p = password || '';
@@ -201,10 +229,11 @@
                 const el = document.getElementById(ids[key]);
                 if (el) el.classList.toggle('is-met', !!r[key]);
             });
-            submitBtn.disabled = signupSubmitting || !allRulesMet(r);
+            const acceptedTerms = termsInput ? termsInput.checked : false;
+            submitBtn.disabled = signupSubmitting || !allRulesMet(r) || !acceptedTerms;
         }
 
-        if (form && submitBtn && pwInput && pw2Input) {
+        if (form && submitBtn && pwInput && pw2Input && termsInput) {
             ['input', 'blur', 'paste'].forEach(function (evt) {
                 pwInput.addEventListener(evt, function () {
                     setTimeout(updateSignupPasswordUI, 0);
@@ -213,6 +242,7 @@
                     setTimeout(updateSignupPasswordUI, 0);
                 });
             });
+            termsInput.addEventListener('change', updateSignupPasswordUI);
             updateSignupPasswordUI();
 
             form.addEventListener('submit', async function (e) {
@@ -231,6 +261,10 @@
                 const password2 = form.password2.value;
                 if (!email || !password) {
                     showAuthFeedback(feedback, 'Enter email and password.', 'error');
+                    return;
+                }
+                if (!termsInput.checked) {
+                    showAuthFeedback(feedback, 'Please agree to the Terms of service and Privacy policy before creating an account.', 'error');
                     return;
                 }
                 const rules = evaluatePasswordRules(password, password2);

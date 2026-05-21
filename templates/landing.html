@@ -154,6 +154,18 @@
             padding: 2.5rem 1.5rem 4rem;
             text-align: center;
         }
+        .hero-layout {
+            width: 100%;
+            max-width: 68rem;
+            display: grid;
+            grid-template-columns: minmax(0, 0.92fr) minmax(280px, 1.08fr);
+            align-items: center;
+            gap: clamp(1.75rem, 4vw, 3.25rem);
+            margin: 0 auto 2.75rem;
+        }
+        .hero-copy {
+            text-align: left;
+        }
         .badge {
             display: inline-flex;
             align-items: center;
@@ -175,10 +187,18 @@
         h1.gurmukhi {
             font-family: "Noto Sans Gurmukhi", "DM Sans", system-ui, sans-serif;
             font-weight: 600;
-            font-size: clamp(1.85rem, 5vw, 2.75rem);
+            font-size: clamp(2rem, 4.8vw, 3.25rem);
             line-height: 1.35;
             margin-bottom: 0.35rem;
             letter-spacing: 0.02em;
+        }
+        .hero-subtitle {
+            font-size: clamp(1.05rem, 2.25vw, 1.35rem);
+            font-weight: 500;
+            color: var(--muted);
+            max-width: 34rem;
+            margin: 0 0 1rem;
+            line-height: 1.55;
         }
         h2.lede {
             font-size: clamp(1.05rem, 2.4vw, 1.35rem);
@@ -205,14 +225,14 @@
             font-size: 1rem;
             color: var(--muted);
             max-width: 34rem;
-            margin: 0 auto 2.5rem;
+            margin: 0 0 1.5rem;
             line-height: 1.65;
         }
         .hero-cta-block {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            margin-bottom: 2.25rem;
+            align-items: flex-start;
+            margin-bottom: 0;
             width: 100%;
         }
         .cta-row {
@@ -230,6 +250,56 @@
         }
         body.light-mode .cta-microcopy {
             color: rgba(70, 78, 98, 0.65);
+        }
+        .hero-preview {
+            position: relative;
+            margin: 0;
+            width: 100%;
+            border-radius: 22px;
+            border: 1px solid rgba(107, 140, 255, 0.18);
+            background: linear-gradient(165deg, rgba(107, 140, 255, 0.11), rgba(120, 200, 255, 0.04));
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34), 0 0 55px rgba(107, 140, 255, 0.13);
+            overflow: hidden;
+        }
+        body.light-mode .hero-preview {
+            border-color: rgba(74, 108, 220, 0.18);
+            background: linear-gradient(165deg, rgba(74, 108, 220, 0.12), rgba(255, 255, 255, 0.75));
+            box-shadow: 0 24px 70px rgba(35, 55, 110, 0.18);
+        }
+        .hero-preview img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .hero-preview img.hero-preview-light {
+            display: none;
+        }
+        body.light-mode .hero-preview img.hero-preview-dark {
+            display: none;
+        }
+        body.light-mode .hero-preview img.hero-preview-light {
+            display: block;
+        }
+        @media (max-width: 860px) {
+            .hero-layout {
+                grid-template-columns: 1fr;
+                max-width: 38rem;
+                gap: 1.6rem;
+            }
+            .hero-copy {
+                text-align: center;
+            }
+            .hero-subtitle,
+            p.desc {
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .hero-cta-block {
+                align-items: center;
+            }
+            .hero-preview {
+                order: 2;
+            }
         }
         .flow-section {
             width: 100%;
@@ -416,6 +486,8 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1.25rem;
             align-items: stretch;
+            max-width: 44rem;
+            margin: 0 auto;
         }
         .pricing-tier--hidden {
             display: none !important;
@@ -592,6 +664,90 @@
             padding: 0.08em 0.3em;
             border-radius: 4px;
         }
+        .page-pack-intro {
+            font-size: 0.9rem;
+            color: var(--muted);
+            line-height: 1.45;
+            margin: 0 0 0.8rem;
+        }
+        .page-pack-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+        .page-pack-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            width: 100%;
+            padding: 0.95rem 1rem;
+            border-radius: 14px;
+            border: 1px solid rgba(120, 200, 255, 0.26);
+            background: rgba(107, 140, 255, 0.11);
+            color: var(--text);
+            text-decoration: none;
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+        .page-pack-btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(120, 200, 255, 0.45);
+            background: rgba(107, 140, 255, 0.18);
+        }
+        body.light-mode .page-pack-btn {
+            border-color: rgba(74, 108, 220, 0.2);
+            background: rgba(74, 108, 220, 0.08);
+        }
+        body.light-mode .page-pack-btn:hover {
+            border-color: rgba(74, 108, 220, 0.34);
+            background: rgba(74, 108, 220, 0.13);
+        }
+        .page-pack-info {
+            min-width: 0;
+        }
+        .page-pack-pages {
+            display: block;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .page-pack-rate {
+            display: block;
+            margin-top: 0.18rem;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+        .page-pack-price {
+            flex-shrink: 0;
+            min-width: 4.5rem;
+            text-align: right;
+        }
+        .page-pack-amount {
+            display: block;
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1;
+            color: var(--text);
+        }
+        .page-pack-action {
+            display: inline-block;
+            margin-top: 0.25rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: rgba(210, 225, 255, 0.96);
+        }
+        body.light-mode .page-pack-action {
+            color: #3d5ccc;
+        }
+        .pricing-credit-note {
+            max-width: 42rem;
+            margin: 1rem auto 0;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: var(--faint);
+            text-align: center;
+        }
         .pricing-cta {
             display: flex;
             flex-direction: column;
@@ -670,23 +826,26 @@
         </nav>
     </header>
     <main>
-        <!-- <h1 class="gurmukhi">ਗੁਰਮੁੱਖੀ ਅੱਖਰ ਪਛਾਣ</h1> -->
-        <h1 class="gurmukhi">Gurmukhi First Document Digitization</h1>
-        <h2 class="gurmukhi">Turn Your Scanned Punjabi Documents, Images, & PDFs into Structured Text.</h2>
+        <section class="hero-layout" aria-labelledby="hero-heading">
+            <div class="hero-copy">
+                <h1 class="gurmukhi" id="hero-heading">OCR for Punjabi PDFs and Images</h1>
+                <h2 class="hero-subtitle">Turn scanned documents into editable text.</h2>
+                <p class="desc">
+                    Works automatically with English and all languages supported by Google Cloud Vision.
+                </p>
 
-        <!-- <h3 class="gurmukhi">Turn Your Scanned Documents, Images, & PDFs into Structured Text</h3> -->
-
-        <!-- <h2 class="lede">ਗੁਰਮੁੱਖੀ ਅੱਖਰ ਪਛਾਣ</h2> -->
-        <p class="desc">
-            Works automatically with English and all languages supported by Google Cloud Vision.
-        </p>
-
-        <div class="hero-cta-block">
-            <div class="cta-row">
-                <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">Open Dashboard</a>
+                <div class="hero-cta-block">
+                    <div class="cta-row">
+                        <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">Open Dashboard</a>
+                    </div>
+                    <p class="cta-microcopy">Free to use. No credit card required.</p>
+                </div>
             </div>
-            <p class="cta-microcopy">Free to use. No credit card required.</p>
-        </div>
+            <figure class="hero-preview" aria-label="GurmukhiOCR side-by-side dashboard preview">
+                <img class="hero-preview-dark" src="{{ url_for('static', filename='dashboard_dark.png') }}" alt="GurmukhiOCR dashboard in dark mode">
+                <img class="hero-preview-light" src="{{ url_for('static', filename='dashboard_light.png') }}" alt="GurmukhiOCR dashboard in light mode">
+            </figure>
+        </section>
         <!-- <p class="hero-highlight">20 pages / images included free, every month.</p> -->
 
         <section class="flow-section" aria-labelledby="flow-heading">
@@ -748,35 +907,64 @@
         <section class="pricing-section" aria-labelledby="pricing-heading">
             <div class="pricing-section-head">
                 <p class="pricing-section-kicker">Plans</p>
-                <h2 class="pricing-section-title" id="pricing-heading">Free to use</h2>
-                <p class="pricing-section-sub">Every month you can run OCR on up to <strong>20 pages or images</strong> at no charge. If you need a higher ongoing limit or dedicated batching, use the custom plan and we will align on scope and pricing.</p>
+                <h2 class="pricing-section-title" id="pricing-heading">Free to start</h2>
+                <p class="pricing-section-sub">Every month you can run OCR on up to <strong>20 credits</strong> at no charge. Need more? Contact us for larger custom volumes.</p>
             </div>
             <div class="pricing-grid">
                 <article class="pricing-tier pricing-tier--free" aria-label="Free monthly allowance">
                     <p class="pricing-tier-label">Included monthly</p>
                     <p class="pricing-tier-price"><span class="amt">$0</span><span class="per">20 pages or images per month</span></p>
-                    <p class="pricing-tier-note">Use the full workflow on real documents—structured JSON, word boxes, and compiled text exports—within your monthly allowance.</p>
+                    <p class="pricing-tier-note">Use the full workflow on real documents—within your monthly allowance.</p>
                     <ul class="pricing-tier-list">
                         <li><strong>20 pages or images</strong> free each calendar month</li>
-                        <li>Full OCR quality on supported files</li>
-                        <li>Structured JSON with word-level boxes</li>
-                        <li>Compiled <code>FULL_TEXT.txt</code> alongside JSON</li>
+                        <li>Full OCR quality on supported files (Image or PDF)</li>
+                        <li>Full capabilities of our side-by-side editor</li>
+                        <li>Gurmukhi, English and all languages supported by Google Cloud Vision, detected automatically OCR'd</li>
+                        <li>Compiled full text exported as .txt file</li>
                         <!-- <li>Large PDFs: ZIP download with JSON + full text</li> -->
                     </ul>
                 </article>
                 
-                <article class="pricing-tier pricing-tier--paid pricing-tier--hidden" aria-hidden="true" aria-label="Pay as you go (hidden)">
-                    <p class="pricing-tier-label">Pay as you go</p>
-                    <p class="pricing-tier-price"><span class="amt">5¢</span><span class="per">per page or image · $0.05 each</span></p>
-                    <p class="pricing-tier-note">After your free pages, every additional page or image is billed the same simple rate.</p>
-                    <ul class="pricing-tier-list">
-                        <li>No tiers, bundles, or seat licenses</li>
-                        <li>Billed only for what you process</li>
-                        <li>Scale up or down anytime</li>
-                        <li>Ideal for archives, books, and one-off batches</li>
-                        <li>No recurring subscription—stay in control of cost</li>
-                    </ul>
+                <!--
+                <article class="pricing-tier pricing-tier--paid" aria-label="Lifetime page packs">
+                    <p class="pricing-tier-label">Buy once</p>
+                    <p class="pricing-tier-price"><span class="amt">Lifetime packs</span><span class="per">credits never expire</span></p>
+                    <p class="pricing-tier-note">No subscription. No expiration.</p>
+                    <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account forever.</p>
+                    <div class="page-pack-options" aria-label="Choose a page pack">
+                        <a class="page-pack-btn" href="/signup?pack=100">
+                            <span class="page-pack-info">
+                                <span class="page-pack-pages">100 pages</span>
+                                <span class="page-pack-rate">5¢ / page</span>
+                            </span>
+                            <span class="page-pack-price">
+                                <span class="page-pack-amount">$5</span>
+                                <span class="page-pack-action">Buy</span>
+                            </span>
+                        </a>
+                        <a class="page-pack-btn" href="/signup?pack=500">
+                            <span class="page-pack-info">
+                                <span class="page-pack-pages">500 pages</span>
+                                <span class="page-pack-rate">3¢ / page</span>
+                            </span>
+                            <span class="page-pack-price">
+                                <span class="page-pack-amount">$15</span>
+                                <span class="page-pack-action">Buy</span>
+                            </span>
+                        </a>
+                        <a class="page-pack-btn" href="/signup?pack=1200">
+                            <span class="page-pack-info">
+                                <span class="page-pack-pages">1200 pages</span>
+                                <span class="page-pack-rate">~2.1¢ / page</span>
+                            </span>
+                            <span class="page-pack-price">
+                                <span class="page-pack-amount">$25</span>
+                                <span class="page-pack-action">Buy</span>
+                            </span>
+                        </a>
+                    </div>
                 </article>
+                -->
                 <article class="pricing-tier pricing-tier--volume" aria-label="Custom volume">
                     <p class="pricing-tier-label">Need more?</p>
                     <p class="pricing-tier-price"><span class="amt">Custom</span><span class="per">when you outgrow the monthly allowance</span></p>
@@ -791,6 +979,10 @@
                     </div>
                 </article>
             </div>
+            <p class="pricing-credit-note">
+                * Pages / images: 1 image = 1 credit. 1 page from a PDF = 1 image = 1 credit.
+                Unused credits stay on your account forever.
+            </p>
             <div class="pricing-cta">
                 <a class="btn btn-primary" href="/signup">Start for free</a>
                 <p class="cta-microcopy">No credit card required.</p>
@@ -806,7 +998,7 @@
             <h2 id="volumeEmailModalTitle">Larger-volume OCR</h2>
             <p class="modal-body">
                 To discuss high-volume OCR, schedule a meeting, or request a custom quote, email us at
-                <span class="modal-email-slot" title="Contact email coming soon"></span>
+                <a class="modal-email-slot" href="mailto:team@gurmukhiocr.com">team@gurmukhiocr.com</a>
                 from the address you use with GurmukhiOCR, and we will follow up.
             </p>
         </div>
