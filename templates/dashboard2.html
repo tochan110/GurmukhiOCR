@@ -150,6 +150,41 @@
         body.light-mode .top a.nav-active {
             color: #1a2d6e;
         }
+        @media (max-width: 720px) {
+            .top {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 1rem;
+                gap: 0.85rem;
+            }
+            .nav-brand {
+                text-align: center;
+            }
+            .top-nav {
+                justify-content: center;
+                gap: 0.65rem 0.85rem;
+            }
+            .nav-auth-guest,
+            .nav-auth-user {
+                justify-content: center;
+                gap: 0.75rem;
+            }
+            .theme-toggle {
+                padding: 0.42rem 0.8rem;
+            }
+        }
+        @media (max-width: 420px) {
+            .top-nav {
+                gap: 0.55rem 0.7rem;
+            }
+            .top a:not(.nav-brand),
+            .nav-logout-btn {
+                font-size: 0.82rem;
+            }
+            .theme-toggle {
+                font-size: 0.76rem;
+            }
+        }
         .dash2-body-stack {
             flex: 1;
             display: flex;
@@ -295,6 +330,51 @@
         }
         .dash2-subnav-wrap.dash2-subnav-wrap--viewer .dash2-subnav-back {
             display: inline-flex;
+        }
+        @media (max-width: 760px) {
+            .dash2-subnav-wrap {
+                padding: 0.45rem 0 0.65rem;
+            }
+            .dash2-subnav-bar {
+                align-items: stretch;
+                justify-content: center;
+                padding: 0 1rem;
+                gap: 0.75rem;
+            }
+            .dash2-subnav-brand {
+                justify-content: center;
+                text-align: center;
+                width: 100%;
+            }
+            .dash2-subnav-page-title {
+                align-items: center;
+            }
+            .dash2-subnav-actions {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.65rem;
+            }
+            .dash2-subnav-actions .dash2-quota-row {
+                margin-right: 0;
+            }
+            .dash2-quota-row.dash2-quota-row--stack {
+                align-items: center;
+                text-align: center;
+            }
+            .dash2-subnav-inner {
+                width: 100%;
+                justify-content: center;
+                border-radius: 16px;
+            }
+            .dash2-subnav-tab {
+                flex: 1;
+                padding: 0.58rem 0.75rem;
+            }
+            .dash2-subnav-wrap.dash2-subnav-wrap--viewer .dash2-subnav-back {
+                justify-content: center;
+                width: 100%;
+            }
         }
         main.dash2-main {
             flex: 1;
@@ -690,6 +770,53 @@
             pointer-events: none;
             opacity: 0.65;
         }
+        .dash2-mobile-capture-wrap {
+            display: none;
+            margin-top: 0.8rem;
+        }
+        .dash2-camera-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(107, 140, 255, 0.32);
+            background: var(--accent-dim);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-align: center;
+        }
+        body.light-mode .dash2-camera-label {
+            border-color: rgba(74, 108, 220, 0.24);
+            background: rgba(74, 108, 220, 0.1);
+        }
+        .dash2-camera-label input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .dash2-camera-label.is-busy {
+            pointer-events: none;
+            opacity: 0.65;
+        }
+        @media (max-width: 760px) {
+            .dash2-mobile-capture-wrap {
+                display: block;
+            }
+            .dash2-upload-label {
+                min-height: 11rem;
+            }
+        }
         .dash2-viewer-wrap {
             flex: 1;
             display: flex;
@@ -731,6 +858,37 @@
         @media (max-width: 900px) {
             .dash2-viewer-split {
                 grid-template-columns: 1fr;
+            }
+            .dash2-viewer-doc,
+            .dash2-viewer-text {
+                min-height: 26rem;
+                height: auto;
+            }
+        }
+        @media (max-width: 560px) {
+            main.dash2-main {
+                padding: 0 0.85rem 1.5rem;
+            }
+            .dash2-pane--upload {
+                padding: 1rem 0 1.6rem;
+            }
+            .dash2-pane--files .dash2-panel,
+            .dash2-viewer-doc,
+            .dash2-viewer-text {
+                padding: 1rem;
+                border-radius: 16px;
+            }
+            .dash2-viewer-head {
+                align-items: stretch;
+            }
+            .dash2-viewer-head .dash2-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .dash2-pdf-controls,
+            .dash2-ocr-nav,
+            .dash2-search-nav {
+                gap: 0.5rem;
             }
         }
         .dash2-viewer-doc,
@@ -1255,6 +1413,19 @@
                                 <span class="dash2-upload-hint">One PDF (multi-page) or one image (PNG, JPEG, WebP, GIF).</span>
                                 <input type="file" id="dash2FileInput" name="file" accept=".pdf,application/pdf,image/*" />
                             </label>
+                            <div class="dash2-mobile-capture-wrap">
+                                <label class="dash2-camera-label" id="dash2CameraLabel">
+                                    <span aria-hidden="true">📷</span>
+                                    <span>Take a picture</span>
+                                    <input
+                                        type="file"
+                                        id="dash2CameraInput"
+                                        name="camera_file"
+                                        accept="image/*"
+                                        capture="environment"
+                                    />
+                                </label>
+                            </div>
                             <p class="dash2-footnote" id="dash2UploadStatus">
                                 Your uploaded file will be appear in your files list. Choose the View Files tab above.
                             </p>
@@ -2373,7 +2544,9 @@
             }
 
             var fileInput = document.getElementById('dash2FileInput');
+            var cameraInput = document.getElementById('dash2CameraInput');
             var uploadLabel = document.getElementById('dash2UploadLabel');
+            var cameraLabel = document.getElementById('dash2CameraLabel');
             var uploadStatus = document.getElementById('dash2UploadStatus');
 
             async function uploadSelectedFiles(filesArr) {
@@ -2384,6 +2557,7 @@
                     uploadStatus.textContent = 'Sign in to upload files.';
                     uploadStatus.classList.add('dash2-upload-status--error');
                     fileInput.value = '';
+                    if (cameraInput) cameraInput.value = '';
                     return;
                 }
                 var sessRes = await supabase.auth.getSession();
@@ -2392,13 +2566,16 @@
                     uploadStatus.textContent = 'Could not read your session. Try signing in again.';
                     uploadStatus.classList.add('dash2-upload-status--error');
                     fileInput.value = '';
+                    if (cameraInput) cameraInput.value = '';
                     return;
                 }
                 var accessToken = session.access_token;
                 uploadStatus.classList.remove('dash2-upload-status--error');
                 uploadStatus.textContent = 'Uploading and processing…';
                 if (uploadLabel) uploadLabel.classList.add('is-busy');
+                if (cameraLabel) cameraLabel.classList.add('is-busy');
                 fileInput.disabled = true;
+                if (cameraInput) cameraInput.disabled = true;
                 var errors = [];
                 for (var i = 0; i < filesArr.length; i++) {
                     var file = filesArr[i];
@@ -2444,7 +2621,12 @@
                 }
                 fileInput.disabled = false;
                 fileInput.value = '';
+                if (cameraInput) {
+                    cameraInput.disabled = false;
+                    cameraInput.value = '';
+                }
                 if (uploadLabel) uploadLabel.classList.remove('is-busy');
+                if (cameraLabel) cameraLabel.classList.remove('is-busy');
                 if (errors.length) {
                     uploadStatus.textContent = errors.join(' · ');
                     uploadStatus.classList.add('dash2-upload-status--error');
@@ -2458,6 +2640,13 @@
             if (fileInput) {
                 fileInput.addEventListener('change', function () {
                     var list = fileInput.files;
+                    if (!list || !list.length) return;
+                    uploadSelectedFiles([list[0]]);
+                });
+            }
+            if (cameraInput) {
+                cameraInput.addEventListener('change', function () {
+                    var list = cameraInput.files;
                     if (!list || !list.length) return;
                     uploadSelectedFiles([list[0]]);
                 });
