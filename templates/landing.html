@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GurmukhiOCR</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+Gurmukhi:wght@500;600&display=swap" rel="stylesheet">
@@ -55,6 +57,9 @@
             transition: border-color 0.25s ease;
         }
         .nav-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
             font-size: 1.125rem;
             font-weight: 700;
             letter-spacing: -0.03em;
@@ -62,6 +67,13 @@
             text-decoration: none;
             white-space: nowrap;
             transition: color 0.2s ease;
+        }
+        .nav-brand-logo {
+            width: 1.55rem;
+            height: 1.55rem;
+            border-radius: 7px;
+            object-fit: contain;
+            flex-shrink: 0;
         }
         .nav-brand:hover {
             color: var(--accent);
@@ -946,7 +958,10 @@
 <body>
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
-        <a href="/" class="nav-brand">GurmukhiOCR</a>
+        <a href="/" class="nav-brand">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="" aria-hidden="true">
+            <span>GurmukhiOCR</span>
+        </a>
         <nav class="top-nav" aria-label="Main">
             <span class="nav-auth-guest" id="navAuthGuest">
                 <a href="/login">Log in</a>
