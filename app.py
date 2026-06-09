@@ -4,7 +4,7 @@ from google.cloud import vision
 from google.oauth2 import service_account
 import fitz  # PyMuPDF
 from PIL import Image, UnidentifiedImageError
-import io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request, math, traceback
+import io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request, urllib.parse, math, traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import uuid
@@ -28,6 +28,9 @@ supabase_client = (
 # Monthly page quota reset (profiles.last_reset + profiles.pages_remaining)
 PROFILE_PAGES_MONTHLY_ALLOWANCE = 20
 PROFILE_PAGES_RESET_INTERVAL_DAYS = 30
+JSON_INLINE_LIMIT_BYTES = 1_000_000
+SUPABASE_STORAGE_BUCKET = "gbucket"
+SUPABASE_JSON_BUCKET = (os.environ.get("SUPABASE_JSON_BUCKET") or SUPABASE_STORAGE_BUCKET).strip()
 
 _DEV_SECRET_KEY = "dev-only-change-SECRET_KEY-in-production"
 
@@ -779,7 +782,105 @@ def supabase_access_token_to_user_id(access_token: str) -> str | None:
 def download_from_gbucket(storage_path: str) -> bytes:
     if not supabase_client:
         raise RuntimeError("Supabase is not configured (missing URL or secret key).")
-    return supabase_client.storage.from_("gbucket").download(storage_path)
+    return supabase_client.storage.from_(SUPABASE_STORAGE_BUCKET).download(storage_path)
+
+
+def download_json_from_storage(storage_path: str) -> bytes:
+    if not supabase_client:
+        raise RuntimeError("Supabase is not configured (missing URL or secret key).")
+    return supabase_client.storage.from_(SUPABASE_JSON_BUCKET).download(storage_path)
+
+
+def _storage_object_url(bucket: str, storage_path: str) -> str:
+    encoded_path = urllib.parse.quote(storage_path.strip("/"), safe="/")
+    return f"{supabase_url.rstrip('/')}/storage/v1/object/{bucket}/{encoded_path}"
+
+
+def _storage_bucket_url(bucket: str) -> str:
+    return f"{supabase_url.rstrip('/')}/storage/v1/object/{bucket}"
+
+
+def _http_error_detail(exc: urllib.error.HTTPError) -> str:
+    try:
+        body = exc.read().decode("utf-8", "replace")
+    except Exception:
+        body = ""
+    return f"HTTP {exc.code} {exc.reason}: {body}".strip()
+
+
+def upload_to_gbucket(storage_path: str, content: bytes, content_type: str = "application/octet-stream") -> None:
+    """Upload/overwrite a private Supabase Storage object using the server secret key."""
+    if not supabase_url or not supabase_secret_key:
+        raise RuntimeError("Supabase storage upload requires SUPABASE_URL and SUPABASE_SECRET_KEY.")
+    if not storage_path or storage_path.startswith("/") or ".." in storage_path:
+        raise ValueError("Invalid storage path.")
+    req = urllib.request.Request(
+        _storage_object_url(SUPABASE_JSON_BUCKET, storage_path),
+        data=content,
+        headers={
+            "Authorization": f"Bearer {supabase_secret_key}",
+            "apikey": supabase_secret_key,
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(
+            f"Supabase Storage upload failed for {storage_path} in bucket {SUPABASE_JSON_BUCKET}: {_http_error_detail(e)}"
+        ) from e
+
+
+def delete_from_gbucket(storage_path: str) -> None:
+    if not supabase_url or not supabase_secret_key or not storage_path:
+        return
+    try:
+        req = urllib.request.Request(
+            _storage_bucket_url(SUPABASE_JSON_BUCKET),
+            data=json.dumps({"prefixes": [storage_path]}).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {supabase_secret_key}",
+                "apikey": supabase_secret_key,
+                "Content-Type": "application/json",
+            },
+            method="DELETE",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        print(
+            f"[storage] delete failed for {storage_path}: {_http_error_detail(e)}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except Exception as e:
+        print(f"[storage] delete failed for {storage_path}: {e}", file=sys.stderr, flush=True)
+
+
+def _json_storage_path(user_id: str, file_id: str, kind: str) -> str:
+    return f"{user_id}/ocr-json/{file_id}/{kind}.json"
+
+
+def _json_bytes_for_storage(data: dict) -> bytes:
+    return json.dumps(
+        data,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+
+
+def _download_json_dict_from_gbucket(storage_path: str) -> dict | None:
+    raw = download_json_from_storage(storage_path)
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"Stored JSON at {storage_path} is not valid JSON.") from e
+    return parsed if isinstance(parsed, dict) else None
 
 
 def run_ocr_on_file_bytes(content: bytes, filename: str) -> dict:
@@ -815,7 +916,18 @@ def require_google_ocr_key():
     if request.path.startswith("/api/files/") or request.path.startswith("/api/me/"):
         _ensure_cred_session_id()
         return None
-    exempt = {"setup_credentials", "api_credentials", "api_auth_status", "landing", "login_page", "signup_page", "dashboard2_page", "dashboard_legacy_redirect"}
+    exempt = {
+        "setup_credentials",
+        "api_credentials",
+        "api_auth_status",
+        "landing",
+        "login_page",
+        "signup_page",
+        "dashboard2_page",
+        "dashboard_legacy_redirect",
+        "process_supabase_preflight",
+        "process_supabase_preflight_upload",
+    }
     if request.endpoint in exempt:
         _ensure_cred_session_id()
         return None
@@ -999,36 +1111,25 @@ def process_supabase_ocr():
     if cur_pages < page_charge:
         return jsonify(
             {
-                "error": f"Not enough pages remaining ({cur_pages} left; this file needs {page_charge}).",
+                "error": f"Not enough credits remaining ({cur_pages} left; this file needs {page_charge}).",
                 "error_type": "insufficient_pages",
                 "pages_remaining": cur_pages,
                 "pages_required": page_charge,
             }
         ), 402
 
-    try:
-        ocr_result = run_ocr_on_file_bytes(raw, file_name or os.path.basename(file_path))
-    except VisionConfigurationError as e:
-        return jsonify_vision_configuration_error(e)
-    except EmptyPagesError as e:
-        return jsonify(
-            {
-                "error": str(e),
-                "error_type": "empty_pages",
-                "start_page": e.start_page,
-                "end_page": e.end_page,
-            }
-        ), 500
-    except Exception as e:
-        print(f"[process] OCR failed: {e}", file=sys.stderr, flush=True)
-        return jsonify({"error": str(e), "error_type": "ocr_error"}), 500
-
+    file_row_id = str(uuid.uuid4())
     insert_row = {
+        "id": file_row_id,
         "user_id": user_id,
         "original_file_path": file_path,
         "file_name": file_name or os.path.basename(file_path),
-        "original_json": ocr_result,
-        "edited_json": ocr_result,
+        "original_json": None,
+        "edited_json": None,
+        "original_json_path": None,
+        "editable_json_path": None,
+        "credits_used": page_charge,
+        "status": "processing",
     }
 
     try:
@@ -1041,28 +1142,118 @@ def process_supabase_ocr():
     if getattr(ins, "data", None) is not None:
         row = ins.data[0] if isinstance(ins.data, list) and len(ins.data) else ins.data
     if row is None:
+        if use_json_storage:
+            delete_from_gbucket(original_json_path)
+            delete_from_gbucket(editable_json_path)
         return jsonify(
             {
-                "error": "Insert returned no row. Confirm the files table columns (user_id UUID, original_file_path text, file_name text, original_json jsonb, edited_json jsonb) and that the service role can insert.",
+                "error": "Insert returned no row. Confirm the files table columns and that the service role can insert.",
                 "error_type": "db_error",
             }
         ), 500
 
     inserted_id = row.get("id") if isinstance(row, dict) else None
+    if not inserted_id:
+        return jsonify({"error": "Inserted row has no id.", "error_type": "db_error"}), 500
+
+    def mark_file_failed(message: str) -> None:
+        try:
+            supabase_client.table("files").update({"status": "failed"}).eq("id", str(inserted_id)).eq("user_id", user_id).execute()
+        except Exception as status_e:
+            print(f"[process] failed to mark file failed ({message}): {status_e}", file=sys.stderr, flush=True)
+
     ok_q, err_q, new_remaining = _consume_profile_pages(user_id, page_charge)
     if not ok_q:
-        if inserted_id:
-            try:
-                supabase_client.table("files").delete().eq("id", str(inserted_id)).execute()
-            except Exception as del_e:
-                print(f"[process] rollback files row failed: {del_e}", file=sys.stderr, flush=True)
+        mark_file_failed(err_q or "Could not update credit balance.")
         return jsonify(
             {
-                "error": err_q or "Could not update page quota.",
+                "error": err_q or "Could not update credit balance.",
                 "error_type": "quota_update_failed",
                 "pages_remaining": cur_pages,
+                "file_id": str(inserted_id),
             }
         ), 409
+
+    try:
+        ocr_result = run_ocr_on_file_bytes(raw, file_name or os.path.basename(file_path))
+    except VisionConfigurationError as e:
+        mark_file_failed(e.user_message)
+        return jsonify_vision_configuration_error(e)
+    except EmptyPagesError as e:
+        mark_file_failed(str(e))
+        return jsonify(
+            {
+                "error": str(e),
+                "error_type": "empty_pages",
+                "start_page": e.start_page,
+                "end_page": e.end_page,
+                "file_id": str(inserted_id),
+            }
+        ), 500
+    except Exception as e:
+        print(f"[process] OCR failed: {e}", file=sys.stderr, flush=True)
+        mark_file_failed(str(e))
+        return jsonify({"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}), 500
+
+    try:
+        ocr_json_bytes = _json_bytes_for_storage(ocr_result)
+    except (TypeError, ValueError) as e:
+        print(f"[process] OCR JSON serialization failed: {e}", file=sys.stderr, flush=True)
+        mark_file_failed(str(e))
+        return jsonify({"error": "OCR result could not be serialized.", "error_type": "serialization", "file_id": str(inserted_id)}), 500
+
+    use_json_storage = len(ocr_json_bytes) >= JSON_INLINE_LIMIT_BYTES
+    original_json_path = None
+    editable_json_path = None
+    update_row = {
+        "status": "completed",
+        "credits_used": page_charge,
+    }
+
+    if use_json_storage:
+        original_json_path = _json_storage_path(user_id, str(inserted_id), "original")
+        editable_json_path = _json_storage_path(user_id, str(inserted_id), "editable")
+        try:
+            upload_to_gbucket(original_json_path, ocr_json_bytes, "application/json")
+            upload_to_gbucket(editable_json_path, ocr_json_bytes, "application/json")
+        except Exception as e:
+            print(f"[process] JSON storage upload failed: {e}", file=sys.stderr, flush=True)
+            delete_from_gbucket(original_json_path)
+            delete_from_gbucket(editable_json_path)
+            mark_file_failed(str(e))
+            return jsonify({"error": f"Could not store large OCR JSON: {e!s}", "error_type": "json_storage", "file_id": str(inserted_id)}), 502
+        update_row.update(
+            {
+                "original_json": None,
+                "edited_json": None,
+                "original_json_path": original_json_path,
+                "editable_json_path": editable_json_path,
+            }
+        )
+    else:
+        update_row.update(
+            {
+                "original_json": ocr_result,
+                "edited_json": ocr_result,
+                "original_json_path": None,
+                "editable_json_path": None,
+            }
+        )
+
+    try:
+        upd = supabase_client.table("files").update(update_row).eq("id", str(inserted_id)).eq("user_id", user_id).execute()
+        upd_rows = getattr(upd, "data", None) or []
+        if isinstance(upd_rows, list) and upd_rows:
+            row = upd_rows[0]
+        elif isinstance(upd_rows, dict):
+            row = upd_rows
+    except Exception as e:
+        print(f"[process] final files row update failed: {e}", file=sys.stderr, flush=True)
+        mark_file_failed(str(e))
+        if use_json_storage:
+            delete_from_gbucket(original_json_path)
+            delete_from_gbucket(editable_json_path)
+        return jsonify({"error": f"Final database update failed: {e!s}", "error_type": "db_error", "file_id": str(inserted_id)}), 500
 
     page_keys = [k for k in ocr_result if isinstance(k, str) and re.match(r"^page_\d+$", k, re.I)]
     return jsonify(
@@ -1073,6 +1264,128 @@ def process_supabase_ocr():
             "row": row,
             "pages_remaining": new_remaining,
             "pages_charged": page_charge,
+            "credits_used": page_charge,
+            "json_storage": "storage" if use_json_storage else "inline",
+        }
+    )
+
+
+@app.route("/api/process/preflight", methods=["POST"])
+def process_supabase_preflight():
+    """Check file type/page count and available credits before running OCR."""
+    if not supabase_client:
+        return jsonify({"error": "Supabase is not configured on the server."}), 503
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json."}), 400
+
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing or invalid Authorization bearer token."}), 401
+
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired session token."}), 401
+
+    body = request.get_json(silent=True) or {}
+    file_path = (body.get("file_path") or "").strip()
+    file_name = (body.get("file_name") or "").strip() or None
+    if not file_path:
+        return jsonify({"error": "file_path is required."}), 400
+    if ".." in file_path or file_path.startswith("/"):
+        return jsonify({"error": "Invalid file_path."}), 400
+    if not file_path.startswith(f"{user_id}/"):
+        return jsonify({"error": "file_path must be under your user folder (user_id/…)."}), 403
+
+    try:
+        raw = download_from_gbucket(file_path)
+    except Exception as e:
+        print(f"[preflight] Storage download failed: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": f"Could not download file from storage: {e!s}"}), 502
+    if not raw:
+        return jsonify({"error": "Downloaded file was empty."}), 400
+
+    try:
+        doc_kind, doc_pages = _document_kind_and_page_count(raw)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    credits_required = doc_pages if doc_kind == "pdf" else 1
+    cur_pages, pr_err = _get_profile_pages_remaining(user_id)
+    if cur_pages is None:
+        return jsonify(
+            {
+                "error": pr_err or "Could not load your page quota from profiles.",
+                "error_type": "profile",
+            }
+        ), 400
+
+    can_process = cur_pages >= credits_required
+    return jsonify(
+        {
+            "can_process": can_process,
+            "file_path": file_path,
+            "file_name": file_name or os.path.basename(file_path),
+            "kind": doc_kind,
+            "page_count": doc_pages,
+            "credits_required": credits_required,
+            "pages_required": credits_required,
+            "pages_remaining": cur_pages,
+            "error_type": None if can_process else "insufficient_pages",
+            "error": None
+            if can_process
+            else f"Not enough credits remaining ({cur_pages} left; this file needs {credits_required}).",
+        }
+    )
+
+
+@app.route("/api/process/preflight-upload", methods=["POST"])
+def process_supabase_preflight_upload():
+    """Check selected file bytes before any Supabase Storage upload or OCR processing."""
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing or invalid Authorization bearer token."}), 401
+
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired session token."}), 401
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided."}), 400
+    upload = request.files["file"]
+    file_name = upload.filename or "upload"
+    raw = upload.read()
+    if not raw:
+        return jsonify({"error": "Uploaded file was empty."}), 400
+
+    try:
+        doc_kind, doc_pages = _document_kind_and_page_count(raw)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    credits_required = doc_pages if doc_kind == "pdf" else 1
+    cur_pages, pr_err = _get_profile_pages_remaining(user_id)
+    if cur_pages is None:
+        return jsonify(
+            {
+                "error": pr_err or "Could not load your page quota from profiles.",
+                "error_type": "profile",
+            }
+        ), 400
+
+    can_process = cur_pages >= credits_required
+    return jsonify(
+        {
+            "can_process": can_process,
+            "file_name": file_name,
+            "kind": doc_kind,
+            "page_count": doc_pages,
+            "credits_required": credits_required,
+            "pages_required": credits_required,
+            "pages_remaining": cur_pages,
+            "error_type": None if can_process else "insufficient_pages",
+            "error": None
+            if can_process
+            else f"Not enough credits remaining ({cur_pages} left; this file needs {credits_required}).",
         }
     )
 
@@ -1090,7 +1403,7 @@ def _files_row_for_user(file_id: str, user_id: str) -> dict | None:
     try:
         res = (
             supabase_client.table("files")
-            .select("id,user_id,original_file_path,file_name,original_json,edited_json")
+            .select("id,user_id,original_file_path,file_name,original_json,edited_json,original_json_path,editable_json_path,credits_used,status")
             .eq("id", file_id)
             .eq("user_id", user_id)
             .limit(1)
@@ -1160,8 +1473,20 @@ def _effective_edited_json_dict(row: dict) -> dict:
     ej = _json_field_to_python(row.get("edited_json"))
     if isinstance(ej, dict) and ej:
         return ej
+    editable_path = (row.get("editable_json_path") or "").strip()
+    if editable_path:
+        stored = _download_json_dict_from_gbucket(editable_path)
+        if isinstance(stored, dict):
+            return stored
     oj = _json_field_to_python(row.get("original_json"))
-    return oj if isinstance(oj, dict) else {}
+    if isinstance(oj, dict):
+        return oj
+    original_path = (row.get("original_json_path") or "").strip()
+    if original_path:
+        stored = _download_json_dict_from_gbucket(original_path)
+        if isinstance(stored, dict):
+            return stored
+    return {}
 
 
 def _document_kind_and_page_count(file_bytes: bytes) -> tuple[str, int]:
@@ -1279,10 +1604,22 @@ def _consume_profile_pages(user_id: str, delta: int) -> tuple[bool, str | None, 
     if cur is None:
         return False, err or "No profile row found for this user.", None
     if cur < delta:
-        return False, f"Not enough pages remaining ({cur} left, this file needs {delta}).", cur
+        return False, f"Not enough credits remaining ({cur} left, this file needs {delta}).", cur
     new_v = cur - delta
     try:
-        supabase_client.table("profiles").update({"pages_remaining": new_v}).eq("id", user_id).execute()
+        res = (
+            supabase_client.table("profiles")
+            .update({"pages_remaining": new_v})
+            .eq("id", user_id)
+            .eq("pages_remaining", cur)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            latest, latest_err = _get_profile_pages_remaining(user_id)
+            if latest is not None and latest < delta:
+                return False, f"Not enough credits remaining ({latest} left, this file needs {delta}).", latest
+            return False, latest_err or "Credit balance changed while starting this job. Try again.", latest
     except Exception as e:
         print(f"[profiles] update pages_remaining: {e}", file=sys.stderr, flush=True)
         return False, str(e), cur
@@ -1355,6 +1692,11 @@ def api_file_get_json(file_id):
         row = _files_row_for_user(str(file_id), user_id)
         if not row:
             return jsonify({"error": "File not found."}), 404
+        status = (row.get("status") or "").strip().lower()
+        if status in ("processing", "pending"):
+            return jsonify({"error": "This file is still processing.", "status": status}), 409
+        if status == "failed":
+            return jsonify({"error": "This file failed to process.", "status": status}), 409
         data = _effective_edited_json_dict(row)
         return _json_http_response(data)
     except Exception as e:
@@ -1466,7 +1808,17 @@ def api_file_save_json(file_id):
     if not isinstance(body, dict):
         return jsonify({"error": "JSON body must be an object."}), 400
     try:
-        supabase_client.table("files").update({"edited_json": body}).eq("id", str(file_id)).eq("user_id", user_id).execute()
+        edited_bytes = _json_bytes_for_storage(body)
+        existing_editable_path = (row.get("editable_json_path") or "").strip()
+        should_store_json = bool(existing_editable_path) or len(edited_bytes) >= JSON_INLINE_LIMIT_BYTES
+        update_row = {}
+        if should_store_json:
+            editable_path = existing_editable_path or _json_storage_path(user_id, str(file_id), "editable")
+            upload_to_gbucket(editable_path, edited_bytes, "application/json")
+            update_row = {"edited_json": None, "editable_json_path": editable_path}
+        else:
+            update_row = {"edited_json": body, "editable_json_path": None}
+        supabase_client.table("files").update(update_row).eq("id", str(file_id)).eq("user_id", user_id).execute()
     except Exception as e:
         print(f"[api/files] save failed: {e}", file=sys.stderr, flush=True)
         return jsonify({"error": str(e)}), 500

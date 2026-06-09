@@ -678,6 +678,56 @@
             word-break: break-word;
             line-height: 1.35;
         }
+        .dash2-file-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+        .dash2-file-status {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.22rem 0.55rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: 1px solid var(--stroke);
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .dash2-file-status--processing,
+        .dash2-file-status--pending {
+            color: #dbe6ff;
+            border-color: rgba(107, 140, 255, 0.32);
+            background: rgba(107, 140, 255, 0.16);
+        }
+        .dash2-file-status--completed {
+            color: #b7f7c8;
+            border-color: rgba(74, 222, 128, 0.32);
+            background: rgba(74, 222, 128, 0.12);
+        }
+        .dash2-file-status--failed {
+            color: #ffc8c8;
+            border-color: rgba(248, 113, 113, 0.35);
+            background: rgba(248, 113, 113, 0.12);
+        }
+        body.light-mode .dash2-file-status--processing,
+        body.light-mode .dash2-file-status--pending {
+            color: #2f4ca8;
+            background: rgba(74, 108, 220, 0.12);
+        }
+        body.light-mode .dash2-file-status--completed {
+            color: #276749;
+            background: rgba(72, 187, 120, 0.12);
+        }
+        body.light-mode .dash2-file-status--failed {
+            color: #b83232;
+            background: rgba(248, 113, 113, 0.12);
+        }
         .dash2-file-meta {
             font-size: 0.76rem;
             color: var(--faint);
@@ -762,6 +812,87 @@
         }
         .dash2-upload-status--error {
             color: #f0a8a8;
+        }
+        .dash2-upload-status-action {
+            display: inline;
+            max-width: none;
+            color: inherit;
+            font-size: inherit;
+            font-weight: 700;
+            text-align: inherit;
+        }
+        .dash2-upload-confirm {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 16px;
+            border: 1px solid rgba(107, 140, 255, 0.22);
+            background: rgba(107, 140, 255, 0.08);
+        }
+        .dash2-upload-confirm[hidden] {
+            display: none !important;
+        }
+        body.light-mode .dash2-upload-confirm {
+            border-color: rgba(74, 108, 220, 0.18);
+            background: rgba(74, 108, 220, 0.08);
+        }
+        .dash2-upload-confirm-title {
+            margin: 0 0 0.45rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .dash2-upload-confirm-meta {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.5;
+        }
+        .dash2-upload-confirm-file {
+            display: block;
+            margin-bottom: 0.7rem;
+            color: var(--text);
+            font-weight: 600;
+            word-break: break-word;
+        }
+        .dash2-upload-confirm-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.55rem;
+        }
+        .dash2-upload-confirm-stat {
+            padding: 0.65rem 0.7rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        body.light-mode .dash2-upload-confirm-stat {
+            background: rgba(255, 255, 255, 0.72);
+        }
+        .dash2-upload-confirm-stat-label {
+            display: block;
+            margin-bottom: 0.2rem;
+            font-size: 0.67rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+        .dash2-upload-confirm-stat-value {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        @media (max-width: 520px) {
+            .dash2-upload-confirm-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .dash2-upload-confirm-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 0.85rem;
         }
         body.light-mode .dash2-upload-status--error {
             color: #b83232;
@@ -1426,6 +1557,14 @@
                                     />
                                 </label>
                             </div>
+                            <div class="dash2-upload-confirm" id="dash2UploadConfirm" hidden>
+                                <p class="dash2-upload-confirm-title" id="dash2UploadConfirmTitle">Ready to process?</p>
+                                <p class="dash2-upload-confirm-meta" id="dash2UploadConfirmMeta"></p>
+                                <div class="dash2-upload-confirm-actions">
+                                    <button type="button" class="dash2-btn" id="dash2UploadConfirmBtn">Process file</button>
+                                    <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2UploadCancelBtn">Cancel</button>
+                                </div>
+                            </div>
                             <p class="dash2-footnote" id="dash2UploadStatus">
                                 Your uploaded file will be appear in your files list. Choose the View Files tab above.
                             </p>
@@ -1640,9 +1779,23 @@
         function fileMetaLine(row) {
             var parts = [];
             if (row.created_at) parts.push(formatWhen(row.created_at));
-            if (row.status) parts.push(String(row.status));
+            if (row.credits_used != null) parts.push(String(row.credits_used) + ' credit' + (Number(row.credits_used) === 1 ? '' : 's'));
             if (row.mime_type) parts.push(String(row.mime_type));
             return parts.join(' · ');
+        }
+
+        function normalizedFileStatus(row) {
+            return String(row && row.status ? row.status : 'completed').trim().toLowerCase() || 'completed';
+        }
+
+        function fileStatusLabel(status) {
+            if (status === 'processing' || status === 'pending') return 'Processing';
+            if (status === 'failed') return 'Failed';
+            return 'Complete';
+        }
+
+        function isProcessingStatus(status) {
+            return status === 'processing' || status === 'pending';
         }
 
         function setListShell(listShell, populated) {
@@ -1697,12 +1850,23 @@
                         var name = escapeHtml(fileDisplayName(row));
                         var meta = escapeHtml(fileMetaLine(row));
                         var fid = row.id != null ? escapeHtml(String(row.id)) : '';
+                        var status = normalizedFileStatus(row);
+                        var statusLabel = escapeHtml(fileStatusLabel(status));
                         return (
                             '<li class="dash2-file-row dash2-file-row--selectable" data-file-id="' +
                             fid +
+                            '" data-file-status="' +
+                            escapeHtml(status) +
                             '" role="button" tabindex="0">' +
+                            '<div class="dash2-file-title-row">' +
                             '<div class="dash2-file-name">' +
                             name +
+                            '</div>' +
+                            '<span class="dash2-file-status dash2-file-status--' +
+                            escapeHtml(status) +
+                            '">' +
+                            statusLabel +
+                            '</span>' +
                             '</div>' +
                             (meta
                                 ? '<div class="dash2-file-meta">' + meta + '</div>'
@@ -2469,6 +2633,15 @@
                     if (!li || !li.getAttribute('data-file-id')) return;
                     var fid = li.getAttribute('data-file-id').trim();
                     if (!fid) return;
+                    var status = String(li.getAttribute('data-file-status') || '').toLowerCase();
+                    if (isProcessingStatus(status)) {
+                        alert('This file is still processing. It will be ready to open shortly.');
+                        return;
+                    }
+                    if (status === 'failed') {
+                        alert('This file failed to process. Try uploading it again.');
+                        return;
+                    }
                     openFile(fid, li);
                 });
 
@@ -2478,6 +2651,15 @@
                     if (!li || !li.getAttribute('data-file-id')) return;
                     ev.preventDefault();
                     var fid = li.getAttribute('data-file-id').trim();
+                    var status = String(li.getAttribute('data-file-status') || '').toLowerCase();
+                    if (isProcessingStatus(status)) {
+                        alert('This file is still processing. It will be ready to open shortly.');
+                        return;
+                    }
+                    if (status === 'failed') {
+                        alert('This file failed to process. Try uploading it again.');
+                        return;
+                    }
                     if (fid) openFile(fid, li);
                 });
 
@@ -2548,16 +2730,86 @@
             var uploadLabel = document.getElementById('dash2UploadLabel');
             var cameraLabel = document.getElementById('dash2CameraLabel');
             var uploadStatus = document.getElementById('dash2UploadStatus');
+            var uploadConfirm = document.getElementById('dash2UploadConfirm');
+            var uploadConfirmTitle = document.getElementById('dash2UploadConfirmTitle');
+            var uploadConfirmMeta = document.getElementById('dash2UploadConfirmMeta');
+            var uploadConfirmBtn = document.getElementById('dash2UploadConfirmBtn');
+            var uploadCancelBtn = document.getElementById('dash2UploadCancelBtn');
+            var pendingUpload = null;
+
+            function setUploadBusy(isBusy) {
+                if (uploadLabel) uploadLabel.classList.toggle('is-busy', isBusy);
+                if (cameraLabel) cameraLabel.classList.toggle('is-busy', isBusy);
+                if (fileInput) fileInput.disabled = isBusy;
+                if (cameraInput) cameraInput.disabled = isBusy;
+                if (uploadConfirmBtn) uploadConfirmBtn.disabled = isBusy;
+                if (uploadCancelBtn) uploadCancelBtn.disabled = isBusy;
+            }
+
+            function resetUploadInputs() {
+                if (fileInput) fileInput.value = '';
+                if (cameraInput) cameraInput.value = '';
+            }
+
+            function hideUploadConfirm() {
+                pendingUpload = null;
+                if (uploadConfirm) uploadConfirm.hidden = true;
+                if (uploadConfirmMeta) uploadConfirmMeta.textContent = '';
+            }
+
+            function showUploadConfirm(preflight, file) {
+                pendingUpload = {
+                    file: file,
+                    filePath: null,
+                    fileName: preflight.file_name,
+                    creditsRequired: preflight.credits_required || preflight.pages_required || 1,
+                    pagesRemaining: preflight.pages_remaining,
+                };
+                if (uploadConfirmTitle) {
+                    uploadConfirmTitle.textContent = 'Confirm Upload';
+                }
+                if (uploadConfirmMeta) {
+                    var count = preflight.page_count || 1;
+                    var kind = preflight.kind === 'pdf' ? 'PDF' : 'image';
+                    var creditWord = Number(pendingUpload.creditsRequired) === 1 ? 'credit' : 'credits';
+                    uploadConfirmMeta.innerHTML =
+                        '<span class="dash2-upload-confirm-file">' +
+                        escapeHtml(preflight.file_name || 'Selected file') +
+                        '</span>' +
+                        '<span class="dash2-upload-confirm-grid">' +
+                        '<span class="dash2-upload-confirm-stat"><span class="dash2-upload-confirm-stat-label">Pages</span><span class="dash2-upload-confirm-stat-value">' +
+                        escapeHtml(String(count)) +
+                        '</span></span>' +
+                        '<span class="dash2-upload-confirm-stat"><span class="dash2-upload-confirm-stat-label">Type</span><span class="dash2-upload-confirm-stat-value">' +
+                        escapeHtml(kind) +
+                        '</span></span>' +
+                        '<span class="dash2-upload-confirm-stat"><span class="dash2-upload-confirm-stat-label">Credits needed</span><span class="dash2-upload-confirm-stat-value">' +
+                        escapeHtml(String(pendingUpload.creditsRequired)) +
+                        ' of ' +
+                        escapeHtml(pendingUpload.pagesRemaining == null ? '—' : String(pendingUpload.pagesRemaining)) +
+                        ' available' +
+                        '</span></span>' +
+                        '</span>';
+                }
+                if (uploadConfirm) uploadConfirm.hidden = false;
+            }
+
+            async function cleanupPendingUpload() {
+                if (!pendingUpload || !pendingUpload.filePath) return;
+                try {
+                    await supabase.storage.from('gbucket').remove([pendingUpload.filePath]);
+                } catch (_removeErr) {}
+            }
 
             async function uploadSelectedFiles(filesArr) {
                 if (!fileInput || !uploadStatus) return;
+                hideUploadConfirm();
                 var userRes = await supabase.auth.getUser();
                 var user = userRes.data && userRes.data.user;
                 if (userRes.error || !user) {
                     uploadStatus.textContent = 'Sign in to upload files.';
                     uploadStatus.classList.add('dash2-upload-status--error');
-                    fileInput.value = '';
-                    if (cameraInput) cameraInput.value = '';
+                    resetUploadInputs();
                     return;
                 }
                 var sessRes = await supabase.auth.getSession();
@@ -2565,76 +2817,171 @@
                 if (!session || !session.access_token) {
                     uploadStatus.textContent = 'Could not read your session. Try signing in again.';
                     uploadStatus.classList.add('dash2-upload-status--error');
-                    fileInput.value = '';
-                    if (cameraInput) cameraInput.value = '';
+                    resetUploadInputs();
                     return;
                 }
                 var accessToken = session.access_token;
                 uploadStatus.classList.remove('dash2-upload-status--error');
-                uploadStatus.textContent = 'Uploading and processing…';
-                if (uploadLabel) uploadLabel.classList.add('is-busy');
-                if (cameraLabel) cameraLabel.classList.add('is-busy');
-                fileInput.disabled = true;
-                if (cameraInput) cameraInput.disabled = true;
+                uploadStatus.textContent = 'Checking page count and available credits…';
+                setUploadBusy(true);
                 var errors = [];
                 for (var i = 0; i < filesArr.length; i++) {
                     var file = filesArr[i];
-                    var safeName = sanitizeForStoragePath(file.name);
-                    var filePath = user.id + '/' + crypto.randomUUID() + '-' + safeName;
-                    var up = await supabase.storage.from('gbucket').upload(filePath, file);
-                    if (up.error) {
-                        errors.push(file.name + ' (storage): ' + up.error.message);
-                        continue;
+                    var fd = new FormData();
+                    fd.append('file', file, file.name || 'upload');
+                    var preflightRes = await fetch('/api/process/preflight-upload', {
+                        method: 'POST',
+                        headers: {
+                            Authorization: 'Bearer ' + accessToken,
+                        },
+                        credentials: 'same-origin',
+                        body: fd,
+                    });
+                    var preflightJson = {};
+                    try {
+                        preflightJson = await preflightRes.json();
+                    } catch (e2) {
+                        preflightJson = {};
                     }
-                    var procRes = await fetch('/process', {
+                    if (!preflightRes.ok || preflightJson.can_process === false) {
+                        if (preflightJson.pages_remaining != null) {
+                            setDash2PagesRemaining(preflightJson.pages_remaining);
+                        }
+                        if (preflightJson.error_type === 'insufficient_pages') {
+                            var have = preflightJson.pages_remaining;
+                            var need = preflightJson.pages_required || preflightJson.credits_required;
+                            errors.push(
+                                '<strong>Not enough credits to complete this file.</strong> ' +
+                                    escapeHtml(file.name) +
+                                    ' needs ' +
+                                    escapeHtml(need == null ? 'more' : String(need)) +
+                                    ' credits, but you have ' +
+                                    escapeHtml(have == null ? '0' : String(have)) +
+                                    '. ' +
+                                    '<button type="button" class="dash2-quota-more dash2-upload-status-action" data-dash2-open-credits>Need more credits?</button>'
+                            );
+                        } else {
+                            errors.push(
+                                escapeHtml(
+                                    file.name +
+                                        ' (check): ' +
+                                        (preflightJson.error || preflightRes.statusText || String(preflightRes.status))
+                                )
+                            );
+                        }
+                    } else {
+                        if (preflightJson.pages_remaining != null) {
+                            setDash2PagesRemaining(preflightJson.pages_remaining);
+                        }
+                        showUploadConfirm(preflightJson, file);
+                        uploadStatus.textContent = 'Confirm below to start OCR processing.';
+                    }
+                }
+                setUploadBusy(false);
+                resetUploadInputs();
+                if (errors.length) {
+                    uploadStatus.innerHTML = errors.join(' · ');
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                }
+            }
+
+            async function processPendingUpload() {
+                if (!pendingUpload || !pendingUpload.file || !uploadStatus) return;
+                uploadStatus.classList.remove('dash2-upload-status--error');
+                uploadStatus.textContent = 'Uploading file…';
+                setUploadBusy(true);
+                var sessRes = await supabase.auth.getSession();
+                var session = sessRes.data && sessRes.data.session;
+                if (!session || !session.access_token) {
+                    uploadStatus.textContent = 'Could not read your session. Try signing in again.';
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                    setUploadBusy(false);
+                    return;
+                }
+                var current = pendingUpload;
+                try {
+                    var safeName = sanitizeForStoragePath(current.file.name || current.fileName);
+                    var userRes = await supabase.auth.getUser();
+                    var user = userRes.data && userRes.data.user;
+                    if (userRes.error || !user) {
+                        throw new Error('Could not verify your account. Try signing in again.');
+                    }
+                    var filePath = user.id + '/' + crypto.randomUUID() + '-' + safeName;
+                    var up = await supabase.storage.from('gbucket').upload(filePath, current.file);
+                    if (up.error) {
+                        throw new Error('Storage upload failed: ' + up.error.message);
+                    }
+                    current.filePath = filePath;
+                    uploadStatus.textContent = 'Starting OCR processing…';
+                    var procPromise = fetch('/process', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            Authorization: 'Bearer ' + accessToken,
+                            Authorization: 'Bearer ' + session.access_token,
                         },
                         credentials: 'same-origin',
                         body: JSON.stringify({
                             file_path: filePath,
-                            file_name: file.name,
+                            file_name: current.fileName || current.file.name,
                         }),
                     });
-                    var procJson = {};
-                    try {
-                        procJson = await procRes.json();
-                    } catch (e2) {
-                        procJson = {};
-                    }
+                    window.setTimeout(function () {
+                        listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                        var filesTab = document.getElementById('dash2TabFiles');
+                        if (filesTab) filesTab.click();
+                    }, 1200);
+                    var procRes = await procPromise;
+                    var procJson = await procRes.json().catch(function () {
+                        return {};
+                    });
                     if (!procRes.ok) {
                         if (procJson.pages_remaining != null) {
                             setDash2PagesRemaining(procJson.pages_remaining);
                         }
-                        errors.push(
-                            file.name +
-                                ' (OCR/DB): ' +
-                                (procJson.error || procRes.statusText || String(procRes.status))
-                        );
-                    } else {
-                        if (procJson.pages_remaining != null) {
-                            setDash2PagesRemaining(procJson.pages_remaining);
+                        if (procJson.error_type === 'insufficient_pages') {
+                            await cleanupPendingUpload();
+                        } else if (!procJson.file_id) {
+                            await cleanupPendingUpload();
                         }
+                        throw new Error(procJson.error || procRes.statusText || String(procRes.status));
                     }
-                }
-                fileInput.disabled = false;
-                fileInput.value = '';
-                if (cameraInput) {
-                    cameraInput.disabled = false;
-                    cameraInput.value = '';
-                }
-                if (uploadLabel) uploadLabel.classList.remove('is-busy');
-                if (cameraLabel) cameraLabel.classList.remove('is-busy');
-                if (errors.length) {
-                    uploadStatus.textContent = errors.join(' · ');
-                    uploadStatus.classList.add('dash2-upload-status--error');
-                } else {
-                    uploadStatus.textContent =
-                        'Done: file uploaded to gbucket, OCR run, and row inserted into files.';
+                    if (procJson.pages_remaining != null) {
+                        setDash2PagesRemaining(procJson.pages_remaining);
+                    }
+                    hideUploadConfirm();
+                    uploadStatus.textContent = 'Processing started. You can track status in View files.';
                     listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                } catch (err) {
+                    uploadStatus.textContent = (err && err.message) || 'Could not start OCR processing.';
+                    uploadStatus.classList.add('dash2-upload-status--error');
+                } finally {
+                    setUploadBusy(false);
                 }
+            }
+
+            if (uploadStatus) {
+                uploadStatus.addEventListener('click', function (ev) {
+                    var btn = ev.target.closest('[data-dash2-open-credits]');
+                    if (!btn) return;
+                    ev.preventDefault();
+                    var contactBtn =
+                        document.getElementById('dash2QuotaContactUpload') ||
+                        document.getElementById('dash2QuotaContactNav');
+                    if (contactBtn) contactBtn.click();
+                });
+            }
+            if (uploadConfirmBtn) {
+                uploadConfirmBtn.addEventListener('click', processPendingUpload);
+            }
+            if (uploadCancelBtn) {
+                uploadCancelBtn.addEventListener('click', async function () {
+                    setUploadBusy(true);
+                    await cleanupPendingUpload();
+                    hideUploadConfirm();
+                    uploadStatus.textContent = 'Upload cancelled. Choose another file when ready.';
+                    uploadStatus.classList.remove('dash2-upload-status--error');
+                    setUploadBusy(false);
+                });
             }
 
             if (fileInput) {
