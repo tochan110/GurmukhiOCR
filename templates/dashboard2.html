@@ -696,6 +696,14 @@
             justify-content: space-between;
             gap: 0.75rem;
         }
+        .dash2-file-row-badges {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
         .dash2-file-status {
             flex-shrink: 0;
             display: inline-flex;
@@ -739,6 +747,15 @@
         body.light-mode .dash2-file-status--failed {
             color: #b83232;
             background: rgba(248, 113, 113, 0.12);
+        }
+        @media (max-width: 520px) {
+            .dash2-file-title-row {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+            .dash2-file-row-badges {
+                justify-content: flex-start;
+            }
         }
         .dash2-file-meta {
             font-size: 0.76rem;
@@ -1133,6 +1150,46 @@
             border-radius: 10px;
             box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
             background: #fff;
+        }
+        @media (max-width: 900px) {
+            .dash2-viewer-split {
+                align-items: start;
+            }
+            .dash2-viewer-doc,
+            .dash2-viewer-text {
+                min-height: 26rem;
+                height: auto;
+            }
+            .dash2-pdf-viewer {
+                flex: none;
+                min-height: 22rem;
+                overflow: auto;
+            }
+            .dash2-original-image {
+                display: block;
+                width: 100%;
+                max-width: 100%;
+                max-height: none;
+                height: auto;
+            }
+            .dash2-pdf-iframe {
+                min-height: 24rem;
+                height: 70vh;
+            }
+        }
+        @media (max-width: 560px) {
+            .dash2-pdf-viewer {
+                min-height: 18rem;
+                padding: 0.5rem;
+            }
+            .dash2-viewer-doc,
+            .dash2-viewer-text {
+                min-height: 22rem;
+            }
+            .dash2-pdf-iframe {
+                min-height: 22rem;
+                height: 65vh;
+            }
         }
         @keyframes dash2-spin {
             to {
@@ -1877,11 +1934,13 @@
                             '<div class="dash2-file-name">' +
                             name +
                             '</div>' +
+                            '<div class="dash2-file-row-badges">' +
                             '<span class="dash2-file-status dash2-file-status--' +
                             escapeHtml(status) +
                             '">' +
                             statusLabel +
                             '</span>' +
+                            '</div>' +
                             '</div>' +
                             (meta
                                 ? '<div class="dash2-file-meta">' + meta + '</div>'
