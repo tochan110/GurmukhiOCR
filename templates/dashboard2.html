@@ -1683,6 +1683,7 @@
                                             </svg>
                                             <span class="dash2-copy-btn-label">Copy</span>
                                         </button>
+                                        <button type="button" class="dash2-mini-btn" id="dash2FormatBtn" disabled>Format</button>
                                         <button type="button" class="dash2-mini-btn" id="dash2EditBtn">Edit</button>
                                         <button type="button" class="dash2-mini-btn dash2-mini-btn--primary" id="dash2SaveBtn" style="display: none">
                                             Save
@@ -2146,6 +2147,7 @@
                 var ocrPageInfo = document.getElementById('dash2OcrPageInfo');
                 var saveOverlay = document.getElementById('dash2SaveOverlay');
                 var copyBtn = document.getElementById('dash2CopyTextBtn');
+                var formatBtn = document.getElementById('dash2FormatBtn');
                 if (!wrap || !pdfBox || !textEl || !listRoot || !exportTxtBtn || !ocrNav || !ocrPrev || !ocrNext || !ocrPageInfo)
                     return;
 
@@ -2196,6 +2198,7 @@
                     editBtn.style.display = 'inline-block';
                     saveBtn.style.display = 'none';
                     cancelBtn.style.display = 'none';
+                    if (formatBtn) formatBtn.disabled = true;
                     searchInput.disabled = false;
                     if (saveOverlay) saveOverlay.hidden = true;
                     pdfBox.innerHTML = '<p class="dash2-empty">Select a file from the list.</p>';
@@ -2225,6 +2228,7 @@
                     var lab = copyBtn.querySelector('.dash2-copy-btn-label');
                     if (lab) lab.textContent = 'Copy';
                     copyBtn.disabled = !(fileId && bundleData);
+                    if (formatBtn) formatBtn.disabled = !(fileId && bundleData);
                 }
 
                 function getVisibleOcrPlainText() {
@@ -2289,6 +2293,129 @@
                         bundleData[pk0].full_text = ed;
                         bundleData[pk0].text = ed;
                     }
+                }
+
+                function normalizeOcrLine(line) {
+                    return String(line || '')
+                        .replace(/\t/g, ' ')
+                        .replace(/[ \u00a0]{2,}/g, ' ')
+                        .replace(/\s+([,.;:!?])/g, '$1')
+                        .replace(/([([{])\s+/g, '$1')
+                        .replace(/\s+([)\]}])/g, '$1')
+                        .trim();
+                }
+
+                function isNumberedListLine(line) {
+                    return /^\s*(?:\d+|[A-Za-z])[\.)]\s+\S+/.test(line);
+                }
+
+                function isBulletLine(line) {
+                    return /^\s*[-•*]\s+\S+/.test(line);
+                }
+
+                function isHeadingLine(line) {
+                    var s = normalizeOcrLine(line);
+                    if (!s || s.length > 90) return false;
+                    if (isNumberedListLine(s) || isBulletLine(s)) return false;
+                    if (/[.!?;:,]$/.test(s)) return false;
+                    var letters = s.match(/[A-Za-z]/g) || [];
+                    var uppers = s.match(/[A-Z]/g) || [];
+                    var uppercaseish = letters.length >= 4 && uppers.length / letters.length > 0.72;
+                    var titleish = /^[A-Z][A-Za-z0-9'’\- ]{2,}$/.test(s) && s.split(/\s+/).length <= 8;
+                    return uppercaseish || titleish;
+                }
+
+                function shouldHardBreakAfter(line) {
+                    return /[.!?:;।॥]$/.test(line) || isNumberedListLine(line) || isBulletLine(line) || isHeadingLine(line);
+                }
+
+                function shouldStartNewParagraph(prev, line) {
+                    if (!prev) return false;
+                    if (isHeadingLine(prev) || isHeadingLine(line)) return true;
+                    if (isNumberedListLine(line) || isBulletLine(line)) return true;
+                    if (isNumberedListLine(prev) || isBulletLine(prev)) return true;
+                    return false;
+                }
+
+                function formatOcrPlainText(input) {
+                    var raw = String(input || '')
+                        .replace(/\r\n?/g, '\n')
+                        .replace(/\u00a0/g, ' ');
+                    var lines = raw.split('\n').map(normalizeOcrLine);
+                    var blocks = [];
+                    var current = '';
+                    var previousLine = '';
+
+                    function flush() {
+                        if (current.trim()) blocks.push(current.trim());
+                        current = '';
+                    }
+
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        if (!line) {
+                            flush();
+                            previousLine = '';
+                            continue;
+                        }
+
+                        if (!current || shouldStartNewParagraph(previousLine, line)) {
+                            flush();
+                            current = line;
+                        } else if (/-$/.test(current) && /^[a-z]/.test(line)) {
+                            current = current.slice(0, -1) + line;
+                        } else {
+                            current += ' ' + line;
+                        }
+
+                        if (isHeadingLine(line) || shouldHardBreakAfter(line)) {
+                            flush();
+                        }
+                        previousLine = line;
+                    }
+                    flush();
+
+                    return blocks
+                        .map(function (block) {
+                            return block
+                                .replace(/[ \t]{2,}/g, ' ')
+                                .replace(/\s+([,.;:!?])/g, '$1')
+                                .trim();
+                        })
+                        .filter(Boolean)
+                        .join('\n\n');
+                }
+
+                function applyRuleBasedFormat() {
+                    if (!bundleData || !fileId) return;
+                    if (isEditMode) flushCurrentPageEditsIntoBundle();
+                    if (!originalSnapshot) originalSnapshot = JSON.parse(JSON.stringify(bundleData));
+                    var pageKeys = Object.keys(bundleData).filter(function (k) {
+                        return /^page_\d+$/i.test(k);
+                    });
+                    pageKeys.forEach(function (pk) {
+                        var page = bundleData[pk];
+                        if (!page) return;
+                        var current = page.full_text || page.text || '';
+                        var formatted = formatOcrPlainText(current);
+                        page.full_text = formatted;
+                        page.text = formatted;
+                    });
+                    isEditMode = false;
+                    textEl.contentEditable = 'false';
+                    textEl.classList.remove('dash2-text-content--editable');
+                    editBtn.style.display = 'inline-block';
+                    saveBtn.style.display = 'inline-block';
+                    cancelBtn.style.display = 'inline-block';
+                    saveBtn.textContent = 'Save';
+                    saveBtn.disabled = false;
+                    searchInput.disabled = false;
+                    searchInput.value = '';
+                    searchMatches = [];
+                    currentMatchIndex = -1;
+                    currentSearchTerm = '';
+                    searchNav.classList.remove('is-visible');
+                    updateText(currentPage);
                 }
 
                 /** Same page order and fields as legacy dashboard / offline_bundles_viewer: full_text || text, blank line between pages. */
@@ -2621,6 +2748,7 @@
                         setOcrPage(1);
                         exportTxtBtn.style.display = 'inline-block';
                         syncCopyTextBtnState();
+                        if (formatBtn) formatBtn.disabled = false;
                         var mainScroll = document.querySelector('main.dash2-main');
                         if (mainScroll) mainScroll.scrollTop = 0;
                     } catch (e2) {
@@ -2756,6 +2884,7 @@
                     subBack.addEventListener('click', closeViewer);
                 }
                 if (copyBtn) copyBtn.addEventListener('click', copyOcrTextToClipboard);
+                if (formatBtn) formatBtn.addEventListener('click', applyRuleBasedFormat);
                 editBtn.addEventListener('click', enterEditMode);
                 cancelBtn.addEventListener('click', exitEditMode);
                 saveBtn.addEventListener('click', saveEdits);
