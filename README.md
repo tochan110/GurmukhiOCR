@@ -16,6 +16,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env — add Supabase keys and path to your Vision service account JSON
+# Optional: install qpdf so uploaded PDFs are linearized for fast viewer loading
+#   macOS: brew install qpdf   Debian/Ubuntu: sudo apt install qpdf
 python app.py
 ```
 
@@ -43,9 +45,19 @@ gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} 'app:app'
   - a **`.python-version`** file in the repo root (this repo pins `3.12.8`), or  
   - the **`PYTHON_VERSION`** environment variable (e.g. `3.12.8`, fully qualified if using the dashboard option that requires it).
 - **Python 3.14** is the default on new Render services (as of their docs) and currently breaks `google-cloud-vision` / `protobuf` at import time; stay on **3.12.x** or **3.13.x** until those stacks support 3.14.
+- **System package `qpdf`** (PDF linearization for fast viewer loading): on Render’s **native Python** runtime, install it via the repo-root **`apt-packages`** file (`qpdf`, one package per line). If you deploy with **Docker**, use the included **`Dockerfile`** (it installs `qpdf` in the image).
 - **Build command:** `pip install -r requirements.txt`
 - **Start command:** `gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30 --access-logfile - --error-logfile - app:app`  
   The **120s timeout** avoids spurious **502** responses when loading large OCR JSON from the database (Render/gunicorn default is often 30s). If payloads are very large, upgrade instance memory or split storage for OCR JSON.
+
+### Docker (Fly.io, Railway, VPS, Render Docker)
+
+```bash
+docker build -t gurmukhi-ocr .
+docker run --env-file .env -p 8000:8000 gurmukhi-ocr
+```
+
+The image includes **`qpdf`** on `PATH`. Without it, uploads still work but PDFs are not linearized and the viewer may download the full file before showing page 1.
 
 ## Security notes
 
