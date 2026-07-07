@@ -391,6 +391,7 @@
     </style>
     {% include "_email_modal_styles.html" %}
     {% include "_legal_footer_styles.html" %}
+    {% include "_nav_profile_styles.html" %}
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -413,6 +414,7 @@
                 <span id="themeIcon">🌙</span>
                 <span id="themeLabel">Dark</span>
             </button>
+            {% include "_nav_profile_fragment.html" %}
         </nav>
     </header>
     <main class="auth-main">

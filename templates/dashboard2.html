@@ -763,6 +763,24 @@
             margin-top: 0.25rem;
             line-height: 1.4;
         }
+        .dash2-file-row-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .dash2-file-row-action {
+            padding: 0.28rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            line-height: 1.2;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .dash2-file-row-action:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
         .dash2-files-error {
             font-size: 0.86rem;
             color: #f0a8a8;
@@ -945,6 +963,66 @@
             color: var(--muted);
             max-width: 18rem;
             line-height: 1.4;
+        }
+        .dash2-import-loading-warn {
+            margin: 0.15rem 0 0;
+            font-size: 0.76rem;
+            font-weight: 600;
+            color: var(--text);
+            max-width: 18rem;
+            line-height: 1.4;
+        }
+        body.light-mode .dash2-import-loading-warn {
+            color: #3d4a63;
+        }
+        .dash2-upload-keep-open {
+            margin: 0.35rem 0 0;
+            font-size: 0.76rem;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.45;
+        }
+        body.light-mode .dash2-upload-keep-open {
+            color: #3d4a63;
+        }
+        .dash2-upload-progress {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.85rem;
+            margin-top: 0.75rem;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(107, 140, 255, 0.08);
+            text-align: left;
+        }
+        .dash2-upload-progress[hidden] {
+            display: none !important;
+        }
+        body.light-mode .dash2-upload-progress {
+            background: rgba(74, 108, 220, 0.08);
+        }
+        .dash2-upload-progress .dash2-spinner {
+            width: 1.65rem;
+            height: 1.65rem;
+            margin-top: 0.1rem;
+        }
+        .dash2-upload-progress-copy {
+            flex: 1;
+            min-width: 0;
+        }
+        .dash2-upload-progress-main {
+            margin: 0;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.4;
+        }
+        .dash2-upload-progress-sub {
+            margin: 0.35rem 0 0;
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.45;
         }
         .dash2-import-form.is-busy {
             pointer-events: none;
@@ -1259,6 +1337,29 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            position: relative;
+        }
+        .dash2-pdfjs-loading-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.95rem;
+            border-radius: 10px;
+            background: rgba(26, 26, 34, 0.92);
+            color: var(--muted);
+            font-size: 0.88rem;
+            text-align: center;
+            padding: 1rem;
+        }
+        .dash2-pdfjs-loading-overlay[hidden] {
+            display: none;
+        }
+        body.light-mode .dash2-pdfjs-loading-overlay {
+            background: rgba(255, 255, 255, 0.92);
         }
         .dash2-pdfjs-scroll {
             flex: 1;
@@ -1304,6 +1405,54 @@
         }
         .dash2-doc-nav[hidden] {
             display: none !important;
+        }
+        .dash2-pdf-page-jump {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.88rem;
+            color: var(--muted);
+        }
+        .dash2-pdf-page-input {
+            width: 3.25rem;
+            padding: 0.35rem 0.45rem;
+            border-radius: 8px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.15);
+            color: var(--text);
+            font-size: 0.88rem;
+            font-family: inherit;
+            font-weight: 600;
+            text-align: center;
+            -moz-appearance: textfield;
+        }
+        .dash2-pdf-page-input::-webkit-outer-spin-button,
+        .dash2-pdf-page-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        body.light-mode .dash2-pdf-page-input {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .dash2-pdf-page-total {
+            white-space: nowrap;
+        }
+        .dash2-pdf-go-btn {
+            padding: 0.35rem 0.7rem;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid rgba(107, 140, 255, 0.35);
+            background: var(--accent-dim);
+            color: var(--text);
+        }
+        .dash2-pdf-go-btn:hover {
+            border-color: rgba(107, 140, 255, 0.5);
+            background: rgba(107, 140, 255, 0.22);
         }
         .dash2-original-image {
             max-width: 100%;
@@ -1423,6 +1572,35 @@
             margin-bottom: 0.55rem;
             flex-wrap: wrap;
         }
+        .dash2-page-toolbar {
+            display: none;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 0.75rem;
+            margin-bottom: 0.55rem;
+        }
+        .dash2-page-toolbar.is-visible {
+            display: flex;
+        }
+        .dash2-page-toolbar .dash2-ocr-nav {
+            margin-bottom: 0;
+            flex: 1 1 auto;
+            justify-content: center;
+            min-width: min(100%, 12rem);
+        }
+        .dash2-page-status-bar {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            padding: 0.35rem 0.55rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: rgba(107, 140, 255, 0.08);
+        }
+        body.light-mode .dash2-page-status-bar {
+            background: rgba(74, 108, 220, 0.08);
+        }
         .dash2-text-panel-head {
             display: flex;
             align-items: center;
@@ -1443,6 +1621,11 @@
             gap: 0.35rem;
         }
         .dash2-copy-icon {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+        .dash2-refresh-icon {
             width: 1rem;
             height: 1rem;
             flex-shrink: 0;
@@ -1470,6 +1653,9 @@
         .dash2-search-bar {
             margin-bottom: 0.5rem;
         }
+        .dash2-search-field {
+            position: relative;
+        }
         .dash2-search-input {
             width: 100%;
             padding: 0.6rem 0.75rem;
@@ -1480,8 +1666,69 @@
             font-size: 0.95rem;
             font-family: inherit;
         }
+        .dash2-search-input.dash2-search-input--loading {
+            padding-right: 6.75rem;
+        }
+        .dash2-search-loading {
+            position: absolute;
+            right: 0.65rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.78rem;
+            color: var(--muted);
+            pointer-events: none;
+        }
+        .dash2-search-loading[hidden] {
+            display: none;
+        }
+        .dash2-spinner--sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 2px;
+        }
         body.light-mode .dash2-search-input {
             background: #fff;
+        }
+        .dash2-format-wrap {
+            position: relative;
+        }
+        .dash2-format-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            z-index: 20;
+            min-width: 9.5rem;
+            padding: 0.25rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #14161f;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        }
+        .dash2-format-menu[hidden] {
+            display: none;
+        }
+        body.light-mode .dash2-format-menu {
+            background: #fff;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+        .dash2-format-menu-item {
+            display: block;
+            width: 100%;
+            padding: 0.45rem 0.65rem;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.82rem;
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .dash2-format-menu-item:hover {
+            background: rgba(107, 140, 255, 0.12);
         }
         .dash2-search-nav {
             display: none;
@@ -1530,6 +1777,104 @@
         body.light-mode .dash2-text-content .highlight.current {
             background: rgba(255, 200, 100, 0.65);
         }
+        .dash2-page-meta {
+            flex-shrink: 0;
+            margin-top: 0.65rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--stroke);
+            display: none;
+        }
+        .dash2-page-meta.is-visible {
+            display: block;
+        }
+        .dash2-page-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.55rem;
+        }
+        .dash2-page-meta-completed {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            user-select: none;
+        }
+        .dash2-page-meta-completed input {
+            width: 1rem;
+            height: 1rem;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .dash2-page-meta-label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--faint);
+            margin-bottom: 0.35rem;
+        }
+        .dash2-page-notes {
+            width: 100%;
+            min-height: 2.75rem;
+            max-height: 8rem;
+            padding: 0.55rem 0.65rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.12);
+            color: var(--text);
+            font-size: 0.86rem;
+            font-family: inherit;
+            line-height: 1.45;
+            resize: vertical;
+        }
+        body.light-mode .dash2-page-notes {
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .dash2-page-notes:disabled {
+            opacity: 0.72;
+            cursor: not-allowed;
+        }
+        .dash2-page-meta-assign {
+            margin-top: 0.55rem;
+        }
+        .dash2-page-meta-assign select {
+            width: 100%;
+            padding: 0.45rem 0.55rem;
+            border-radius: 8px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.12);
+            color: var(--text);
+            font-size: 0.84rem;
+            font-family: inherit;
+        }
+        body.light-mode .dash2-page-meta-assign select {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .dash2-page-meta-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-top: 0.35rem;
+            min-height: 1rem;
+        }
+        .dash2-page-meta-status {
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+        .dash2-page-meta-status--error {
+            color: #f0a8a8;
+        }
+        body.light-mode .dash2-page-meta-status--error {
+            color: #b83232;
+        }
         .dash2-file-row--selectable {
             cursor: pointer;
             transition: background 0.15s ease;
@@ -1543,6 +1888,238 @@
         }
         body.light-mode .dash2-file-row--selectable.dash2-file-row--active {
             background: rgba(74, 108, 220, 0.12);
+        }
+        .dash2-files-source-tabs {
+            display: flex;
+            gap: 0.35rem;
+            margin-bottom: 0.85rem;
+            flex-wrap: wrap;
+        }
+        .dash2-files-source-tab {
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid var(--stroke);
+            background: transparent;
+            color: var(--muted);
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .dash2-files-source-tab.is-active {
+            color: var(--text);
+            border-color: rgba(107, 140, 255, 0.35);
+            background: rgba(107, 140, 255, 0.14);
+        }
+        body.light-mode .dash2-files-source-tab.is-active {
+            background: rgba(74, 108, 220, 0.1);
+            border-color: rgba(74, 108, 220, 0.28);
+        }
+        .dash2-permission-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.22rem 0.55rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: 1px solid var(--stroke);
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .dash2-permission-badge--edit {
+            color: #dbe6ff;
+            border-color: rgba(107, 140, 255, 0.32);
+            background: rgba(107, 140, 255, 0.16);
+        }
+        .dash2-permission-badge--view {
+            color: var(--muted);
+            border-color: var(--stroke);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        body.light-mode .dash2-permission-badge {
+            color: #3d4a63;
+            border-color: rgba(74, 108, 220, 0.22);
+            background: rgba(74, 108, 220, 0.08);
+        }
+        body.light-mode .dash2-permission-badge--view {
+            color: #475569;
+            border-color: rgba(100, 116, 139, 0.35);
+            background: rgba(100, 116, 139, 0.12);
+        }
+        body.light-mode .dash2-permission-badge--edit {
+            color: #1e3a8a;
+            border-color: rgba(74, 108, 220, 0.35);
+            background: rgba(74, 108, 220, 0.14);
+        }
+        body.light-mode .modal-dialog .dash2-permission-badge--view {
+            color: #334155;
+            border-color: rgba(71, 85, 105, 0.38);
+            background: rgba(71, 85, 105, 0.1);
+        }
+        body.light-mode .modal-dialog .dash2-permission-badge--edit {
+            color: #1d4ed8;
+            border-color: rgba(37, 99, 235, 0.42);
+            background: rgba(59, 130, 246, 0.16);
+        }
+        .dash2-viewer-head-main {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 0;
+            flex: 1;
+        }
+        .dash2-viewer-access-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--muted);
+            letter-spacing: 0.02em;
+        }
+        .dash2-viewer-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        .dash2-share-form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+        .dash2-share-field label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+        .dash2-share-field input,
+        .dash2-share-field select {
+            width: 100%;
+            padding: 0.55rem 0.65rem;
+            border-radius: 8px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.15);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.88rem;
+        }
+        body.light-mode .dash2-share-field input,
+        body.light-mode .dash2-share-field select {
+            background: #fff;
+            color: var(--text);
+            border-color: rgba(74, 108, 220, 0.22);
+        }
+        body.light-mode .dash2-share-field select option {
+            color: #14161c;
+            background: #fff;
+        }
+        .dash2-share-status {
+            font-size: 0.82rem;
+            min-height: 1.2rem;
+            margin: 0;
+        }
+        .dash2-share-status--error {
+            color: #ff8a8a;
+        }
+        .dash2-share-status--ok {
+            color: #8fd4a0;
+        }
+        body.light-mode .dash2-share-status--error {
+            color: #b83232;
+        }
+        body.light-mode .dash2-share-status--ok {
+            color: #276749;
+        }
+        .dash2-share-list-heading {
+            font-size: 0.88rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.5rem;
+        }
+        .dash2-share-ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 14rem;
+            overflow-y: auto;
+        }
+        .dash2-share-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.65rem 0;
+            border-bottom: 1px solid var(--stroke);
+        }
+        .dash2-share-row:last-child {
+            border-bottom: none;
+        }
+        .dash2-share-row-email {
+            font-size: 0.88rem;
+            font-weight: 500;
+            word-break: break-word;
+        }
+        .dash2-share-row-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+        .dash2-share-remove-btn {
+            padding: 0.3rem 0.55rem;
+            font-size: 0.72rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 120, 120, 0.35);
+            background: rgba(255, 80, 80, 0.1);
+            color: #ffb0b0;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+        }
+        .dash2-share-remove-btn:hover {
+            background: rgba(255, 80, 80, 0.18);
+        }
+        body.light-mode .dash2-share-remove-btn {
+            color: #b83232;
+            border-color: rgba(220, 38, 38, 0.35);
+            background: rgba(248, 113, 113, 0.12);
+        }
+        body.light-mode .dash2-share-remove-btn:hover {
+            background: rgba(248, 113, 113, 0.2);
+        }
+        .dash2-transfer-warning {
+            margin: 0 0 1rem;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--dash2-muted);
+        }
+        .dash2-transfer-warning p {
+            margin: 0 0 0.5rem;
+        }
+        .dash2-transfer-warning p:last-child {
+            margin-bottom: 0;
+        }
+        .dash2-transfer-confirm {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin: 0.75rem 0 1rem;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            cursor: pointer;
+        }
+        .dash2-transfer-confirm input {
+            margin-top: 0.2rem;
+            flex-shrink: 0;
+        }
+        .dash2-transfer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
         footer.dash2-footer {
             flex-shrink: 0;
@@ -1694,6 +2271,7 @@
     </style>
     {% include "_email_modal_styles.html" %}
     {% include "_legal_footer_styles.html" %}
+    {% include "_nav_profile_styles.html" %}
 </head>
 <body>
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
@@ -1715,6 +2293,7 @@
                 <span id="themeIcon">🌙</span>
                 <span id="themeLabel">Dark</span>
             </button>
+            {% include "_nav_profile_fragment.html" %}
         </nav>
     </header>
     <div class="dash2-body-stack">
@@ -1804,6 +2383,16 @@
                             <p class="dash2-footnote" id="dash2UploadStatus">
                                 Your uploaded file will be appear in your files list. Choose the View Files tab above.
                             </p>
+                            <div class="dash2-upload-progress" id="dash2UploadProgress" hidden role="status" aria-live="polite">
+                                <span class="dash2-spinner" aria-hidden="true"></span>
+                                <div class="dash2-upload-progress-copy">
+                                    <p class="dash2-upload-progress-main" id="dash2UploadProgressMain">Uploading file…</p>
+                                    <p class="dash2-upload-progress-sub" id="dash2UploadProgressSub">
+                                        Your file may take a few minutes to appear in My files.
+                                    </p>
+                                    <p class="dash2-upload-keep-open">Please don’t close this window until the upload finishes.</p>
+                                </div>
+                            </div>
                             <p class="dash2-import-bundle-wrap">
                                 <button type="button" class="dash2-import-bundle-link" id="dash2ImportBundleOpen">
                                     Import existing bundle (original + JSON files)
@@ -1814,7 +2403,11 @@
                 </div>
                 <div id="dash2PaneFiles" class="dash2-pane dash2-pane--files" role="tabpanel" aria-labelledby="dash2TabFiles">
                     <section class="dash2-panel" aria-labelledby="dash2-files-heading">
-                        <h2 id="dash2-files-heading">My files</h2>
+                        <h2 id="dash2-files-heading">Files</h2>
+                        <div class="dash2-files-source-tabs" role="tablist" aria-label="File sources">
+                            <button type="button" class="dash2-files-source-tab is-active" id="dash2FilesTabMine" role="tab" aria-selected="true" aria-controls="dash2FilesList">My files</button>
+                            <button type="button" class="dash2-files-source-tab" id="dash2FilesTabShared" role="tab" aria-selected="false" aria-controls="dash2FilesList">Shared with me</button>
+                        </div>
                         <p class="dash2-panel-desc">Refresh to reload the list.</p>
                         <div class="dash2-files-toolbar">
                             <button type="button" class="dash2-btn" id="dash2ViewFilesBtn">Refresh</button>
@@ -1829,17 +2422,40 @@
                 <div id="dash2PaneViewer" class="dash2-pane dash2-pane--viewer" role="region" aria-label="File viewer">
                     <section class="dash2-viewer-wrap" id="dash2ViewerWrap">
                         <div class="dash2-viewer-head">
-                            <h2 class="dash2-viewer-title" id="dash2ViewerTitle">Document</h2>
-                            <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2ExportTxtBtn" style="display: none">
-                                Export Text File
-                            </button>
+                            <div class="dash2-viewer-head-main">
+                                <h2 class="dash2-viewer-title" id="dash2ViewerTitle">Document</h2>
+                                <span class="dash2-viewer-access-badge" id="dash2ViewerAccessBadge" hidden></span>
+                            </div>
+                            <div class="dash2-viewer-actions">
+                                <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2ShareBtn" style="display: none">
+                                    Share
+                                </button>
+                                <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2TransferBtn" style="display: none">
+                                    Transfer Ownership
+                                </button>
+                                <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2ExportTxtBtn" style="display: none">
+                                    Export Text File
+                                </button>
+                            </div>
                         </div>
                         <div class="dash2-viewer-split">
                             <div class="dash2-viewer-doc">
                                 <h3 class="dash2-viewer-subtitle">Original</h3>
                                 <div class="dash2-doc-nav" id="dash2PdfNav" hidden>
                                     <button type="button" class="dash2-page-btn" id="dash2PdfPrev">← Prev</button>
-                                    <span class="dash2-page-info" id="dash2PdfPageInfo">Page 1 of 1</span>
+                                    <span class="dash2-pdf-page-jump">
+                                        <input
+                                            type="number"
+                                            class="dash2-pdf-page-input"
+                                            id="dash2PdfPageInput"
+                                            min="1"
+                                            value="1"
+                                            inputmode="numeric"
+                                            aria-label="Page number"
+                                        />
+                                        <span class="dash2-pdf-page-total">of <span id="dash2PdfTotalPages">1</span></span>
+                                        <button type="button" class="dash2-pdf-go-btn" id="dash2PdfGoBtn">Go</button>
+                                    </span>
                                     <button type="button" class="dash2-page-btn" id="dash2PdfNext">Next →</button>
                                 </div>
                                 <div class="dash2-pdf-viewer" id="dash2PdfViewer">
@@ -1848,7 +2464,7 @@
                             </div>
                             <div class="dash2-viewer-text">
                                 <div class="dash2-text-panel-head">
-                                    <h3 class="dash2-viewer-subtitle">OCR text (Editable)</h3>
+                                    <h3 class="dash2-viewer-subtitle" id="dash2OcrSubtitle">OCR text (Editable)</h3>
                                     <div class="dash2-edit-controls" id="dash2EditControls">
                                         <button type="button" class="dash2-mini-btn dash2-mini-btn--with-icon" id="dash2CopyTextBtn" disabled title="Copy OCR text for this page" aria-label="Copy OCR text to clipboard">
                                             <svg class="dash2-copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1857,7 +2473,22 @@
                                             </svg>
                                             <span class="dash2-copy-btn-label">Copy</span>
                                         </button>
-                                        <button type="button" class="dash2-mini-btn" id="dash2FormatBtn" disabled>Format</button>
+                                        <button type="button" class="dash2-mini-btn dash2-mini-btn--with-icon" id="dash2RefreshPageBtn" disabled title="Reload this page's OCR text from the server" aria-label="Refresh this page">
+                                            <svg class="dash2-refresh-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <polyline points="23 4 23 10 17 10" />
+                                                <polyline points="1 20 1 14 7 14" />
+                                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                            </svg>
+                                            <span class="dash2-refresh-btn-label">Refresh</span>
+                                        </button>
+                                        <div class="dash2-format-wrap" id="dash2FormatWrap" hidden>
+                                            <button type="button" class="dash2-mini-btn" id="dash2FormatBtn" disabled aria-haspopup="menu" aria-expanded="false">Format ▾</button>
+                                            <div class="dash2-format-menu" id="dash2FormatMenu" hidden role="menu">
+                                                <button type="button" class="dash2-format-menu-item" data-format-scope="page" role="menuitem">This page</button>
+                                                <button type="button" class="dash2-format-menu-item" data-format-scope="all" role="menuitem">All pages</button>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="dash2-mini-btn" id="dash2RevertBtn" disabled title="Revert this page to the original OCR text">Revert</button>
                                         <button type="button" class="dash2-mini-btn" id="dash2EditBtn">Edit</button>
                                         <button type="button" class="dash2-mini-btn dash2-mini-btn--primary" id="dash2SaveBtn" style="display: none">
                                             Save
@@ -1865,19 +2496,33 @@
                                         <button type="button" class="dash2-mini-btn" id="dash2CancelBtn" style="display: none">Cancel</button>
                                     </div>
                                 </div>
-                                <div class="dash2-ocr-nav" id="dash2OcrNav" hidden>
-                                    <button type="button" class="dash2-page-btn" id="dash2OcrPrev">← Prev</button>
-                                    <span class="dash2-page-info" id="dash2OcrPageInfo">OCR page 1 of 1</span>
-                                    <button type="button" class="dash2-page-btn" id="dash2OcrNext">Next →</button>
+                                <div class="dash2-page-toolbar" id="dash2PageToolbar" aria-label="Page navigation and status">
+                                    <div class="dash2-ocr-nav" id="dash2OcrNav" hidden>
+                                        <button type="button" class="dash2-page-btn" id="dash2OcrPrev">← Prev</button>
+                                        <span class="dash2-page-info" id="dash2OcrPageInfo">OCR page 1 of 1</span>
+                                        <button type="button" class="dash2-page-btn" id="dash2OcrNext">Next →</button>
+                                    </div>
+                                    <div class="dash2-page-status-bar">
+                                        <label class="dash2-page-meta-completed" for="dash2PageCompleted">
+                                            <input type="checkbox" id="dash2PageCompleted" disabled />
+                                            <span>Completed</span>
+                                        </label>
+                                    </div>
                                 </div>
                                 <div class="dash2-search-bar">
-                                    <input
-                                        type="text"
-                                        class="dash2-search-input"
-                                        id="dash2SearchInput"
-                                        placeholder="Search in OCR text…"
-                                        autocomplete="off"
-                                    />
+                                    <div class="dash2-search-field">
+                                        <input
+                                            type="text"
+                                            class="dash2-search-input"
+                                            id="dash2SearchInput"
+                                            placeholder="Search in OCR text…"
+                                            autocomplete="off"
+                                        />
+                                        <div class="dash2-search-loading" id="dash2SearchLoading" hidden role="status" aria-live="polite">
+                                            <span class="dash2-spinner dash2-spinner--sm" aria-hidden="true"></span>
+                                            <span>Searching…</span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="dash2-search-nav" id="dash2SearchNav">
                                     <button type="button" class="dash2-mini-btn" id="dash2PrevMatchBtn" disabled>← Prev</button>
@@ -1885,6 +2530,27 @@
                                     <button type="button" class="dash2-mini-btn" id="dash2NextMatchBtn" disabled>Next →</button>
                                 </div>
                                 <div class="dash2-text-content" id="dash2TextContent">Select a file from the list.</div>
+                                <div class="dash2-page-meta" id="dash2PageMeta" aria-label="Page collaboration">
+                                    <div class="dash2-page-meta-notes-wrap">
+                                        <span class="dash2-page-meta-label" id="dash2PageNotesLabel">Notes</span>
+                                        <textarea
+                                            class="dash2-page-notes"
+                                            id="dash2PageNotes"
+                                            rows="2"
+                                            placeholder="Add notes for collaborators on this page…"
+                                            disabled
+                                        ></textarea>
+                                    </div>
+                                    <div class="dash2-page-meta-assign" id="dash2PageAssignWrap" hidden>
+                                        <span class="dash2-page-meta-label" for="dash2PageAssignee">Assigned to</span>
+                                        <select id="dash2PageAssignee" disabled>
+                                            <option value="">Unassigned</option>
+                                        </select>
+                                    </div>
+                                    <div class="dash2-page-meta-foot">
+                                        <span class="dash2-page-meta-status" id="dash2PageMetaStatus" aria-live="polite"></span>
+                                    </div>
+                                </div>
                                 <div id="dash2SaveOverlay" class="dash2-save-overlay" hidden>
                                     <span class="dash2-spinner" aria-hidden="true"></span>
                                     <span>Saving changes…</span>
@@ -1916,6 +2582,7 @@
                 <span class="dash2-spinner" aria-hidden="true"></span>
                 <p class="dash2-import-loading-text" id="dash2ImportBundleLoadingText">Preparing import…</p>
                 <p class="dash2-import-loading-sub" id="dash2ImportBundleLoadingSub">Large bundles can take a minute.</p>
+                <p class="dash2-import-loading-warn" id="dash2ImportBundleLoadingWarn">Please don’t close this window until the import finishes.</p>
             </div>
             <h2 id="dash2ImportBundleModalTitle">Import bundle</h2>
             <p class="modal-body">
@@ -1949,6 +2616,59 @@
                     <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2ImportBundleCancel">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+    <div class="modal-overlay" id="dash2ShareModal" role="dialog" aria-modal="true" aria-labelledby="dash2ShareModalTitle">
+        <div class="modal-dialog" style="max-width: 28rem">
+            <button type="button" class="modal-close" id="dash2ShareModalClose" aria-label="Close">&times;</button>
+            <h2 id="dash2ShareModalTitle">Share document</h2>
+            <p class="modal-body">Invite another GurmukhiOCR user by username. They must already have an account.</p>
+            <form class="dash2-share-form" id="dash2ShareForm">
+                <div class="dash2-share-field">
+                    <label for="dash2ShareUsername">Username</label>
+                    <input type="text" id="dash2ShareUsername" name="username" required autocomplete="off" placeholder="@username" autocapitalize="off" spellcheck="false" />
+                </div>
+                <div class="dash2-share-field">
+                    <label for="dash2SharePermission">Permission</label>
+                    <select id="dash2SharePermission" name="permission">
+                        <option value="view">View — read only</option>
+                        <option value="edit">Edit — can change OCR text</option>
+                    </select>
+                </div>
+                <button type="submit" class="dash2-btn" id="dash2ShareSubmit">Share</button>
+            </form>
+            <p class="dash2-share-status" id="dash2ShareStatus" aria-live="polite"></p>
+            <h3 class="dash2-share-list-heading">People with access</h3>
+            <ul class="dash2-share-ul" id="dash2ShareList">
+                <li class="dash2-empty" style="max-width: none; margin: 0">Loading…</li>
+            </ul>
+        </div>
+    </div>
+    <div class="modal-overlay" id="dash2TransferModal" role="dialog" aria-modal="true" aria-labelledby="dash2TransferModalTitle">
+        <div class="modal-dialog" style="max-width: 28rem">
+            <button type="button" class="modal-close" id="dash2TransferModalClose" aria-label="Close">&times;</button>
+            <h2 id="dash2TransferModalTitle">Transfer ownership</h2>
+            <div class="dash2-transfer-warning">
+                <p><strong>Transfer ownership of this document?</strong></p>
+                <p>The recipient will become the new owner.</p>
+                <p>You will lose ownership but will retain Edit access.</p>
+                <p>This action can be reversed only if the new owner transfers ownership back to you.</p>
+            </div>
+            <form class="dash2-share-form" id="dash2TransferForm">
+                <div class="dash2-share-field">
+                    <label for="dash2TransferUsername">Recipient username</label>
+                    <input type="text" id="dash2TransferUsername" name="username" required autocomplete="off" placeholder="@username" autocapitalize="off" spellcheck="false" />
+                </div>
+                <label class="dash2-transfer-confirm" for="dash2TransferConfirm">
+                    <input type="checkbox" id="dash2TransferConfirm" />
+                    <span>I understand that I will lose ownership of this document.</span>
+                </label>
+                <div class="dash2-transfer-actions">
+                    <button type="submit" class="dash2-btn" id="dash2TransferSubmit" disabled>Transfer ownership</button>
+                    <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2TransferCancel">Cancel</button>
+                </div>
+            </form>
+            <p class="dash2-share-status" id="dash2TransferStatus" aria-live="polite"></p>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
@@ -2072,10 +2792,31 @@
             }
         }
 
+        function formatProcessingDuration(seconds) {
+            var total = Math.round(Number(seconds));
+            if (!isFinite(total) || total < 0) return '';
+            if (total < 60) return total + 's';
+            var mins = Math.floor(total / 60);
+            var secs = total % 60;
+            if (mins < 60) return mins + 'm ' + secs + 's';
+            var hrs = Math.floor(mins / 60);
+            return hrs + 'h ' + (mins % 60) + 'm';
+        }
+
         function fileMetaLine(row) {
             var parts = [];
             if (row.created_at) parts.push(formatWhen(row.created_at));
-            if (row.credits_used != null) parts.push(String(row.credits_used) + ' credit' + (Number(row.credits_used) === 1 ? '' : 's'));
+            if (row.credits_used != null && row.credits_used !== '') {
+                parts.push(
+                    String(row.credits_used) + ' credit' + (Number(row.credits_used) === 1 ? '' : 's')
+                );
+            } else {
+                parts.push('Imported');
+            }
+            if (row.processing_duration_seconds != null && row.processing_duration_seconds !== '') {
+                var dur = formatProcessingDuration(row.processing_duration_seconds);
+                if (dur) parts.push(dur);
+            }
             if (row.mime_type) parts.push(String(row.mime_type));
             return parts.join(' · ');
         }
@@ -2088,6 +2829,37 @@
             if (status === 'processing' || status === 'pending') return 'Processing';
             if (status === 'failed') return 'Failed';
             return 'Complete';
+        }
+
+        function fileStatusBadgeHtml(status) {
+            if (!isProcessingStatus(status) && status !== 'failed') return '';
+            var badgeStatus = isProcessingStatus(status)
+                ? status === 'pending'
+                    ? 'pending'
+                    : 'processing'
+                : 'failed';
+            return (
+                '<span class="dash2-file-status dash2-file-status--' +
+                escapeHtml(badgeStatus) +
+                '">' +
+                escapeHtml(fileStatusLabel(status)) +
+                '</span>'
+            );
+        }
+
+        function fileRowOwnerActionsHtml(status) {
+            var disabled = isProcessingStatus(status) || status === 'failed';
+            var dis = disabled ? ' disabled' : '';
+            return (
+                '<div class="dash2-file-row-actions">' +
+                '<button type="button" class="dash2-file-row-action dash2-btn dash2-btn--ghost"' +
+                dis +
+                ' data-file-action="share">Share</button>' +
+                '<button type="button" class="dash2-file-row-action dash2-btn dash2-btn--ghost"' +
+                dis +
+                ' data-file-action="transfer">Transfer</button>' +
+                '</div>'
+            );
         }
 
         function isProcessingStatus(status) {
@@ -2147,7 +2919,6 @@
                         var meta = escapeHtml(fileMetaLine(row));
                         var fid = row.id != null ? escapeHtml(String(row.id)) : '';
                         var status = normalizedFileStatus(row);
-                        var statusLabel = escapeHtml(fileStatusLabel(status));
                         return (
                             '<li class="dash2-file-row dash2-file-row--selectable" data-file-id="' +
                             fid +
@@ -2161,16 +2932,133 @@
                             name +
                             '</div>' +
                             '<div class="dash2-file-row-badges">' +
-                            '<span class="dash2-file-status dash2-file-status--' +
-                            escapeHtml(status) +
-                            '">' +
-                            statusLabel +
-                            '</span>' +
+                            fileStatusBadgeHtml(status) +
+                            fileRowOwnerActionsHtml(status) +
                             '</div>' +
                             '</div>' +
                             (meta
                                 ? '<div class="dash2-file-meta">' + meta + '</div>'
                                 : '') +
+                            '</li>'
+                        );
+                    })
+                    .join('') +
+                '</ul>';
+            root.innerHTML = html;
+            setListShell(listShell, true);
+        }
+
+        function permissionBadgeHtml(permission) {
+            var p = String(permission || 'view').toLowerCase();
+            var label = p === 'edit' ? 'Edit' : 'View';
+            var cls =
+                p === 'edit' ? 'dash2-permission-badge--edit' : 'dash2-permission-badge--view';
+            return (
+                '<span class="dash2-permission-badge ' +
+                cls +
+                '">' +
+                escapeHtml(label) +
+                '</span>'
+            );
+        }
+
+        function usernameDisplayLabel(user) {
+            if (!user) return 'Unknown user';
+            if (user.username) return '@' + user.username;
+            return 'Unknown user';
+        }
+
+        function ownerDisplayLabel(owner) {
+            return usernameDisplayLabel(owner);
+        }
+
+        async function renderSharedFilesInto(supabase, root, listShell) {
+            root.innerHTML = '<p class="dash2-empty">Loading shared files…</p>';
+            setListShell(listShell, false);
+
+            var sessionRes = await supabase.auth.getSession();
+            var token =
+                sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+            if (!token) {
+                root.innerHTML =
+                    '<p class="dash2-empty">Sign in to see files shared with you. <a href="/login">Log in</a></p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var r;
+            try {
+                r = await fetch('/api/files/shared-with-me', {
+                    headers: { Authorization: 'Bearer ' + token },
+                    credentials: 'same-origin',
+                });
+            } catch (fetchErr) {
+                root.innerHTML =
+                    '<p class="dash2-files-error">' + escapeHtml(String(fetchErr.message || fetchErr)) + '</p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var payload = {};
+            try {
+                payload = await r.json();
+            } catch (e2) {
+                payload = {};
+            }
+            if (!r.ok) {
+                root.innerHTML =
+                    '<p class="dash2-files-error">' +
+                    escapeHtml(payload.error || r.statusText || 'Could not load shared files.') +
+                    '</p>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var items = payload.files || [];
+            if (!items.length) {
+                root.innerHTML =
+                    '<div class="dash2-files-list-inner"><p class="dash2-empty">No files have been shared with you yet.</p></div>';
+                setListShell(listShell, false);
+                return;
+            }
+
+            var html =
+                '<ul class="dash2-file-ul">' +
+                items
+                    .map(function (item) {
+                        var row = item.file || {};
+                        var name = escapeHtml(fileDisplayName(row));
+                        var fid = row.id != null ? escapeHtml(String(row.id)) : '';
+                        var status = normalizedFileStatus(row);
+                        var ownerLine =
+                            'Shared by ' + escapeHtml(ownerDisplayLabel(item.owner || {}));
+                        var metaParts = [ownerLine];
+                        if (row.created_at) metaParts.push(escapeHtml(formatWhen(row.created_at)));
+                        if (row.processing_duration_seconds != null && row.processing_duration_seconds !== '') {
+                            var sharedDur = formatProcessingDuration(row.processing_duration_seconds);
+                            if (sharedDur) metaParts.push(escapeHtml(sharedDur));
+                        }
+                        var meta = metaParts.join(' · ');
+                        return (
+                            '<li class="dash2-file-row dash2-file-row--selectable" data-file-id="' +
+                            fid +
+                            '" data-file-status="' +
+                            escapeHtml(status) +
+                            '" data-cache-version="' +
+                            escapeHtml(String(row.original_file_path || row.id || '')) +
+                            '" data-shared-with-me="1" role="button" tabindex="0">' +
+                            '<div class="dash2-file-title-row">' +
+                            '<div class="dash2-file-name">' +
+                            name +
+                            '</div>' +
+                            '<div class="dash2-file-row-badges">' +
+                            permissionBadgeHtml(item.permission) +
+                            fileStatusBadgeHtml(status) +
+                            '</div>' +
+                            '</div>' +
+                            '<div class="dash2-file-meta">' +
+                            meta +
+                            '</div>' +
                             '</li>'
                         );
                     })
@@ -2336,21 +3224,77 @@
 
             setInterval(updateDash2UploadQuotaCountdown, 60000);
 
+            var filesListSource = 'mine';
+            var tabMine = document.getElementById('dash2FilesTabMine');
+            var tabShared = document.getElementById('dash2FilesTabShared');
+
+            function setFilesListSource(source) {
+                filesListSource = source === 'shared' ? 'shared' : 'mine';
+                if (tabMine) {
+                    tabMine.classList.toggle('is-active', filesListSource === 'mine');
+                    tabMine.setAttribute('aria-selected', filesListSource === 'mine' ? 'true' : 'false');
+                }
+                if (tabShared) {
+                    tabShared.classList.toggle('is-active', filesListSource === 'shared');
+                    tabShared.setAttribute('aria-selected', filesListSource === 'shared' ? 'true' : 'false');
+                }
+            }
+
             function refresh() {
-                renderFilesInto(supabase, root, listShell);
+                if (filesListSource === 'shared') {
+                    renderSharedFilesInto(supabase, root, listShell);
+                } else {
+                    renderFilesInto(supabase, root, listShell);
+                }
                 refreshPagesRemainingDisplay();
             }
 
+            if (tabMine) {
+                tabMine.addEventListener('click', function () {
+                    setFilesListSource('mine');
+                    refresh();
+                });
+            }
+            if (tabShared) {
+                tabShared.addEventListener('click', function () {
+                    setFilesListSource('shared');
+                    refresh();
+                });
+            }
+
             refresh();
+            async function ensureProfileUsername(sb) {
+                try {
+                    var sessionRes = await sb.auth.getSession();
+                    var token =
+                        sessionRes.data &&
+                        sessionRes.data.session &&
+                        sessionRes.data.session.access_token;
+                    if (!token) return;
+                    await fetch('/api/profile', {
+                        headers: { Authorization: 'Bearer ' + token },
+                        credentials: 'same-origin',
+                    });
+                } catch (_profileErr) {
+                    /* non-fatal */
+                }
+            }
+            void ensureProfileUsername(supabase);
             supabase.auth.onAuthStateChange(function (_event, session) {
                 if (!session) {
                     window.location.replace('/signup');
                     return;
                 }
+                void ensureProfileUsername(supabase);
                 refresh();
             });
 
             listShell.addEventListener('dash2-refresh-files', refresh);
+
+            listShell.addEventListener('dash2-ownership-transferred', function () {
+                setFilesListSource('shared');
+                refresh();
+            });
 
             function initDash2FileViewer(sb, listRoot, listShellForEvents) {
                 var wrap = document.getElementById('dash2ViewerWrap');
@@ -2358,6 +3302,7 @@
                 var pdfBox = document.getElementById('dash2PdfViewer');
                 var textEl = document.getElementById('dash2TextContent');
                 var searchInput = document.getElementById('dash2SearchInput');
+                var searchLoading = document.getElementById('dash2SearchLoading');
                 var searchNav = document.getElementById('dash2SearchNav');
                 var matchInfo = document.getElementById('dash2MatchInfo');
                 var prevMatchBtn = document.getElementById('dash2PrevMatchBtn');
@@ -2373,10 +3318,26 @@
                 var pdfNav = document.getElementById('dash2PdfNav');
                 var pdfPrev = document.getElementById('dash2PdfPrev');
                 var pdfNext = document.getElementById('dash2PdfNext');
-                var pdfPageInfo = document.getElementById('dash2PdfPageInfo');
+                var pdfPageInput = document.getElementById('dash2PdfPageInput');
+                var pdfTotalPagesEl = document.getElementById('dash2PdfTotalPages');
+                var pdfGoBtn = document.getElementById('dash2PdfGoBtn');
                 var saveOverlay = document.getElementById('dash2SaveOverlay');
                 var copyBtn = document.getElementById('dash2CopyTextBtn');
                 var formatBtn = document.getElementById('dash2FormatBtn');
+                var formatMenu = document.getElementById('dash2FormatMenu');
+                var revertBtn = document.getElementById('dash2RevertBtn');
+                var refreshBtn = document.getElementById('dash2RefreshPageBtn');
+                var pageMetaPanel = document.getElementById('dash2PageMeta');
+                var pageToolbar = document.getElementById('dash2PageToolbar');
+                var pageCompleted = document.getElementById('dash2PageCompleted');
+                var pageNotes = document.getElementById('dash2PageNotes');
+                var pageAssignWrap = document.getElementById('dash2PageAssignWrap');
+                var pageAssignee = document.getElementById('dash2PageAssignee');
+                var pageMetaStatus = document.getElementById('dash2PageMetaStatus');
+                var shareBtn = document.getElementById('dash2ShareBtn');
+                var transferBtn = document.getElementById('dash2TransferBtn');
+                var accessBadge = document.getElementById('dash2ViewerAccessBadge');
+                var ocrSubtitle = document.getElementById('dash2OcrSubtitle');
                 if (!wrap || !pdfBox || !textEl || !listRoot || !exportTxtBtn || !ocrNav || !ocrPrev || !ocrNext || !ocrPageInfo)
                     return;
 
@@ -2424,6 +3385,9 @@
                     searchMatches = [];
                     currentMatchIndex = -1;
                     currentSearchTerm = '';
+                    searchLoadGen += 1;
+                    setSearchLoading(false);
+                    setFormatMenuOpen(false);
                     searchNav.classList.remove('is-visible');
                     isEditMode = false;
                     textEl.contentEditable = 'false';
@@ -2432,16 +3396,247 @@
                     saveBtn.style.display = 'none';
                     cancelBtn.style.display = 'none';
                     if (formatBtn) formatBtn.disabled = true;
+                    if (revertBtn) revertBtn.disabled = true;
                     searchInput.disabled = false;
                     if (saveOverlay) saveOverlay.hidden = true;
                     pdfBox.innerHTML = '<p class="dash2-empty">Select a file from the list.</p>';
                     textEl.textContent = 'Select a file from the list.';
+                    fileAccess = { role: 'owner', can_edit: true, is_owner: true };
+                    if (pageCompleted) pageCompleted.checked = false;
+                    if (pageNotes) pageNotes.value = '';
+                    setPageMetaStatus('');
                     syncCopyTextBtnState();
+                    applyFileAccessUI();
                 }
 
                 var fileId = null;
+                var fileAccess = { role: 'owner', can_edit: true, is_owner: true };
+                var listActionFileId = null;
+
+                function shareTargetFileId() {
+                    return listActionFileId || fileId;
+                }
+
+                function clearListActionFileId() {
+                    listActionFileId = null;
+                }
+
+                function applyFileAccessUI() {
+                    var canEdit = !!(fileAccess && fileAccess.can_edit);
+                    var isOwner = !!(fileAccess && fileAccess.is_owner);
+                    if (editBtn) {
+                        if (isEditMode) {
+                            editBtn.style.display = 'none';
+                        } else {
+                            editBtn.style.display = canEdit ? 'inline-block' : 'none';
+                        }
+                        editBtn.disabled = !canEdit;
+                    }
+                    if (revertBtn) revertBtn.disabled = !canEdit || isEditMode;
+                    if (shareBtn) shareBtn.style.display = isOwner && fileId ? 'inline-block' : 'none';
+                    if (transferBtn) transferBtn.style.display = isOwner && fileId ? 'inline-block' : 'none';
+                    if (accessBadge) {
+                        if (fileAccess && fileAccess.role === 'view') {
+                            accessBadge.hidden = false;
+                            accessBadge.textContent = 'View only';
+                        } else if (fileAccess && fileAccess.role === 'edit' && !isOwner) {
+                            accessBadge.hidden = false;
+                            accessBadge.textContent = 'Shared with you (can edit)';
+                        } else if (fileAccess && fileAccess.owner_username && !isOwner) {
+                            accessBadge.hidden = false;
+                            accessBadge.textContent = 'Shared by @' + fileAccess.owner_username;
+                        } else {
+                            accessBadge.hidden = true;
+                            accessBadge.textContent = '';
+                        }
+                    }
+                    if (ocrSubtitle) {
+                        ocrSubtitle.textContent = canEdit ? 'OCR text (Editable)' : 'OCR text (View only)';
+                    }
+                    syncPageMetaEditState();
+                }
+
+                function resetPageMetaCacheState() {
+                    pageMetaCache = {};
+                    pageMetaLoadPromises = {};
+                    metadataCollaborators = [];
+                    if (pageMetaSaveTimer) {
+                        clearTimeout(pageMetaSaveTimer);
+                        pageMetaSaveTimer = null;
+                    }
+                }
+
+                function setPageMetaStatus(msg, isError) {
+                    if (!pageMetaStatus) return;
+                    pageMetaStatus.textContent = msg || '';
+                    pageMetaStatus.classList.toggle('dash2-page-meta-status--error', !!isError);
+                }
+
+                function syncPageMetaEditState() {
+                    var canEdit = !!(fileAccess && fileAccess.can_edit);
+                    var hasFile = !!(fileId && totalPages > 0);
+                    if (pageToolbar) pageToolbar.classList.toggle('is-visible', hasFile);
+                    if (pageMetaPanel) pageMetaPanel.classList.toggle('is-visible', hasFile);
+                    if (pageCompleted) pageCompleted.disabled = !hasFile || !canEdit || pageMetaLoading;
+                    if (pageNotes) pageNotes.disabled = !hasFile || !canEdit || pageMetaLoading;
+                    if (pageAssignee) pageAssignee.disabled = !hasFile || !canEdit || pageMetaLoading;
+                }
+
+                function applyPageMetaToUI(meta) {
+                    if (!meta) return;
+                    pageMetaLoading = true;
+                    syncPageMetaEditState();
+                    if (pageCompleted) pageCompleted.checked = !!meta.completed;
+                    if (pageNotes) pageNotes.value = meta.notes || '';
+                    if (pageAssignee) {
+                        var assigneeId = meta.assigned_to_user_id || '';
+                        pageAssignee.value = assigneeId;
+                    }
+                    pageMetaLoading = false;
+                    syncPageMetaEditState();
+                    setPageMetaStatus('');
+                }
+
+                function populateAssigneeOptions(collaborators) {
+                    if (!pageAssignee) return;
+                    var current = pageAssignee.value;
+                    var html = '<option value="">Unassigned</option>';
+                    (collaborators || []).forEach(function (c) {
+                        if (!c || !c.user_id) return;
+                        var label = c.username ? '@' + c.username : 'Unknown user';
+                        html +=
+                            '<option value="' +
+                            escapeHtml(String(c.user_id)) +
+                            '">' +
+                            escapeHtml(String(label)) +
+                            '</option>';
+                    });
+                    pageAssignee.innerHTML = html;
+                    if (current) pageAssignee.value = current;
+                    if (pageAssignWrap) {
+                        pageAssignWrap.hidden = !(collaborators && collaborators.length > 1);
+                    }
+                }
+
+                async function loadMetadataCollaborators(fid) {
+                    if (!fid) return [];
+                    try {
+                        var ah = await authHeaders();
+                        var r = await fetch('/api/files/' + fid + '/metadata/collaborators', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                        });
+                        var data = await r.json().catch(function () {
+                            return {};
+                        });
+                        if (!r.ok) return [];
+                        return data.collaborators || [];
+                    } catch (_e) {
+                        return [];
+                    }
+                }
+
+                async function fetchPageMetadata(fid, pageNum, forceRefresh) {
+                    if (!fid || pageNum < 1) return null;
+                    if (!forceRefresh && pageMetaCache[pageNum]) return pageMetaCache[pageNum];
+                    if (!forceRefresh && pageMetaLoadPromises[pageNum]) return pageMetaLoadPromises[pageNum];
+                    pageMetaLoadPromises[pageNum] = (async function () {
+                        var ah = await authHeaders();
+                        var r = await fetch('/api/files/' + fid + '/pages/' + pageNum + '/metadata', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                            cache: 'no-store',
+                        });
+                        var data = await r.json().catch(function () {
+                            return {};
+                        });
+                        if (!r.ok) throw new Error(data.error || 'Failed to load page metadata');
+                        if (fileId === fid) pageMetaCache[pageNum] = data;
+                        return data;
+                    })();
+                    try {
+                        return await pageMetaLoadPromises[pageNum];
+                    } finally {
+                        delete pageMetaLoadPromises[pageNum];
+                    }
+                }
+
+                async function savePageMetadata(pageNum, patch) {
+                    if (!fileId || pageNum < 1 || !fileAccess || !fileAccess.can_edit) return null;
+                    var fid = fileId;
+                    setPageMetaStatus('Saving…');
+                    try {
+                        var ah = await authHeaders();
+                        var r = await fetch('/api/files/' + fid + '/pages/' + pageNum + '/metadata', {
+                            method: 'PUT',
+                            headers: Object.assign({ 'Content-Type': 'application/json' }, ah),
+                            credentials: 'same-origin',
+                            body: JSON.stringify(patch),
+                        });
+                        var data = await r.json().catch(function () {
+                            return {};
+                        });
+                        if (!r.ok) throw new Error(data.error || r.statusText);
+                        if (fileId === fid) pageMetaCache[pageNum] = data;
+                        if (fileId === fid && pageNum === currentPage) {
+                            applyPageMetaToUI(data);
+                        }
+                        setPageMetaStatus('Saved');
+                        setTimeout(function () {
+                            if (fileId === fid && pageNum === currentPage) setPageMetaStatus('');
+                        }, 1200);
+                        return data;
+                    } catch (e) {
+                        setPageMetaStatus(String((e && e.message) || e), true);
+                        throw e;
+                    }
+                }
+
+                function schedulePageNotesSave(pageNum) {
+                    if (!fileAccess || !fileAccess.can_edit || pageMetaLoading) return;
+                    if (pageMetaSaveTimer) clearTimeout(pageMetaSaveTimer);
+                    pageMetaSaveTimer = setTimeout(function () {
+                        pageMetaSaveTimer = null;
+                        var notes = pageNotes ? pageNotes.value : '';
+                        var cached = pageMetaCache[pageNum];
+                        if (cached && cached.notes === notes) return;
+                        void savePageMetadata(pageNum, { notes: notes });
+                    }, 1000);
+                }
+
+                async function flushPageMetaNotes(pageNum) {
+                    if (pageMetaSaveTimer) {
+                        clearTimeout(pageMetaSaveTimer);
+                        pageMetaSaveTimer = null;
+                    }
+                    if (!fileId || pageNum < 1 || !fileAccess || !fileAccess.can_edit || pageMetaLoading) return;
+                    var notes = pageNotes ? pageNotes.value : '';
+                    var cached = pageMetaCache[pageNum];
+                    if (cached && cached.notes === notes) return;
+                    try {
+                        await savePageMetadata(pageNum, { notes: notes });
+                    } catch (_flushErr) {}
+                }
+
+                async function loadAndApplyPageMetadata(fid, pageNum) {
+                    if (!fid || pageNum < 1) return;
+                    try {
+                        var meta = await fetchPageMetadata(fid, pageNum);
+                        if (fileId !== fid || currentPage !== pageNum) return;
+                        applyPageMetaToUI(meta);
+                    } catch (metaErr) {
+                        if (fileId === fid && currentPage === pageNum) {
+                            setPageMetaStatus(String((metaErr && metaErr.message) || metaErr), true);
+                        }
+                    }
+                }
                 var pageCache = {};
                 var pageLoadPromises = {};
+                var pageMetaCache = {};
+                var pageMetaLoadPromises = {};
+                var pageMetaSaveTimer = null;
+                var pageMetaLoading = false;
+                var metadataCollaborators = [];
                 var pageEditSnapshot = null;
                 var currentPage = 1;
                 var totalPages = 0;
@@ -2450,6 +3645,7 @@
                 var searchMatches = [];
                 var currentMatchIndex = -1;
                 var currentSearchTerm = '';
+                var searchLoadGen = 0;
                 var copyBtnRevertTimer = null;
                 var pageSyncLock = false;
                 var originalLoadGen = 0;
@@ -2461,9 +3657,20 @@
                     scroll: null,
                     regionLayer: null,
                     canvasWrap: null,
+                    loadingOverlay: null,
+                    loadingLabel: null,
+                    firstPageRendered: false,
                     fid: null,
                     loadingTask: null,
                 };
+
+                function setPdfViewerLoading(visible, label) {
+                    if (!pdfJsState.loadingOverlay) return;
+                    pdfJsState.loadingOverlay.hidden = !visible;
+                    if (label && pdfJsState.loadingLabel) {
+                        pdfJsState.loadingLabel.textContent = label;
+                    }
+                }
 
                 function destroyPdfJsViewer() {
                     if (pdfJsState.renderTask) {
@@ -2489,6 +3696,9 @@
                         scroll: null,
                         regionLayer: null,
                         canvasWrap: null,
+                        loadingOverlay: null,
+                        loadingLabel: null,
+                        firstPageRendered: false,
                         fid: null,
                         loadingTask: null,
                     };
@@ -2542,6 +3752,14 @@
                     pdfBox.innerHTML = '';
                     var wrap = document.createElement('div');
                     wrap.className = 'dash2-pdfjs-wrap';
+                    var overlay = document.createElement('div');
+                    overlay.className = 'dash2-pdfjs-loading-overlay';
+                    overlay.setAttribute('role', 'status');
+                    overlay.setAttribute('aria-live', 'polite');
+                    overlay.innerHTML =
+                        '<span class="dash2-spinner" aria-hidden="true"></span>' +
+                        '<span class="dash2-pdfjs-loading-label">Loading PDF…</span>';
+                    var loadingLabel = overlay.querySelector('.dash2-pdfjs-loading-label');
                     var scroll = document.createElement('div');
                     scroll.className = 'dash2-pdfjs-scroll';
                     scroll.id = 'dash2PdfScroll';
@@ -2556,6 +3774,7 @@
                     canvasWrap.appendChild(regionLayer);
                     scroll.appendChild(canvasWrap);
                     wrap.appendChild(scroll);
+                    wrap.appendChild(overlay);
                     pdfBox.appendChild(wrap);
 
                     pdfJsState = {
@@ -2566,6 +3785,9 @@
                         scroll: scroll,
                         regionLayer: regionLayer,
                         canvasWrap: canvasWrap,
+                        loadingOverlay: overlay,
+                        loadingLabel: loadingLabel,
+                        firstPageRendered: false,
                         fid: fid,
                         loadingTask: null,
                     };
@@ -2586,22 +3808,30 @@
                         rangeChunkSize: 1048576,
                     });
                     pdfJsState.loadingTask = loadingTask;
-                    var doc = await loadingTask.promise;
-                    if (pdfJsState.fid !== fid || fileId !== fid) return;
-                    pdfJsState.doc = doc;
-                    if (doc.numPages > totalPages) totalPages = doc.numPages;
-                    updateOcrNav();
-                    updatePdfNav();
-                    // The editor may have finished loading before the PDF was ready, so render
-                    // the currently viewed page now that the document exists.
-                    pageSyncLock = true;
-                    renderPdfJsPage(currentPage)
-                        .catch(function (err) {
-                            console.error('PDF page render failed:', err);
-                        })
-                        .finally(function () {
+                    try {
+                        var doc = await loadingTask.promise;
+                        if (pdfJsState.fid !== fid || fileId !== fid) return;
+                        pdfJsState.doc = doc;
+                        if (doc.numPages > totalPages) totalPages = doc.numPages;
+                        updateOcrNav();
+                        updatePdfNav();
+                        setPdfViewerLoading(true, 'Rendering page…');
+                        // The editor may have finished loading before the PDF was ready.
+                        pageSyncLock = true;
+                        try {
+                            await renderPdfJsPage(currentPage);
+                        } finally {
                             pageSyncLock = false;
-                        });
+                        }
+                        if (pdfJsState.fid !== fid || fileId !== fid) return;
+                        pdfJsState.firstPageRendered = true;
+                        setPdfViewerLoading(false);
+                    } catch (err) {
+                        if (pdfJsState.fid === fid && fileId === fid) {
+                            setPdfViewerLoading(false);
+                        }
+                        throw err;
+                    }
                 }
 
                 async function fetchOriginalSignedUrl(fid) {
@@ -2624,6 +3854,7 @@
                     pageCache = {};
                     pageLoadPromises = {};
                     pageEditSnapshot = null;
+                    resetPageMetaCacheState();
                 }
 
                 function pageCacheToBundleShape() {
@@ -2654,28 +3885,39 @@
                     if (!fid || pageNum < 1) return null;
                     if (pageCache[pageNum]) return pageCache[pageNum];
                     if (pageLoadPromises[pageNum]) return pageLoadPromises[pageNum];
-                    pageLoadPromises[pageNum] = (async function () {
-                        var ah = await authHeaders();
-                        var r = await fetch('/api/files/' + fid + '/json/' + pageNum, {
-                            headers: ah,
-                            credentials: 'same-origin',
-                        });
-                        if (!r.ok) {
-                            var ej = await r.json().catch(function () {
-                                return {};
-                            });
-                            throw new Error(ej.error || 'Failed to load page ' + pageNum);
-                        }
-                        var data = await r.json();
-                        if (fileId !== fid) return data;
-                        pageCache[pageNum] = data;
+                    pageLoadPromises[pageNum] = fetchPageFromServer(fid, pageNum).then(function (data) {
+                        if (fileId === fid) pageCache[pageNum] = data;
                         return data;
-                    })();
+                    });
                     try {
                         return await pageLoadPromises[pageNum];
                     } finally {
                         delete pageLoadPromises[pageNum];
                     }
+                }
+
+                async function fetchPageFromServer(fid, pageNum) {
+                    var ah = await authHeaders();
+                    var r = await fetch('/api/files/' + fid + '/json/' + pageNum, {
+                        headers: ah,
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                    });
+                    if (!r.ok) {
+                        var ej = await r.json().catch(function () {
+                            return {};
+                        });
+                        throw new Error(ej.error || 'Failed to load page ' + pageNum);
+                    }
+                    return r.json();
+                }
+
+                async function reloadPageFromServer(fid, pageNum) {
+                    delete pageCache[pageNum];
+                    delete pageLoadPromises[pageNum];
+                    var data = await fetchPageFromServer(fid, pageNum);
+                    if (fileId === fid) pageCache[pageNum] = data;
+                    return data;
                 }
 
                 function prefetchAdjacentPages(fid, centerPage) {
@@ -2746,9 +3988,25 @@
                     if (!showPdfNav) return;
                     if (pdfPrev) pdfPrev.disabled = currentPage <= 1;
                     if (pdfNext) pdfNext.disabled = currentPage >= totalPages;
-                    if (pdfPageInfo) {
-                        pdfPageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+                    if (pdfTotalPagesEl) pdfTotalPagesEl.textContent = String(totalPages);
+                    if (pdfPageInput) {
+                        pdfPageInput.min = '1';
+                        pdfPageInput.max = String(totalPages);
+                        if (document.activeElement !== pdfPageInput) {
+                            pdfPageInput.value = String(currentPage);
+                        }
                     }
+                }
+
+                function goToPdfPageFromInput() {
+                    if (!pdfPageInput || totalPages < 1) return;
+                    var n = parseInt(pdfPageInput.value, 10);
+                    if (!n || n < 1) {
+                        pdfPageInput.value = String(currentPage);
+                        return;
+                    }
+                    if (n > totalPages) n = totalPages;
+                    void setViewerPage(n, 'pdf');
                 }
 
                 function flushPageEditsFor(pageNum) {
@@ -2784,7 +4042,9 @@
                     }
                     pageSyncLock = true;
                     try {
-                        flushPageEditsFor(currentPage);
+                        var leavingPage = currentPage;
+                        flushPageEditsFor(leavingPage);
+                        await flushPageMetaNotes(leavingPage);
                         currentPage = next;
                         updateOcrNav();
                         updatePdfNav();
@@ -2797,6 +4057,7 @@
                                     'Could not load page ' + currentPage + ': ' + String(loadErr.message || loadErr);
                                 return;
                             }
+                            await loadAndApplyPageMetadata(fileId, currentPage);
                         }
                         updateOcrTextForPage(currentPage);
                         if (docKind === 'pdf' && pdfJsState.doc) {
@@ -2824,7 +4085,93 @@
                     var lab = copyBtn.querySelector('.dash2-copy-btn-label');
                     if (lab) lab.textContent = 'Copy';
                     copyBtn.disabled = !(fileId && totalPages > 0);
-                    if (formatBtn) formatBtn.disabled = !(fileId && totalPages > 0);
+                    var canEdit = !!(fileAccess && fileAccess.can_edit);
+                    if (formatBtn) formatBtn.disabled = !(fileId && totalPages > 0) || !canEdit;
+                    if (revertBtn) {
+                        revertBtn.disabled = !(fileId && totalPages > 0) || isEditMode || !canEdit;
+                    }
+                    if (refreshBtn) {
+                        refreshBtn.disabled = !(fileId && totalPages > 0) || isEditMode;
+                    }
+                }
+
+                async function refreshCurrentPageFromServer() {
+                    if (!fileId || currentPage < 1) return;
+                    if (isEditMode) {
+                        alert('Save or cancel your edits before refreshing.');
+                        return;
+                    }
+                    var fid = fileId;
+                    var pageNum = currentPage;
+                    var refreshLab = refreshBtn && refreshBtn.querySelector('.dash2-refresh-btn-label');
+                    if (refreshBtn) {
+                        refreshBtn.disabled = true;
+                        if (refreshLab) refreshLab.textContent = 'Refreshing…';
+                    }
+                    try {
+                        await reloadPageFromServer(fid, pageNum);
+                        if (fileId !== fid || currentPage !== pageNum) return;
+                        updateText(pageNum);
+                    } catch (e) {
+                        alert(String((e && e.message) || e));
+                    } finally {
+                        if (refreshBtn && refreshLab) refreshLab.textContent = 'Refresh';
+                        syncCopyTextBtnState();
+                    }
+                }
+
+                async function fetchOriginalPageData(fid, pageNum) {
+                    var ah = await authHeaders();
+                    var r = await fetch('/api/files/' + fid + '/json/' + pageNum + '/original', {
+                        headers: ah,
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok) {
+                        var ej = await r.json().catch(function () {
+                            return {};
+                        });
+                        throw new Error(ej.error || 'Failed to load original page ' + pageNum);
+                    }
+                    return r.json();
+                }
+
+                async function revertCurrentPageToOriginal() {
+                    if (!fileId || currentPage < 1) return;
+                    if (!fileAccess || !fileAccess.can_edit) return;
+                    if (isEditMode) {
+                        alert('Save or cancel your edits before reverting this page.');
+                        return;
+                    }
+                    if (
+                        !confirm(
+                            'Revert page ' +
+                                currentPage +
+                                ' to the original OCR text? Your edits on this page will be lost.'
+                        )
+                    ) {
+                        return;
+                    }
+                    var fid = fileId;
+                    var pageNum = currentPage;
+                    if (revertBtn) {
+                        revertBtn.disabled = true;
+                        revertBtn.textContent = 'Reverting…';
+                    }
+                    try {
+                        var original = await fetchOriginalPageData(fid, pageNum);
+                        if (fileId !== fid || currentPage !== pageNum) return;
+                        pageCache[pageNum] = original;
+                        await savePageToServer(pageNum);
+                        if (fileId !== fid || currentPage !== pageNum) return;
+                        updateText(pageNum);
+                    } catch (e) {
+                        alert(String((e && e.message) || e));
+                    } finally {
+                        if (revertBtn) {
+                            revertBtn.textContent = 'Revert';
+                            syncCopyTextBtnState();
+                        }
+                    }
                 }
 
                 function getVisibleOcrPlainText() {
@@ -2975,17 +4322,41 @@
                         .join('\n\n');
                 }
 
-                async function applyRuleBasedFormat() {
+                function setSearchLoading(visible) {
+                    if (searchLoading) searchLoading.hidden = !visible;
+                    if (searchInput) {
+                        searchInput.classList.toggle('dash2-search-input--loading', visible);
+                        searchInput.setAttribute('aria-busy', visible ? 'true' : 'false');
+                    }
+                }
+
+                function setFormatMenuOpen(open) {
+                    if (!formatMenu || !formatBtn) return;
+                    formatMenu.hidden = !open;
+                    formatBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+
+                async function applyRuleBasedFormat(scope) {
+                    scope = scope === 'all' ? 'all' : 'page';
                     if (!fileId || totalPages < 1) return;
+                    setFormatMenuOpen(false);
                     if (isEditMode) flushCurrentPageEditsIntoBundle();
+                    var pagesToFormat = [];
                     try {
-                        await ensureAllPagesLoaded(fileId);
+                        if (scope === 'all') {
+                            await ensureAllPagesLoaded(fileId);
+                            for (var p = 1; p <= totalPages; p++) pagesToFormat.push(p);
+                        } else {
+                            await ensurePageLoaded(fileId, currentPage);
+                            pagesToFormat = [currentPage];
+                        }
                     } catch (e) {
                         alert(String((e && e.message) || e));
                         return;
                     }
-                    for (var p = 1; p <= totalPages; p++) {
-                        var page = pageCache[p];
+                    for (var i = 0; i < pagesToFormat.length; i++) {
+                        var pageNum = pagesToFormat[i];
+                        var page = pageCache[pageNum];
                         if (!page) continue;
                         var current = page.full_text || page.text || '';
                         var formatted = formatOcrPlainText(current);
@@ -3001,16 +4372,19 @@
                     cancelBtn.style.display = 'inline-block';
                     saveBtn.textContent = 'Save';
                     saveBtn.disabled = false;
-                    searchInput.disabled = false;
-                    searchInput.value = '';
-                    searchMatches = [];
-                    currentMatchIndex = -1;
-                    currentSearchTerm = '';
-                    searchNav.classList.remove('is-visible');
+                    if (scope === 'all') {
+                        searchInput.disabled = false;
+                        searchInput.value = '';
+                        searchMatches = [];
+                        currentMatchIndex = -1;
+                        currentSearchTerm = '';
+                        searchNav.classList.remove('is-visible');
+                    }
                     updateText(currentPage);
                     var saveJobs = [];
-                    for (var sp = 1; sp <= totalPages; sp++) {
-                        if (pageCache[sp]) saveJobs.push(savePageToServer(sp));
+                    for (var sp = 0; sp < pagesToFormat.length; sp++) {
+                        var sn = pagesToFormat[sp];
+                        if (pageCache[sn]) saveJobs.push(savePageToServer(sn));
                     }
                     Promise.all(saveJobs).catch(function (err) {
                         console.error('Format save failed:', err);
@@ -3180,7 +4554,9 @@
                 }
 
                 async function searchAllPages(term) {
+                    var gen = ++searchLoadGen;
                     if (!fileId || !(term || '').trim()) {
+                        setSearchLoading(false);
                         searchMatches = [];
                         currentMatchIndex = -1;
                         currentSearchTerm = '';
@@ -3188,12 +4564,16 @@
                         updateText(currentPage);
                         return;
                     }
+                    setSearchLoading(true);
                     try {
                         await ensureAllPagesLoaded(fileId);
                     } catch (e) {
+                        if (gen === searchLoadGen) setSearchLoading(false);
                         alert(String((e && e.message) || e));
                         return;
                     }
+                    if (gen !== searchLoadGen) return;
+                    setSearchLoading(false);
                     currentSearchTerm = term.trim();
                     searchMatches = [];
                     for (var p = 1; p <= totalPages; p++) {
@@ -3276,6 +4656,9 @@
                         searchMatches = [];
                         currentMatchIndex = -1;
                         currentSearchTerm = '';
+                        searchLoadGen += 1;
+                        setSearchLoading(false);
+                        setFormatMenuOpen(false);
                         searchNav.classList.remove('is-visible');
                         isEditMode = false;
                         editBtn.style.display = 'inline-block';
@@ -3287,8 +4670,12 @@
                             (li.getAttribute('data-cache-version') || fid || '').trim() || fid;
                         resetPageCacheState();
                         var meta = await fetchPageMeta(fid);
+                        fileAccess = meta.access || { role: 'owner', can_edit: true, is_owner: true };
                         totalPages = meta.page_count || 1;
                         currentPage = 1;
+                        applyFileAccessUI();
+                        metadataCollaborators = await loadMetadataCollaborators(fid);
+                        populateAssigneeOptions(metadataCollaborators);
 
                         // Render the OCR editor immediately from page 1 — do NOT wait for the
                         // PDF document to finish loading. Large / non-linearized PDFs can take a
@@ -3296,7 +4683,6 @@
                         await setViewerPage(1, 'init');
                         exportTxtBtn.style.display = 'inline-block';
                         syncCopyTextBtnState();
-                        if (formatBtn) formatBtn.disabled = false;
                         var mainScroll = document.querySelector('main.dash2-main');
                         if (mainScroll) mainScroll.scrollTop = 0;
 
@@ -3324,6 +4710,7 @@
 
                 function enterEditMode() {
                     if (!fileId || !pageCache[currentPage]) return;
+                    if (!fileAccess || !fileAccess.can_edit) return;
                     isEditMode = true;
                     pageEditSnapshot = JSON.parse(JSON.stringify(pageCache[currentPage]));
                     textEl.contentEditable = 'true';
@@ -3340,6 +4727,7 @@
                     saveBtn.textContent = 'Save';
                     saveBtn.disabled = false;
                     searchInput.disabled = true;
+                    syncCopyTextBtnState();
                 }
 
                 function exitEditMode() {
@@ -3355,6 +4743,7 @@
                     saveBtn.style.display = 'none';
                     cancelBtn.style.display = 'none';
                     searchInput.disabled = false;
+                    syncCopyTextBtnState();
                     updateText(currentPage);
                 }
 
@@ -3379,6 +4768,20 @@
 
                 var fileListEventRoot = listShellForEvents && listShellForEvents.nodeType ? listShellForEvents : listRoot;
                 fileListEventRoot.addEventListener('click', function (ev) {
+                    var actionBtn = ev.target.closest('[data-file-action]');
+                    if (actionBtn) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        if (actionBtn.disabled) return;
+                        var row = actionBtn.closest('.dash2-file-row--selectable');
+                        if (!row) return;
+                        var fid = row.getAttribute('data-file-id');
+                        if (!fid) return;
+                        var action = actionBtn.getAttribute('data-file-action');
+                        if (action === 'share') openShareModalForFile(fid.trim());
+                        if (action === 'transfer') openTransferModalForFile(fid.trim());
+                        return;
+                    }
                     var li = ev.target.closest('.dash2-file-row--selectable');
                     if (!li || !li.getAttribute('data-file-id')) return;
                     var fid = li.getAttribute('data-file-id').trim();
@@ -3432,15 +4835,382 @@
                     subBack.addEventListener('click', closeViewer);
                 }
                 if (copyBtn) copyBtn.addEventListener('click', copyOcrTextToClipboard);
-                if (formatBtn) formatBtn.addEventListener('click', function () {
-                    void applyRuleBasedFormat();
+                if (formatBtn) {
+                    formatBtn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        if (formatBtn.disabled) return;
+                        setFormatMenuOpen(formatMenu && formatMenu.hidden);
+                    });
+                }
+                if (formatMenu) {
+                    formatMenu.addEventListener('click', function (e) {
+                        var item = e.target.closest('[data-format-scope]');
+                        if (!item) return;
+                        e.stopPropagation();
+                        void applyRuleBasedFormat(item.getAttribute('data-format-scope'));
+                    });
+                }
+                document.addEventListener('click', function () {
+                    setFormatMenuOpen(false);
                 });
                 editBtn.addEventListener('click', enterEditMode);
+                if (pageCompleted) {
+                    pageCompleted.addEventListener('change', function () {
+                        if (pageMetaLoading || !fileId || !fileAccess || !fileAccess.can_edit) return;
+                        void savePageMetadata(currentPage, { completed: pageCompleted.checked });
+                    });
+                }
+                if (pageNotes) {
+                    pageNotes.addEventListener('input', function () {
+                        schedulePageNotesSave(currentPage);
+                    });
+                }
+                if (pageAssignee) {
+                    pageAssignee.addEventListener('change', function () {
+                        if (pageMetaLoading || !fileId || !fileAccess || !fileAccess.can_edit) return;
+                        void savePageMetadata(currentPage, {
+                            assigned_to_user_id: pageAssignee.value || null,
+                        });
+                    });
+                }
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', function () {
+                        void refreshCurrentPageFromServer();
+                    });
+                }
+                if (revertBtn) {
+                    revertBtn.addEventListener('click', function () {
+                        void revertCurrentPageToOriginal();
+                    });
+                }
                 cancelBtn.addEventListener('click', exitEditMode);
                 saveBtn.addEventListener('click', saveEdits);
                 exportTxtBtn.addEventListener('click', function () {
                     void exportCompiledText();
                 });
+
+                var shareModal = document.getElementById('dash2ShareModal');
+                var shareModalClose = document.getElementById('dash2ShareModalClose');
+                var shareForm = document.getElementById('dash2ShareForm');
+                var shareUsernameInput = document.getElementById('dash2ShareUsername');
+                var sharePermissionSelect = document.getElementById('dash2SharePermission');
+                var shareStatusEl = document.getElementById('dash2ShareStatus');
+                var shareListEl = document.getElementById('dash2ShareList');
+
+                function setShareStatus(msg, kind) {
+                    if (!shareStatusEl) return;
+                    shareStatusEl.textContent = msg || '';
+                    shareStatusEl.classList.remove('dash2-share-status--error', 'dash2-share-status--ok');
+                    if (kind === 'error') shareStatusEl.classList.add('dash2-share-status--error');
+                    if (kind === 'ok') shareStatusEl.classList.add('dash2-share-status--ok');
+                }
+
+                function renderShareListRows(shares) {
+                    if (!shareListEl) return;
+                    if (!shares || !shares.length) {
+                        shareListEl.innerHTML =
+                            '<li class="dash2-empty" style="max-width: none; margin: 0">Not shared with anyone yet.</li>';
+                        return;
+                    }
+                    shareListEl.innerHTML = shares
+                        .map(function (s) {
+                            var uname = escapeHtml(
+                                s.username ? '@' + s.username : 'Unknown user'
+                            );
+                            var sid = s.id != null ? escapeHtml(String(s.id)) : '';
+                            return (
+                                '<li class="dash2-share-row" data-share-id="' +
+                                sid +
+                                '">' +
+                                '<span class="dash2-share-row-email">' +
+                                uname +
+                                '</span>' +
+                                '<span class="dash2-share-row-meta">' +
+                                permissionBadgeHtml(s.permission) +
+                                '<button type="button" class="dash2-share-remove-btn" data-share-id="' +
+                                sid +
+                                '">Remove access</button>' +
+                                '</span>' +
+                                '</li>'
+                            );
+                        })
+                        .join('');
+                }
+
+                async function loadShareList() {
+                    var fid = shareTargetFileId();
+                    if (!fid || !shareListEl) return;
+                    shareListEl.innerHTML =
+                        '<li class="dash2-empty" style="max-width: none; margin: 0">Loading…</li>';
+                    try {
+                        var ah = await authHeaders();
+                        var r = await fetch('/api/files/' + fid + '/shares', {
+                            headers: ah,
+                            credentials: 'same-origin',
+                        });
+                        var data = await r.json().catch(function () {
+                            return {};
+                        });
+                        if (!r.ok) throw new Error(data.error || r.statusText);
+                        renderShareListRows(data.shares || []);
+                    } catch (listErr) {
+                        shareListEl.innerHTML =
+                            '<li class="dash2-files-error">' +
+                            escapeHtml(String(listErr.message || listErr)) +
+                            '</li>';
+                    }
+                }
+
+                function openShareModal() {
+                    var fid = shareTargetFileId();
+                    if (!shareModal || !fid) return;
+                    if (!listActionFileId && (!fileAccess || !fileAccess.is_owner)) return;
+                    setShareStatus('', null);
+                    if (shareUsernameInput) shareUsernameInput.value = '';
+                    if (sharePermissionSelect) sharePermissionSelect.value = 'view';
+                    shareModal.classList.add('is-open');
+                    document.body.style.overflow = 'hidden';
+                    void loadShareList();
+                    if (shareUsernameInput) shareUsernameInput.focus();
+                }
+
+                function openShareModalForFile(fid) {
+                    if (!fid) return;
+                    listActionFileId = String(fid);
+                    openShareModal();
+                }
+
+                function closeShareModal() {
+                    if (!shareModal) return;
+                    shareModal.classList.remove('is-open');
+                    document.body.style.overflow = '';
+                    clearListActionFileId();
+                }
+
+                if (shareBtn) {
+                    shareBtn.addEventListener('click', function () {
+                        clearListActionFileId();
+                        openShareModal();
+                    });
+                }
+                if (shareModalClose) {
+                    shareModalClose.addEventListener('click', closeShareModal);
+                }
+                if (shareModal) {
+                    shareModal.addEventListener('click', function (e) {
+                        if (e.target === shareModal) closeShareModal();
+                    });
+                }
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && shareModal && shareModal.classList.contains('is-open')) {
+                        closeShareModal();
+                    }
+                });
+
+                if (shareListEl) {
+                    shareListEl.addEventListener('click', function (e) {
+                        var btn = e.target.closest('.dash2-share-remove-btn');
+                        if (!btn || !shareTargetFileId()) return;
+                        var shareId = btn.getAttribute('data-share-id');
+                        if (!shareId) return;
+                        var fid = shareTargetFileId();
+                        void (async function () {
+                            btn.disabled = true;
+                            try {
+                                var ah = await authHeaders();
+                                var r = await fetch(
+                                    '/api/files/' + fid + '/shares/' + encodeURIComponent(shareId),
+                                    {
+                                        method: 'DELETE',
+                                        headers: ah,
+                                        credentials: 'same-origin',
+                                    }
+                                );
+                                var data = await r.json().catch(function () {
+                                    return {};
+                                });
+                                if (!r.ok) throw new Error(data.error || r.statusText);
+                                await loadShareList();
+                                setShareStatus('Access removed.', 'ok');
+                            } catch (unshareErr) {
+                                setShareStatus(String(unshareErr.message || unshareErr), 'error');
+                                btn.disabled = false;
+                            }
+                        })();
+                    });
+                }
+
+                if (shareForm) {
+                    shareForm.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        var fid = shareTargetFileId();
+                        if (!fid) return;
+                        void (async function () {
+                            var submitBtn = document.getElementById('dash2ShareSubmit');
+                            if (submitBtn) submitBtn.disabled = true;
+                            setShareStatus('Sharing…', null);
+                            try {
+                                var ah = await authHeaders();
+                                var r = await fetch('/api/files/' + fid + '/share', {
+                                    method: 'POST',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, ah),
+                                    credentials: 'same-origin',
+                                    body: JSON.stringify({
+                                        username: shareUsernameInput ? shareUsernameInput.value.trim() : '',
+                                        permission: sharePermissionSelect
+                                            ? sharePermissionSelect.value
+                                            : 'view',
+                                    }),
+                                });
+                                var data = await r.json().catch(function () {
+                                    return {};
+                                });
+                                if (!r.ok) throw new Error(data.error || r.statusText);
+                                setShareStatus(
+                                    data.already_shared
+                                        ? 'This user already has access.'
+                                        : 'Document shared successfully.',
+                                    'ok'
+                                );
+                                if (shareUsernameInput) shareUsernameInput.value = '';
+                                await loadShareList();
+                            } catch (shareErr) {
+                                setShareStatus(String(shareErr.message || shareErr), 'error');
+                            } finally {
+                                if (submitBtn) submitBtn.disabled = false;
+                            }
+                        })();
+                    });
+                }
+
+                var transferModal = document.getElementById('dash2TransferModal');
+                var transferModalClose = document.getElementById('dash2TransferModalClose');
+                var transferForm = document.getElementById('dash2TransferForm');
+                var transferUsernameInput = document.getElementById('dash2TransferUsername');
+                var transferConfirmInput = document.getElementById('dash2TransferConfirm');
+                var transferSubmitBtn = document.getElementById('dash2TransferSubmit');
+                var transferCancelBtn = document.getElementById('dash2TransferCancel');
+                var transferStatusEl = document.getElementById('dash2TransferStatus');
+
+                function setTransferStatus(msg, kind) {
+                    if (!transferStatusEl) return;
+                    transferStatusEl.textContent = msg || '';
+                    transferStatusEl.classList.remove('dash2-share-status--error', 'dash2-share-status--ok');
+                    if (kind === 'error') transferStatusEl.classList.add('dash2-share-status--error');
+                    if (kind === 'ok') transferStatusEl.classList.add('dash2-share-status--ok');
+                }
+
+                function syncTransferSubmitState() {
+                    if (!transferSubmitBtn) return;
+                    var usernameOk =
+                        transferUsernameInput && transferUsernameInput.value.trim().length > 0;
+                    var confirmed = transferConfirmInput && transferConfirmInput.checked;
+                    transferSubmitBtn.disabled = !(usernameOk && confirmed);
+                }
+
+                function openTransferModal() {
+                    var fid = shareTargetFileId();
+                    if (!transferModal || !fid) return;
+                    if (!listActionFileId && (!fileAccess || !fileAccess.is_owner)) return;
+                    setTransferStatus('', null);
+                    if (transferUsernameInput) transferUsernameInput.value = '';
+                    if (transferConfirmInput) transferConfirmInput.checked = false;
+                    syncTransferSubmitState();
+                    transferModal.classList.add('is-open');
+                    document.body.style.overflow = 'hidden';
+                    if (transferUsernameInput) transferUsernameInput.focus();
+                }
+
+                function openTransferModalForFile(fid) {
+                    if (!fid) return;
+                    listActionFileId = String(fid);
+                    openTransferModal();
+                }
+
+                function closeTransferModal() {
+                    if (!transferModal) return;
+                    transferModal.classList.remove('is-open');
+                    document.body.style.overflow = '';
+                    clearListActionFileId();
+                }
+
+                if (transferBtn) {
+                    transferBtn.addEventListener('click', function () {
+                        clearListActionFileId();
+                        openTransferModal();
+                    });
+                }
+                if (transferModalClose) {
+                    transferModalClose.addEventListener('click', closeTransferModal);
+                }
+                if (transferCancelBtn) {
+                    transferCancelBtn.addEventListener('click', closeTransferModal);
+                }
+                if (transferModal) {
+                    transferModal.addEventListener('click', function (e) {
+                        if (e.target === transferModal) closeTransferModal();
+                    });
+                }
+                if (transferUsernameInput) {
+                    transferUsernameInput.addEventListener('input', syncTransferSubmitState);
+                }
+                if (transferConfirmInput) {
+                    transferConfirmInput.addEventListener('change', syncTransferSubmitState);
+                }
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && transferModal && transferModal.classList.contains('is-open')) {
+                        closeTransferModal();
+                    }
+                });
+
+                if (transferForm) {
+                    transferForm.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        var fid = shareTargetFileId();
+                        if (!fid || !transferConfirmInput || !transferConfirmInput.checked) return;
+                        void (async function () {
+                            if (transferSubmitBtn) transferSubmitBtn.disabled = true;
+                            setTransferStatus('Transferring ownership…', null);
+                            try {
+                                var ah = await authHeaders();
+                                var r = await fetch(
+                                    '/api/files/' + fid + '/transfer-ownership',
+                                    {
+                                        method: 'POST',
+                                        headers: Object.assign(
+                                            { 'Content-Type': 'application/json' },
+                                            ah
+                                        ),
+                                        credentials: 'same-origin',
+                                        body: JSON.stringify({
+                                            username: transferUsernameInput
+                                                ? transferUsernameInput.value.trim()
+                                                : '',
+                                        }),
+                                    }
+                                );
+                                var data = await r.json().catch(function () {
+                                    return {};
+                                });
+                                if (!r.ok) throw new Error(data.error || r.statusText);
+                                closeTransferModal();
+                                closeViewer();
+                                if (listShellForEvents) {
+                                    listShellForEvents.dispatchEvent(
+                                        new CustomEvent('dash2-ownership-transferred')
+                                    );
+                                }
+                                alert(
+                                    'Ownership transferred successfully. You now have Edit access under Shared with me.'
+                                );
+                            } catch (transferErr) {
+                                setTransferStatus(String(transferErr.message || transferErr), 'error');
+                            } finally {
+                                syncTransferSubmitState();
+                            }
+                        })();
+                    });
+                }
 
                 searchInput.addEventListener('input', function (e) {
                     void searchAllPages(e.target.value);
@@ -3479,25 +5249,17 @@
                         if (currentPage < totalPages) void setViewerPage(currentPage + 1, 'pdf');
                     });
                 }
-                pdfBox.addEventListener(
-                    'wheel',
-                    function (ev) {
-                        if (docKind !== 'pdf' || totalPages <= 1 || pageSyncLock) return;
-                        var scroll = pdfJsState.scroll;
-                        if (!scroll) return;
-                        var atTop = scroll.scrollTop <= 2;
-                        var atBottom =
-                            scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 2;
-                        if (ev.deltaY > 0 && atBottom && currentPage < totalPages) {
-                            ev.preventDefault();
-                            void setViewerPage(currentPage + 1, 'pdf');
-                        } else if (ev.deltaY < 0 && atTop && currentPage > 1) {
-                            ev.preventDefault();
-                            void setViewerPage(currentPage - 1, 'pdf');
+                if (pdfGoBtn) {
+                    pdfGoBtn.addEventListener('click', goToPdfPageFromInput);
+                }
+                if (pdfPageInput) {
+                    pdfPageInput.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            goToPdfPageFromInput();
                         }
-                    },
-                    { passive: false }
-                );
+                    });
+                }
                 var pdfResizeTimer = null;
                 window.addEventListener('resize', function () {
                     if (docKind !== 'pdf' || !pdfJsState.doc) return;
@@ -3523,6 +5285,9 @@
             var uploadLabel = document.getElementById('dash2UploadLabel');
             var cameraLabel = document.getElementById('dash2CameraLabel');
             var uploadStatus = document.getElementById('dash2UploadStatus');
+            var uploadProgress = document.getElementById('dash2UploadProgress');
+            var uploadProgressMain = document.getElementById('dash2UploadProgressMain');
+            var uploadProgressSub = document.getElementById('dash2UploadProgressSub');
             var uploadConfirm = document.getElementById('dash2UploadConfirm');
             var uploadConfirmTitle = document.getElementById('dash2UploadConfirmTitle');
             var uploadConfirmMeta = document.getElementById('dash2UploadConfirmMeta');
@@ -3542,6 +5307,17 @@
             function resetUploadInputs() {
                 if (fileInput) fileInput.value = '';
                 if (cameraInput) cameraInput.value = '';
+            }
+
+            function setUploadProgress(active, mainText, subText) {
+                if (uploadProgress) uploadProgress.hidden = !active;
+                if (uploadStatus) uploadStatus.hidden = !!active;
+                if (uploadProgressMain && mainText) uploadProgressMain.textContent = mainText;
+                if (uploadProgressSub) {
+                    uploadProgressSub.textContent =
+                        subText ||
+                        'Your file may take a few minutes to appear in My files.';
+                }
             }
 
             function hideUploadConfirm() {
@@ -3681,11 +5457,12 @@
             async function processPendingUpload() {
                 if (!pendingUpload || !pendingUpload.file || !uploadStatus) return;
                 uploadStatus.classList.remove('dash2-upload-status--error');
-                uploadStatus.textContent = 'Uploading file…';
+                setUploadProgress(true, 'Uploading file…');
                 setUploadBusy(true);
                 var sessRes = await supabase.auth.getSession();
                 var session = sessRes.data && sessRes.data.session;
                 if (!session || !session.access_token) {
+                    setUploadProgress(false);
                     uploadStatus.textContent = 'Could not read your session. Try signing in again.';
                     uploadStatus.classList.add('dash2-upload-status--error');
                     setUploadBusy(false);
@@ -3705,7 +5482,7 @@
                         throw new Error('Storage upload failed: ' + up.error.message);
                     }
                     current.filePath = filePath;
-                    uploadStatus.textContent = 'Starting OCR processing…';
+                    setUploadProgress(true, 'Starting OCR processing…');
                     var procPromise = fetch('/process', {
                         method: 'POST',
                         headers: {
@@ -3742,9 +5519,12 @@
                         setDash2PagesRemaining(procJson.pages_remaining);
                     }
                     hideUploadConfirm();
-                    uploadStatus.textContent = 'Processing started. You can track status in View files.';
+                    setUploadProgress(false);
+                    uploadStatus.textContent =
+                        'Processing started. Your file may take a few minutes to appear in My files.';
                     listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
                 } catch (err) {
+                    setUploadProgress(false);
                     uploadStatus.textContent = (err && err.message) || 'Could not start OCR processing.';
                     uploadStatus.classList.add('dash2-upload-status--error');
                 } finally {
@@ -3853,6 +5633,12 @@
                     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
                 }
 
+                function ocrJsonPageCount(parsed) {
+                    return Object.keys(parsed).filter(function (k) {
+                        return /^page_\d+$/i.test(k);
+                    }).length;
+                }
+
                 async function readJsonFile(file, label) {
                     var text = await file.text();
                     var parsed;
@@ -3959,9 +5745,13 @@
                     setImportBusy(true);
                     setImportLoading(true, 'Checking files…', 'Validating JSON before upload.');
 
+                    var importPageCount = 0;
                     try {
-                        await readJsonFile(originalJsonFile, 'original.json');
-                        await readJsonFile(editableJsonFile, 'editable.json');
+                        var parsedBundle = await Promise.all([
+                            readJsonFile(originalJsonFile, 'original.json'),
+                            readJsonFile(editableJsonFile, 'editable.json'),
+                        ]);
+                        importPageCount = ocrJsonPageCount(parsedBundle[1]);
                     } catch (err) {
                         setImportLoading(false);
                         setImportBusy(false);
@@ -3987,23 +5777,29 @@
 
                         setImportLoading(
                             true,
-                            'Uploading original.json…',
-                            originalJsonFile.name +
-                                (formatFileSize(originalJsonFile.size) ? ' · ' + formatFileSize(originalJsonFile.size) : '')
+                            'Uploading JSON files…',
+                            'original.json and editable.json'
                         );
-                        await uploadImportJsonFile(originalJsonPath, originalJsonFile);
-                        uploadedPaths.push(originalJsonPath);
+                        await Promise.all([
+                            uploadImportJsonFile(originalJsonPath, originalJsonFile).then(function () {
+                                uploadedPaths.push(originalJsonPath);
+                            }),
+                            uploadImportJsonFile(editableJsonPath, editableJsonFile).then(function () {
+                                uploadedPaths.push(editableJsonPath);
+                            }),
+                        ]);
 
+                        var saveSub =
+                            importPageCount > 1
+                                ? 'Storing ' +
+                                  importPageCount +
+                                  ' pages in parallel. Large bundles can take a minute.'
+                                : 'Creating your file entry.';
                         setImportLoading(
                             true,
-                            'Uploading editable.json…',
-                            editableJsonFile.name +
-                                (formatFileSize(editableJsonFile.size) ? ' · ' + formatFileSize(editableJsonFile.size) : '')
+                            'Saving bundle' + (importPageCount > 1 ? ' (' + importPageCount + ' pages)…' : '…'),
+                            saveSub
                         );
-                        await uploadImportJsonFile(editableJsonPath, editableJsonFile);
-                        uploadedPaths.push(editableJsonPath);
-
-                        setImportLoading(true, 'Saving bundle…', 'Creating your file entry.');
 
                         var res = await fetch('/api/files/import-bundle', {
                             method: 'POST',

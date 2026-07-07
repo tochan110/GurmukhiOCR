@@ -1,0 +1,42 @@
+                <div class="nav-profile-wrap is-hidden" id="navProfileWrap">
+                    <button
+                        type="button"
+                        class="nav-profile-btn"
+                        id="navProfileBtn"
+                        aria-label="Account"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        title="Account"
+                    >
+                        <svg class="nav-profile-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M20 21a8 8 0 0 0-16 0" />
+                            <circle cx="12" cy="8" r="4" />
+                        </svg>
+                    </button>
+                    <div class="nav-profile-menu" id="navProfileMenu" hidden role="dialog" aria-label="Account">
+                        <p class="nav-profile-menu-kicker">Signed in as</p>
+                        <p class="nav-profile-email" id="navProfileEmail">—</p>
+                        <div class="nav-profile-settings">
+                            <p class="nav-profile-menu-kicker">Profile settings</p>
+                            <form class="nav-profile-username-form" id="navProfileUsernameForm">
+                                <label class="nav-profile-username-label" for="navProfileUsernameInput">Username</label>
+                                <div class="nav-profile-username-row">
+                                    <span class="nav-profile-username-at" aria-hidden="true">@</span>
+                                    <input
+                                        type="text"
+                                        id="navProfileUsernameInput"
+                                        name="username"
+                                        autocomplete="off"
+                                        autocapitalize="off"
+                                        spellcheck="false"
+                                        maxlength="30"
+                                        placeholder="username"
+                                    />
+                                </div>
+                                <p class="nav-profile-username-hint">3–30 characters. Letters, numbers, underscores, and periods.</p>
+                                <p class="nav-profile-username-status" id="navProfileUsernameStatus" aria-live="polite"></p>
+                                <button type="submit" class="nav-profile-save-btn" id="navProfileUsernameSave">Save username</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>

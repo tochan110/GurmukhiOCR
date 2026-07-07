@@ -1,0 +1,170 @@
+    <style>
+        .nav-profile-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .nav-profile-wrap.is-hidden {
+            display: none !important;
+        }
+        .nav-profile-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.15rem;
+            height: 2.15rem;
+            padding: 0;
+            border-radius: 50%;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--muted);
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .nav-profile-btn:hover,
+        .nav-profile-btn[aria-expanded="true"] {
+            color: var(--text);
+            background: rgba(107, 140, 255, 0.14);
+            border-color: rgba(107, 140, 255, 0.35);
+        }
+        body.light-mode .nav-profile-btn {
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .nav-profile-icon {
+            width: 1.15rem;
+            height: 1.15rem;
+            display: block;
+        }
+        .nav-profile-menu {
+            position: absolute;
+            top: calc(100% + 0.45rem);
+            right: 0;
+            z-index: 200;
+            min-width: 14rem;
+            max-width: 20rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(14, 16, 24, 0.96);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+        }
+        body.light-mode .nav-profile-menu {
+            background: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 12px 28px rgba(30, 50, 100, 0.15);
+        }
+        .nav-profile-menu[hidden] {
+            display: none !important;
+        }
+        .nav-profile-menu-kicker {
+            margin: 0 0 0.25rem;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+        .nav-profile-email {
+            margin: 0;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: var(--text);
+            word-break: break-word;
+            line-height: 1.35;
+        }
+        .nav-profile-settings {
+            margin-top: 0.85rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--stroke);
+        }
+        .nav-profile-username-form {
+            margin: 0;
+        }
+        .nav-profile-username-label {
+            display: block;
+            margin: 0 0 0.35rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+        .nav-profile-username-row {
+            display: flex;
+            align-items: center;
+            gap: 0.15rem;
+            border: 1px solid var(--stroke);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.12);
+            padding: 0.35rem 0.5rem;
+        }
+        body.light-mode .nav-profile-username-row {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .nav-profile-username-at {
+            color: var(--muted);
+            font-size: 0.86rem;
+            font-weight: 600;
+        }
+        .nav-profile-username-row input {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.86rem;
+            font-family: inherit;
+            outline: none;
+        }
+        .nav-profile-username-hint {
+            margin: 0.35rem 0 0;
+            font-size: 0.68rem;
+            line-height: 1.35;
+            color: var(--faint);
+        }
+        .nav-profile-username-status {
+            margin: 0.35rem 0 0;
+            font-size: 0.72rem;
+            line-height: 1.35;
+            color: var(--muted);
+            min-height: 1rem;
+        }
+        .nav-profile-username-status--error {
+            color: #f0a8a8;
+        }
+        body.light-mode .nav-profile-username-status--error {
+            color: #b83232;
+        }
+        .nav-profile-username-status--ok {
+            color: #9fd4a8;
+        }
+        body.light-mode .nav-profile-username-status--ok {
+            color: #2d7a3a;
+        }
+        .nav-profile-save-btn {
+            margin-top: 0.55rem;
+            width: 100%;
+            padding: 0.45rem 0.65rem;
+            border-radius: 8px;
+            border: 1px solid rgba(107, 140, 255, 0.35);
+            background: rgba(107, 140, 255, 0.18);
+            color: var(--text);
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .nav-profile-save-btn:hover:not(:disabled) {
+            background: rgba(107, 140, 255, 0.28);
+        }
+        .nav-profile-save-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+    </style>
