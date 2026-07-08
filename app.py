@@ -79,6 +79,11 @@ def _log_mem(tag: str) -> None:
         pass
 
 
+# Temporary render-concurrency instrumentation (remove after the spike is located).
+_render_inflight = 0
+_render_inflight_lock = threading.Lock()
+
+
 class _UploadProfile:
     """Collects per-step timings for one upload/OCR job; logs to stderr."""
 
@@ -387,19 +392,35 @@ def render_pdf_page_to_image(doc, page_index):
 
     Forces RGB (no stray alpha), converts CMYK/grayscale PDF content to RGB so channel count matches PIL.
     """
-    page = doc[page_index]
-    mat = fitz.Matrix(300 / 72, 300 / 72)
-    pix = page.get_pixmap(matrix=mat, alpha=False)
+    global _render_inflight
+    with _render_inflight_lock:
+        _render_inflight += 1
+        inflight = _render_inflight
+    _log_mem(f"render_start page={page_index + 1} inflight={inflight}")
     try:
-        if pix.n != 3:
-            rgb_pix = fitz.Pixmap(fitz.csRGB, pix)
+        page = doc[page_index]
+        mat = fitz.Matrix(300 / 72, 300 / 72)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        _log_mem(
+            f"render_after_get_pixmap page={page_index + 1} inflight={inflight} "
+            f"w={pix.width} h={pix.height} n={pix.n} px_bytes={pix.width * pix.height * pix.n}"
+        )
+        try:
+            if pix.n != 3:
+                rgb_pix = fitz.Pixmap(fitz.csRGB, pix)
+                del pix
+                pix = rgb_pix
+                _log_mem(f"render_after_rgb_convert page={page_index + 1} inflight={inflight}")
+            if pix.width < 1 or pix.height < 1:
+                raise ValueError(f"Degenerate page render: {pix.width}x{pix.height}")
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            _log_mem(f"render_after_frombytes page={page_index + 1} inflight={inflight}")
+            return img
+        finally:
             del pix
-            pix = rgb_pix
-        if pix.width < 1 or pix.height < 1:
-            raise ValueError(f"Degenerate page render: {pix.width}x{pix.height}")
-        return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     finally:
-        del pix
+        with _render_inflight_lock:
+            _render_inflight -= 1
 
 
 def _pil_to_rgb_white_background(image: Image.Image) -> Image.Image:
@@ -945,11 +966,12 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
         _log_mem("before_create_threadpool")
         with ThreadPoolExecutor(max_workers=workers) as ex:
             _log_mem("after_create_threadpool")
-            _log_mem("before_submit_ocr_tasks")
-            futures = [
-                ex.submit(_parallel_ocr_one_page, pdf_bytes, i, vclient)
-                for i in range(total_pages)
-            ]
+            _log_mem(f"before_submit_ocr_tasks workers={workers} total_pages={total_pages}")
+            futures = []
+            for i in range(total_pages):
+                futures.append(ex.submit(_parallel_ocr_one_page, pdf_bytes, i, vclient))
+                if i % 25 == 0:
+                    _log_mem(f"submit_loop_i={i}")
             _log_mem("after_submit_ocr_tasks")
             for fut in as_completed(futures):
                 page_num, pdata = fut.result()
