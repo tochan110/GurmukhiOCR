@@ -763,6 +763,90 @@
             margin-top: 0.25rem;
             line-height: 1.4;
         }
+        .dash2-file-row--checkable {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+        }
+        .dash2-file-row--checkable .dash2-file-row-main {
+            flex: 1;
+            min-width: 0;
+        }
+        .dash2-file-select-wrap {
+            display: none;
+            align-items: center;
+            padding-top: 0.15rem;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .dash2-selecting .dash2-file-select-wrap {
+            display: inline-flex;
+        }
+        .dash2-selecting .dash2-file-row-actions {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .dash2-file-select {
+            width: 1.05rem;
+            height: 1.05rem;
+            cursor: pointer;
+            accent-color: #6b8cff;
+        }
+        .dash2-file-select:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .dash2-bulk-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            margin-left: auto;
+            padding: 0.25rem 0.4rem 0.25rem 0.7rem;
+            border-radius: 999px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(107, 140, 255, 0.28);
+        }
+        .dash2-bulk-bar[hidden] {
+            display: none;
+        }
+        .dash2-select-toggle {
+            margin-left: auto;
+        }
+        .dash2-select-toggle[hidden] {
+            display: none;
+        }
+        .dash2-bulk-count {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .dash2-bulk-action {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.76rem;
+        }
+        .dash2-bulk-action:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .dash2-bulk-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.6rem;
+            height: 1.6rem;
+            border-radius: 999px;
+            border: 1px solid rgba(107, 140, 255, 0.28);
+            background: transparent;
+            color: var(--text);
+            font-size: 1.1rem;
+            line-height: 1;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .dash2-bulk-close:hover {
+            background: rgba(107, 140, 255, 0.16);
+        }
         .dash2-file-row-actions {
             display: inline-flex;
             align-items: center;
@@ -806,9 +890,15 @@
             padding: clamp(1.25rem, 4vw, 2.25rem);
             text-align: center;
         }
-        .dash2-upload-label:hover {
+        .dash2-upload-label:hover,
+        .dash2-upload-label.is-dragover {
             border-color: rgba(107, 140, 255, 0.55);
             background: rgba(107, 140, 255, 0.1);
+        }
+        .dash2-upload-label.is-dragover {
+            border-style: solid;
+            border-color: rgba(107, 140, 255, 0.85);
+            background: rgba(107, 140, 255, 0.16);
         }
         body.light-mode .dash2-upload-label {
             background: rgba(74, 108, 220, 0.06);
@@ -2411,6 +2501,14 @@
                         <p class="dash2-panel-desc">Refresh to reload the list.</p>
                         <div class="dash2-files-toolbar">
                             <button type="button" class="dash2-btn" id="dash2ViewFilesBtn">Refresh</button>
+                            <button type="button" class="dash2-btn dash2-btn--ghost dash2-select-toggle" id="dash2SelectToggle">Select</button>
+                            <div class="dash2-bulk-bar" id="dash2BulkBar" hidden>
+                                <span class="dash2-bulk-count" id="dash2BulkCount">0 selected</span>
+                                <button type="button" class="dash2-btn dash2-btn--ghost dash2-bulk-action" id="dash2BulkShare">Share</button>
+                                <button type="button" class="dash2-btn dash2-btn--ghost dash2-bulk-action" id="dash2BulkTransfer">Transfer</button>
+                                <button type="button" class="dash2-btn dash2-btn--ghost dash2-bulk-action" id="dash2BulkClear">Clear</button>
+                                <button type="button" class="dash2-bulk-close" id="dash2BulkClose" aria-label="Exit selection">&times;</button>
+                            </div>
                         </div>
                         <div class="dash2-files-list" id="dash2FilesList" role="status" aria-live="polite" tabindex="-1">
                             <div class="dash2-files-list-inner" id="dash2FilesListRoot">
@@ -2638,10 +2736,12 @@
                 <button type="submit" class="dash2-btn" id="dash2ShareSubmit">Share</button>
             </form>
             <p class="dash2-share-status" id="dash2ShareStatus" aria-live="polite"></p>
-            <h3 class="dash2-share-list-heading">People with access</h3>
-            <ul class="dash2-share-ul" id="dash2ShareList">
-                <li class="dash2-empty" style="max-width: none; margin: 0">Loading…</li>
-            </ul>
+            <div id="dash2ShareListSection">
+                <h3 class="dash2-share-list-heading">People with access</h3>
+                <ul class="dash2-share-ul" id="dash2ShareList">
+                    <li class="dash2-empty" style="max-width: none; margin: 0">Loading…</li>
+                </ul>
+            </div>
         </div>
     </div>
     <div class="modal-overlay" id="dash2TransferModal" role="dialog" aria-modal="true" aria-labelledby="dash2TransferModalTitle">
@@ -2919,14 +3019,25 @@
                         var meta = escapeHtml(fileMetaLine(row));
                         var fid = row.id != null ? escapeHtml(String(row.id)) : '';
                         var status = normalizedFileStatus(row);
+                        var selectable = !isProcessingStatus(status) && status !== 'failed';
+                        var selectHtml =
+                            '<label class="dash2-file-select-wrap" title="Select file">' +
+                            '<input type="checkbox" class="dash2-file-select" data-file-id="' +
+                            fid +
+                            '"' +
+                            (selectable ? '' : ' disabled') +
+                            ' aria-label="Select ' + name + '" />' +
+                            '</label>';
                         return (
-                            '<li class="dash2-file-row dash2-file-row--selectable" data-file-id="' +
+                            '<li class="dash2-file-row dash2-file-row--selectable dash2-file-row--checkable" data-file-id="' +
                             fid +
                             '" data-file-status="' +
                             escapeHtml(status) +
                             '" data-cache-version="' +
                             escapeHtml(String(row.original_file_path || row.id || '')) +
                             '" role="button" tabindex="0">' +
+                            selectHtml +
+                            '<div class="dash2-file-row-main">' +
                             '<div class="dash2-file-title-row">' +
                             '<div class="dash2-file-name">' +
                             name +
@@ -2939,6 +3050,7 @@
                             (meta
                                 ? '<div class="dash2-file-meta">' + meta + '</div>'
                                 : '') +
+                            '</div>' +
                             '</li>'
                         );
                     })
@@ -3240,7 +3352,17 @@
                 }
             }
 
+            function resetSelectionUI() {
+                var bb = document.getElementById('dash2BulkBar');
+                if (bb) bb.hidden = true;
+                var shell = document.getElementById('dash2FilesList');
+                if (shell) shell.classList.remove('dash2-selecting');
+                var st = document.getElementById('dash2SelectToggle');
+                if (st) st.hidden = filesListSource !== 'mine';
+            }
+
             function refresh() {
+                resetSelectionUI();
                 if (filesListSource === 'shared') {
                     renderSharedFilesInto(supabase, root, listShell);
                 } else {
@@ -4767,7 +4889,107 @@
                 }
 
                 var fileListEventRoot = listShellForEvents && listShellForEvents.nodeType ? listShellForEvents : listRoot;
+
+                var selectShell =
+                    listShellForEvents && listShellForEvents.classList ? listShellForEvents : listRoot;
+                var bulkShareBtn = document.getElementById('dash2BulkShare');
+                var bulkTransferBtn = document.getElementById('dash2BulkTransfer');
+                var bulkClearBtn = document.getElementById('dash2BulkClear');
+                var bulkCloseBtn = document.getElementById('dash2BulkClose');
+                var selectToggleBtn = document.getElementById('dash2SelectToggle');
+
+                function isSelecting() {
+                    return !!(selectShell && selectShell.classList.contains('dash2-selecting'));
+                }
+
+                function getSelectedFileIds() {
+                    var boxes = listRoot.querySelectorAll('.dash2-file-select:checked');
+                    return Array.prototype.map
+                        .call(boxes, function (b) {
+                            return (b.getAttribute('data-file-id') || '').trim();
+                        })
+                        .filter(Boolean);
+                }
+
+                function updateBulkBar() {
+                    var bulkBar = document.getElementById('dash2BulkBar');
+                    if (!bulkBar) return;
+                    if (!isSelecting()) {
+                        bulkBar.hidden = true;
+                        return;
+                    }
+                    bulkBar.hidden = false;
+                    var ids = getSelectedFileIds();
+                    var countEl = document.getElementById('dash2BulkCount');
+                    if (countEl) countEl.textContent = ids.length + ' selected';
+                    if (bulkShareBtn) bulkShareBtn.disabled = ids.length === 0;
+                    if (bulkTransferBtn) bulkTransferBtn.disabled = ids.length === 0;
+                }
+
+                function uncheckAll() {
+                    listRoot
+                        .querySelectorAll('.dash2-file-select:checked')
+                        .forEach(function (b) {
+                            b.checked = false;
+                        });
+                }
+
+                function clearSelection() {
+                    uncheckAll();
+                    updateBulkBar();
+                }
+
+                function enterSelectionMode() {
+                    if (selectShell) selectShell.classList.add('dash2-selecting');
+                    if (selectToggleBtn) selectToggleBtn.hidden = true;
+                    updateBulkBar();
+                }
+
+                function exitSelectionMode() {
+                    uncheckAll();
+                    if (selectShell) selectShell.classList.remove('dash2-selecting');
+                    var bulkBar = document.getElementById('dash2BulkBar');
+                    if (bulkBar) bulkBar.hidden = true;
+                    if (selectToggleBtn) selectToggleBtn.hidden = false;
+                }
+
+                if (selectToggleBtn) {
+                    selectToggleBtn.addEventListener('click', enterSelectionMode);
+                }
+                if (bulkCloseBtn) {
+                    bulkCloseBtn.addEventListener('click', exitSelectionMode);
+                }
+                if (bulkShareBtn) {
+                    bulkShareBtn.addEventListener('click', function () {
+                        var ids = getSelectedFileIds();
+                        if (ids.length) openBulkShareModal(ids);
+                    });
+                }
+                if (bulkTransferBtn) {
+                    bulkTransferBtn.addEventListener('click', function () {
+                        var ids = getSelectedFileIds();
+                        if (ids.length) openBulkTransferModal(ids);
+                    });
+                }
+                if (bulkClearBtn) {
+                    bulkClearBtn.addEventListener('click', clearSelection);
+                }
+
+                fileListEventRoot.addEventListener('change', function (ev) {
+                    if (
+                        ev.target &&
+                        ev.target.classList &&
+                        ev.target.classList.contains('dash2-file-select')
+                    ) {
+                        updateBulkBar();
+                    }
+                });
+
                 fileListEventRoot.addEventListener('click', function (ev) {
+                    if (ev.target.closest('.dash2-file-select-wrap')) {
+                        ev.stopPropagation();
+                        return;
+                    }
                     var actionBtn = ev.target.closest('[data-file-action]');
                     if (actionBtn) {
                         ev.preventDefault();
@@ -4786,6 +5008,14 @@
                     if (!li || !li.getAttribute('data-file-id')) return;
                     var fid = li.getAttribute('data-file-id').trim();
                     if (!fid) return;
+                    if (isSelecting()) {
+                        var box = li.querySelector('.dash2-file-select');
+                        if (box && !box.disabled) {
+                            box.checked = !box.checked;
+                            updateBulkBar();
+                        }
+                        return;
+                    }
                     var status = String(li.getAttribute('data-file-status') || '').toLowerCase();
                     if (isProcessingStatus(status)) {
                         alert('This file is still processing. It will be ready to open shortly.');
@@ -4804,6 +5034,14 @@
                     if (!li || !li.getAttribute('data-file-id')) return;
                     ev.preventDefault();
                     var fid = li.getAttribute('data-file-id').trim();
+                    if (isSelecting()) {
+                        var box = li.querySelector('.dash2-file-select');
+                        if (box && !box.disabled) {
+                            box.checked = !box.checked;
+                            updateBulkBar();
+                        }
+                        return;
+                    }
                     var status = String(li.getAttribute('data-file-status') || '').toLowerCase();
                     if (isProcessingStatus(status)) {
                         alert('This file is still processing. It will be ready to open shortly.');
@@ -4896,6 +5134,15 @@
                 var sharePermissionSelect = document.getElementById('dash2SharePermission');
                 var shareStatusEl = document.getElementById('dash2ShareStatus');
                 var shareListEl = document.getElementById('dash2ShareList');
+                var shareModalTitleEl = document.getElementById('dash2ShareModalTitle');
+                var shareListSectionEl = document.getElementById('dash2ShareListSection');
+                var bulkShareFileIds = null;
+
+                function refreshFilesListAfterBulk() {
+                    if (listShellForEvents) {
+                        listShellForEvents.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                    }
+                }
 
                 function setShareStatus(msg, kind) {
                     if (!shareStatusEl) return;
@@ -4965,6 +5212,9 @@
                     var fid = shareTargetFileId();
                     if (!shareModal || !fid) return;
                     if (!listActionFileId && (!fileAccess || !fileAccess.is_owner)) return;
+                    bulkShareFileIds = null;
+                    if (shareModalTitleEl) shareModalTitleEl.textContent = 'Share document';
+                    if (shareListSectionEl) shareListSectionEl.style.display = '';
                     setShareStatus('', null);
                     if (shareUsernameInput) shareUsernameInput.value = '';
                     if (sharePermissionSelect) sharePermissionSelect.value = 'view';
@@ -4980,11 +5230,29 @@
                     openShareModal();
                 }
 
+                function openBulkShareModal(ids) {
+                    if (!shareModal || !ids || !ids.length) return;
+                    bulkShareFileIds = ids.slice();
+                    listActionFileId = null;
+                    if (shareModalTitleEl) {
+                        shareModalTitleEl.textContent =
+                            'Share ' + ids.length + ' document' + (ids.length === 1 ? '' : 's');
+                    }
+                    if (shareListSectionEl) shareListSectionEl.style.display = 'none';
+                    setShareStatus('', null);
+                    if (shareUsernameInput) shareUsernameInput.value = '';
+                    if (sharePermissionSelect) sharePermissionSelect.value = 'view';
+                    shareModal.classList.add('is-open');
+                    document.body.style.overflow = 'hidden';
+                    if (shareUsernameInput) shareUsernameInput.focus();
+                }
+
                 function closeShareModal() {
                     if (!shareModal) return;
                     shareModal.classList.remove('is-open');
                     document.body.style.overflow = '';
                     clearListActionFileId();
+                    bulkShareFileIds = null;
                 }
 
                 if (shareBtn) {
@@ -5040,9 +5308,73 @@
                     });
                 }
 
+                async function submitBulkShare(ids) {
+                    var submitBtn = document.getElementById('dash2ShareSubmit');
+                    var username = shareUsernameInput ? shareUsernameInput.value.trim() : '';
+                    var permission = sharePermissionSelect ? sharePermissionSelect.value : 'view';
+                    if (!username) {
+                        setShareStatus('Enter a username.', 'error');
+                        return;
+                    }
+                    if (submitBtn) submitBtn.disabled = true;
+                    var ok = 0;
+                    var already = 0;
+                    var failures = [];
+                    for (var i = 0; i < ids.length; i++) {
+                        setShareStatus('Sharing ' + (i + 1) + ' of ' + ids.length + '…', null);
+                        try {
+                            var ah = await authHeaders();
+                            var r = await fetch('/api/files/' + ids[i] + '/share', {
+                                method: 'POST',
+                                headers: Object.assign({ 'Content-Type': 'application/json' }, ah),
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ username: username, permission: permission }),
+                            });
+                            var data = await r.json().catch(function () {
+                                return {};
+                            });
+                            if (!r.ok) throw new Error(data.error || r.statusText);
+                            if (data.already_shared) already++;
+                            else ok++;
+                        } catch (bulkShareErr) {
+                            failures.push(String((bulkShareErr && bulkShareErr.message) || bulkShareErr));
+                        }
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                    if (failures.length) {
+                        setShareStatus(
+                            'Shared ' +
+                                ok +
+                                ', already had access ' +
+                                already +
+                                ', failed ' +
+                                failures.length +
+                                '. ' +
+                                failures[0],
+                            'error'
+                        );
+                    } else {
+                        setShareStatus(
+                            'Shared ' +
+                                ok +
+                                ' document' +
+                                (ok === 1 ? '' : 's') +
+                                (already ? ' (' + already + ' already had access)' : '') +
+                                '.',
+                            'ok'
+                        );
+                        if (shareUsernameInput) shareUsernameInput.value = '';
+                        refreshFilesListAfterBulk();
+                    }
+                }
+
                 if (shareForm) {
                     shareForm.addEventListener('submit', function (e) {
                         e.preventDefault();
+                        if (bulkShareFileIds && bulkShareFileIds.length) {
+                            void submitBulkShare(bulkShareFileIds.slice());
+                            return;
+                        }
                         var fid = shareTargetFileId();
                         if (!fid) return;
                         void (async function () {
@@ -5091,6 +5423,8 @@
                 var transferSubmitBtn = document.getElementById('dash2TransferSubmit');
                 var transferCancelBtn = document.getElementById('dash2TransferCancel');
                 var transferStatusEl = document.getElementById('dash2TransferStatus');
+                var transferModalTitleEl = document.getElementById('dash2TransferModalTitle');
+                var bulkTransferFileIds = null;
 
                 function setTransferStatus(msg, kind) {
                     if (!transferStatusEl) return;
@@ -5112,6 +5446,8 @@
                     var fid = shareTargetFileId();
                     if (!transferModal || !fid) return;
                     if (!listActionFileId && (!fileAccess || !fileAccess.is_owner)) return;
+                    bulkTransferFileIds = null;
+                    if (transferModalTitleEl) transferModalTitleEl.textContent = 'Transfer ownership';
                     setTransferStatus('', null);
                     if (transferUsernameInput) transferUsernameInput.value = '';
                     if (transferConfirmInput) transferConfirmInput.checked = false;
@@ -5127,11 +5463,29 @@
                     openTransferModal();
                 }
 
+                function openBulkTransferModal(ids) {
+                    if (!transferModal || !ids || !ids.length) return;
+                    bulkTransferFileIds = ids.slice();
+                    listActionFileId = null;
+                    if (transferModalTitleEl) {
+                        transferModalTitleEl.textContent =
+                            'Transfer ' + ids.length + ' document' + (ids.length === 1 ? '' : 's');
+                    }
+                    setTransferStatus('', null);
+                    if (transferUsernameInput) transferUsernameInput.value = '';
+                    if (transferConfirmInput) transferConfirmInput.checked = false;
+                    syncTransferSubmitState();
+                    transferModal.classList.add('is-open');
+                    document.body.style.overflow = 'hidden';
+                    if (transferUsernameInput) transferUsernameInput.focus();
+                }
+
                 function closeTransferModal() {
                     if (!transferModal) return;
                     transferModal.classList.remove('is-open');
                     document.body.style.overflow = '';
                     clearListActionFileId();
+                    bulkTransferFileIds = null;
                 }
 
                 if (transferBtn) {
@@ -5163,11 +5517,79 @@
                     }
                 });
 
+                async function submitBulkTransfer(ids) {
+                    var username = transferUsernameInput ? transferUsernameInput.value.trim() : '';
+                    if (!username) {
+                        setTransferStatus('Enter a recipient username.', 'error');
+                        return;
+                    }
+                    if (transferSubmitBtn) transferSubmitBtn.disabled = true;
+                    var ok = 0;
+                    var failures = [];
+                    for (var i = 0; i < ids.length; i++) {
+                        setTransferStatus(
+                            'Transferring ' + (i + 1) + ' of ' + ids.length + '…',
+                            null
+                        );
+                        try {
+                            var ah = await authHeaders();
+                            var r = await fetch('/api/files/' + ids[i] + '/transfer-ownership', {
+                                method: 'POST',
+                                headers: Object.assign({ 'Content-Type': 'application/json' }, ah),
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ username: username }),
+                            });
+                            var data = await r.json().catch(function () {
+                                return {};
+                            });
+                            if (!r.ok) throw new Error(data.error || r.statusText);
+                            ok++;
+                        } catch (bulkTransferErr) {
+                            failures.push(
+                                String((bulkTransferErr && bulkTransferErr.message) || bulkTransferErr)
+                            );
+                        }
+                    }
+                    if (failures.length) {
+                        setTransferStatus(
+                            'Transferred ' +
+                                ok +
+                                ', failed ' +
+                                failures.length +
+                                '. ' +
+                                failures[0],
+                            'error'
+                        );
+                        syncTransferSubmitState();
+                        if (ok > 0) refreshFilesListAfterBulk();
+                        return;
+                    }
+                    closeTransferModal();
+                    closeViewer();
+                    if (listShellForEvents) {
+                        listShellForEvents.dispatchEvent(
+                            new CustomEvent('dash2-ownership-transferred')
+                        );
+                    }
+                    alert(
+                        'Ownership transferred for ' +
+                            ok +
+                            ' document' +
+                            (ok === 1 ? '' : 's') +
+                            '. You now have Edit access under Shared with me.'
+                    );
+                }
+
                 if (transferForm) {
                     transferForm.addEventListener('submit', function (e) {
                         e.preventDefault();
+                        if (!transferConfirmInput || !transferConfirmInput.checked) return;
+                        if (bulkTransferFileIds && bulkTransferFileIds.length) {
+                            void submitBulkTransfer(bulkTransferFileIds.slice());
+                            return;
+                        }
                         var fid = shareTargetFileId();
-                        if (!fid || !transferConfirmInput || !transferConfirmInput.checked) return;
+                        if (!fid) return;
                         void (async function () {
                             if (transferSubmitBtn) transferSubmitBtn.disabled = true;
                             setTransferStatus('Transferring ownership…', null);
@@ -5571,6 +5993,49 @@
                     uploadSelectedFiles([list[0]]);
                 });
             }
+
+            if (uploadLabel) {
+                var dragDepth = 0;
+                var stop = function (ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                };
+                uploadLabel.addEventListener('dragenter', function (ev) {
+                    stop(ev);
+                    if (fileInput && fileInput.disabled) return;
+                    dragDepth++;
+                    uploadLabel.classList.add('is-dragover');
+                });
+                uploadLabel.addEventListener('dragover', function (ev) {
+                    stop(ev);
+                    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+                });
+                uploadLabel.addEventListener('dragleave', function (ev) {
+                    stop(ev);
+                    dragDepth = Math.max(0, dragDepth - 1);
+                    if (dragDepth === 0) uploadLabel.classList.remove('is-dragover');
+                });
+                uploadLabel.addEventListener('drop', function (ev) {
+                    stop(ev);
+                    dragDepth = 0;
+                    uploadLabel.classList.remove('is-dragover');
+                    if (fileInput && fileInput.disabled) return;
+                    var dt = ev.dataTransfer;
+                    var list = dt && dt.files;
+                    if (!list || !list.length) return;
+                    uploadSelectedFiles([list[0]]);
+                });
+            }
+
+            document.addEventListener('dragover', function (ev) {
+                if (ev.target && ev.target.closest && ev.target.closest('#dash2UploadLabel')) return;
+                ev.preventDefault();
+                if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'none';
+            });
+            document.addEventListener('drop', function (ev) {
+                if (ev.target && ev.target.closest && ev.target.closest('#dash2UploadLabel')) return;
+                ev.preventDefault();
+            });
 
             (function initImportBundleModal() {
                 var openBtn = document.getElementById('dash2ImportBundleOpen');

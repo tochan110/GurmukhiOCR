@@ -772,10 +772,64 @@ def _assemble_pages_with_empty_detection(
             )
 
 
+def _invoke_save_callback(save_callback, page_num, page_data) -> None:
+    """Run the per-page save callback (with profiling) for streaming OCR.
+
+    Unlike the batch assembly path this does NOT swallow errors: when a caller streams
+    pages to storage, a failed page upload must surface so the file can be marked failed
+    instead of silently completing with a missing page.
+    """
+    if not save_callback:
+        return
+    prof = _active_upload_profile()
+    t_save = time.perf_counter()
+    save_callback(page_num, page_data)
+    if prof:
+        prof.add("json_page_save_callback", time.perf_counter() - t_save, "json_page_save_pages")
+
+
+def _raise_if_consecutive_empty(empties: list) -> None:
+    """Apply the 10-consecutive-empty-page rule over per-page emptiness flags.
+
+    Lets the streaming path keep only one bool per page (instead of every page's OCR
+    data) while preserving the exact detection behaviour of the batch assembler.
+    """
+    import sys
+
+    consecutive_empty_count = 0
+    first_empty_page = None
+    for i, is_empty in enumerate(empties):
+        page_num = i + 1
+        if is_empty:
+            if consecutive_empty_count == 0:
+                first_empty_page = page_num
+            consecutive_empty_count += 1
+            print(
+                f"[Empty Page Detection] Page {page_num} is empty (consecutive count: {consecutive_empty_count})",
+                file=sys.stderr,
+                flush=True,
+            )
+            if consecutive_empty_count >= 10:
+                error_msg = (
+                    f"OCR processing paused: 10 consecutive empty pages detected (pages {first_empty_page} to {page_num}). "
+                    "This may indicate an issue with the PDF or OCR service."
+                )
+                print(f"[Empty Page Detection] ERROR: {error_msg}", file=sys.stderr, flush=True)
+                raise EmptyPagesError(first_empty_page, page_num, error_msg)
+        else:
+            consecutive_empty_count = 0
+            first_empty_page = None
+
+
 def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback=None):
     """
     Extract text with location data per page. Renders at 300 DPI, sends Vision-friendly JPEGs.
     Uses a thread pool for concurrent Vision API calls (see OCR_MAX_WORKERS); sequential if workers=1.
+
+    Streaming mode: when `save_callback` is provided, each page is handed to the callback and
+    released immediately (never accumulated), so peak memory stays flat regardless of page
+    count. The returned dict is empty in this mode. When `save_callback` is None the full
+    per-page result dict is returned (used by the legacy /pdf and /pdf-json routes).
     """
     import sys
 
@@ -799,6 +853,9 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
             total_pages,
             f"Starting OCR: {total_pages} page(s), {workers} concurrent Vision request(s) max…",
         )
+
+    stream = save_callback is not None
+    empties: list = [False] * total_pages if stream else []
 
     if workers < 2:
         page_datas: list = []
@@ -831,17 +888,28 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
                         raise Exception(
                             f"OCR processing stopped due to API error: {str(api_error)}"
                         ) from api_error
-                    page_datas.append(_vision_response_to_page_data(response))
+                    page_data = _vision_response_to_page_data(response)
                 finally:
                     if page_image is not None:
                         page_image.close()
+                if stream:
+                    # Stream this page to the sink and drop it immediately; only a bool
+                    # per page is retained (for the consecutive-empty rule).
+                    empties[page_index] = is_page_empty(page_data)
+                    _invoke_save_callback(save_callback, page_num, page_data)
+                    del page_data
+                else:
+                    page_datas.append(page_data)
         finally:
             doc.close()
-        _assemble_pages_with_empty_detection(
-            page_datas, total_pages, result, progress_callback, save_callback
-        )
+        if stream:
+            _raise_if_consecutive_empty(empties)
+        else:
+            _assemble_pages_with_empty_detection(
+                page_datas, total_pages, result, progress_callback, save_callback
+            )
     else:
-        page_datas = [None] * total_pages
+        page_datas = [] if stream else [None] * total_pages
         completed = 0
         with ThreadPoolExecutor(max_workers=workers) as ex:
             futures = [
@@ -850,17 +918,27 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
             ]
             for fut in as_completed(futures):
                 page_num, pdata = fut.result()
-                page_datas[page_num - 1] = pdata
                 completed += 1
+                if stream:
+                    # Hand each finished page straight to the sink and release it so the
+                    # full OCR result is never held in memory at once.
+                    empties[page_num - 1] = is_page_empty(pdata)
+                    _invoke_save_callback(save_callback, page_num, pdata)
+                    del pdata
+                else:
+                    page_datas[page_num - 1] = pdata
                 if progress_callback:
                     progress_callback(
                         completed,
                         total_pages,
                         f"OCR finished {completed} of {total_pages} page(s) (parallel)…",
                     )
-        _assemble_pages_with_empty_detection(
-            page_datas, total_pages, result, None, save_callback
-        )
+        if stream:
+            _raise_if_consecutive_empty(empties)
+        else:
+            _assemble_pages_with_empty_detection(
+                page_datas, total_pages, result, None, save_callback
+            )
     
     if progress_callback:
         progress_callback(total_pages, total_pages, "OCR processing complete!")
@@ -1208,6 +1286,28 @@ def _page_numbers_from_prefix(prefix: str) -> list[int]:
         if m:
             nums.append(int(m.group(1)))
     return sorted(set(nums))
+
+
+def _delete_page_json_prefix(prefix: str) -> None:
+    """Best-effort removal of every per-page JSON under a storage prefix.
+
+    Lists the pages actually present and deletes each one; "not found" is a no-op.
+    Never raises: individual failures are logged so callers can use this on error paths
+    without masking the original error.
+    """
+    prefix = (prefix or "").strip()
+    if not prefix:
+        return
+    try:
+        nums = _page_numbers_from_prefix(prefix)
+    except Exception as e:
+        print(f"[cleanup] could not list pages under {prefix}: {e}", file=sys.stderr, flush=True)
+        return
+    for n in nums:
+        try:
+            delete_from_gbucket(_page_json_path_from_prefix(prefix, n))
+        except Exception as e:
+            print(f"[cleanup] failed to delete page {n} under {prefix}: {e}", file=sys.stderr, flush=True)
 
 
 def _upload_bundle_page_task(task: tuple[str, str, str, int, dict]) -> None:
@@ -1684,6 +1784,9 @@ def process_supabase_ocr():
                     raw = linearized
                 except Exception as e:
                     print(f"[process] linearized re-upload failed (using original): {e}", file=sys.stderr, flush=True)
+            # Release the temporary linearized buffer so two full PDF copies aren't retained
+            # into the memory-heavy OCR stage (raw now holds whichever copy we keep).
+            del linearized
 
         page_charge = doc_pages if doc_kind == "pdf" else 1
 
@@ -1765,18 +1868,62 @@ def process_supabase_ocr():
                 }
             ), 409
 
+        inserted_id_str = str(inserted_id)
+        ocr_result = None
         try:
-            # Per-page JSON is uploaded in parallel after OCR (see below), so no per-page
-            # save callback is needed here.
-            with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=use_inline_json):
-                ocr_result = run_ocr_on_file_bytes(
-                    raw, file_name or os.path.basename(file_path), save_callback=None
-                )
+            if use_inline_json:
+                # Single page: keep the page data in memory so it can be stored inline on
+                # the row (1 page is tiny). No streaming needed.
+                with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=True):
+                    ocr_result = run_ocr_on_file_bytes(
+                        raw, file_name or os.path.basename(file_path), save_callback=None
+                    )
+            else:
+                # Multi-page: stream each page to per-page storage as its OCR completes so
+                # the whole OCR result is never held in memory at once. Uploads still run in
+                # parallel via a dedicated executor; OCR (the slow stage) paces the backlog,
+                # keeping only a handful of pages in flight regardless of document size.
+                upload_ex = ThreadPoolExecutor(max_workers=_import_max_workers(doc_pages))
+                upload_futures: list = []
+
+                def _save_original_page(page_num, page_data):
+                    upload_futures.append(
+                        upload_ex.submit(
+                            _upload_page_json, user_id, inserted_id_str, "original", page_num, page_data
+                        )
+                    )
+
+                try:
+                    with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=False):
+                        run_ocr_on_file_bytes(
+                            raw,
+                            file_name or os.path.basename(file_path),
+                            save_callback=_save_original_page,
+                        )
+                    with profile.time_step("json_upload_parallel", pages=doc_pages):
+                        upload_ex.shutdown(wait=True)
+                        for f in upload_futures:
+                            f.result()
+                finally:
+                    # Ensure worker threads are always released, even on OCR/upload failure.
+                    upload_ex.shutdown(wait=True)
         except VisionConfigurationError as e:
             mark_file_failed(e.user_message)
             return jsonify_vision_configuration_error(e)
         except EmptyPagesError as e:
             mark_file_failed(str(e))
+            # Streaming uploads may have already written some per-page JSONs before the
+            # consecutive-empty check tripped. Remove the orphans (both prefixes, no-op if
+            # absent) without ever masking the original EmptyPagesError.
+            try:
+                _delete_page_json_prefix(_json_kind_prefix(user_id, inserted_id_str, "original"))
+                _delete_page_json_prefix(_json_kind_prefix(user_id, inserted_id_str, "editable"))
+            except Exception as cleanup_e:
+                print(
+                    f"[process] orphan JSON cleanup after empty-pages failure errored: {cleanup_e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             return jsonify(
                 {
                     "error": str(e),
@@ -1791,10 +1938,13 @@ def process_supabase_ocr():
             mark_file_failed(str(e))
             return jsonify({"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}), 500
 
-        page_keys = [k for k in ocr_result if isinstance(k, str) and re.match(r"^page_\d+$", k, re.I)]
-        page_count = len(page_keys)
+        # The source PDF is no longer needed; release it before serializing DB updates.
+        raw = None
+
         processing_duration_seconds = max(0, round(time.perf_counter() - profile.t0))
-        if page_count == 1:
+        if use_inline_json:
+            page_keys = [k for k in ocr_result if isinstance(k, str) and re.match(r"^page_\d+$", k, re.I)]
+            page_count = len(page_keys)
             page_key = page_keys[0]
             page_data = ocr_result[page_key]
             t_ser = time.perf_counter()
@@ -1802,14 +1952,12 @@ def process_supabase_ocr():
                 "status": "completed",
                 "credits_used": page_charge,
                 "processing_duration_seconds": processing_duration_seconds,
-                **_json_row_fields_for_page_count(user_id, str(inserted_id), 1, page_data, page_data),
+                **_json_row_fields_for_page_count(user_id, inserted_id_str, 1, page_data, page_data),
             }
             profile.add("json_serialize", time.perf_counter() - t_ser, "json_serialize_ops")
             json_storage = "inline"
         else:
-            with profile.time_step("json_upload_parallel", pages=page_count):
-                _upload_original_pages_parallel(user_id, str(inserted_id), ocr_result)
-            processing_duration_seconds = max(0, round(time.perf_counter() - profile.t0))
+            page_count = doc_pages
             update_row = {
                 "status": "completed",
                 "credits_used": page_charge,
