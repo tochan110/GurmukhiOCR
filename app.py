@@ -386,9 +386,15 @@ _VISION_MAX_PIXELS = 75_000_000
 _VISION_MAX_IMAGE_BYTES = 20 * 1024 * 1024
 _VISION_MAX_EDGE = 16_384
 
+# PDF page rasterization: target 300 DPI, but cap the longest edge so huge pages (e.g. oversized
+# scans embedded in the PDF) do not allocate hundreds of MB per pixmap.
+_RENDER_TARGET_DPI = 300
+_RENDER_MAX_EDGE = 5000
+
 
 def render_pdf_page_to_image(doc, page_index):
-    """Render one PDF page at 300 DPI. Returns a PIL Image; caller should close() it after use.
+    """Render one PDF page for OCR. Targets 300 DPI; scales down proportionally when the page
+    would exceed _RENDER_MAX_EDGE px on its longest side. Returns a PIL Image; caller closes it.
 
     Forces RGB (no stray alpha), converts CMYK/grayscale PDF content to RGB so channel count matches PIL.
     """
@@ -399,7 +405,14 @@ def render_pdf_page_to_image(doc, page_index):
     _log_mem(f"render_start page={page_index + 1} inflight={inflight}")
     try:
         page = doc[page_index]
-        mat = fitz.Matrix(300 / 72, 300 / 72)
+        scale = _RENDER_TARGET_DPI / 72
+        rect = page.rect
+        exp_w = rect.width * scale
+        exp_h = rect.height * scale
+        max_dim = max(exp_w, exp_h)
+        if max_dim > _RENDER_MAX_EDGE:
+            scale *= _RENDER_MAX_EDGE / max_dim
+        mat = fitz.Matrix(scale, scale)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         _log_mem(
             f"render_after_get_pixmap page={page_index + 1} inflight={inflight} "
