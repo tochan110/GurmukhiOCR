@@ -59,6 +59,25 @@ SUPABASE_JSON_BUCKET = (os.environ.get("SUPABASE_JSON_BUCKET") or SUPABASE_STORA
 _PROFILE_TAG = "[profile:upload]"
 _upload_profile_tls = threading.local()
 
+# Temporary memory profiling (remove after the memory spike is located).
+try:
+    import psutil as _psutil
+    _mem_proc = _psutil.Process()
+except Exception:
+    _psutil = None
+    _mem_proc = None
+
+
+def _log_mem(tag: str) -> None:
+    """Log current process RSS in MB, e.g. `[mem] before_ocr rss=182 MB`."""
+    if _mem_proc is None:
+        return
+    try:
+        rss_mb = _mem_proc.memory_info().rss / (1024 * 1024)
+        print(f"[mem] {tag} rss={rss_mb:.0f} MB", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
 
 class _UploadProfile:
     """Collects per-step timings for one upload/OCR job; logs to stderr."""
@@ -692,7 +711,11 @@ def _parallel_ocr_one_page(pdf_bytes, page_index: int, vision_client) -> tuple[i
 
     page_num = page_index + 1
     prof = _active_upload_profile()
+    if page_index == 0:
+        _log_mem("parallel_page1_start")
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    if page_index == 0:
+        _log_mem("parallel_page1_after_fitz_open")
     try:
         page_image = None
         try:
@@ -700,11 +723,15 @@ def _parallel_ocr_one_page(pdf_bytes, page_index: int, vision_client) -> tuple[i
             page_image = render_pdf_page_to_image(doc, page_index)
             if prof:
                 prof.add("pdf_render", time.perf_counter() - t_render, "pdf_render_pages")
+            if page_index == 0:
+                _log_mem("parallel_page1_after_render")
             try:
                 t_ocr = time.perf_counter()
                 response = ocr_pil_with_client(vision_client, page_image)
                 if prof:
                     prof.add("ocr_api", time.perf_counter() - t_ocr, "ocr_api_pages")
+                if page_index == 0:
+                    _log_mem("parallel_page1_after_vision_ocr")
             except VisionConfigurationError:
                 raise
             except Exception as api_error:
@@ -835,15 +862,19 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
 
     prof = _active_upload_profile()
     t_meta = time.perf_counter()
+    _log_mem("before_open_pdf_page_count")
     meta = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         total_pages = len(meta)
     finally:
         meta.close()
+    _log_mem("after_page_count")
     if prof:
         prof.log_step("pdf_parse_page_count", time.perf_counter() - t_meta, pages=total_pages)
 
+    _log_mem("before_vision_client")
     vclient = get_vision_client()
+    _log_mem("after_vision_client")
     workers = _effective_ocr_worker_count(total_pages)
     result: dict = {}
 
@@ -911,11 +942,15 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
     else:
         page_datas = [] if stream else [None] * total_pages
         completed = 0
+        _log_mem("before_create_threadpool")
         with ThreadPoolExecutor(max_workers=workers) as ex:
+            _log_mem("after_create_threadpool")
+            _log_mem("before_submit_ocr_tasks")
             futures = [
                 ex.submit(_parallel_ocr_one_page, pdf_bytes, i, vclient)
                 for i in range(total_pages)
             ]
+            _log_mem("after_submit_ocr_tasks")
             for fut in as_completed(futures):
                 page_num, pdata = fut.result()
                 completed += 1
@@ -1765,6 +1800,8 @@ def process_supabase_ocr():
 
         if not raw:
             return jsonify({"error": "Downloaded file was empty."}), 400
+
+        _log_mem("after_storage_download")
 
         with profile.time_step("pdf_parse_page_count", bytes=len(raw)):
             try:
