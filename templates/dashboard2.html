@@ -1514,6 +1514,7 @@
             font-family: inherit;
             font-weight: 600;
             text-align: center;
+            appearance: textfield;
             -moz-appearance: textfield;
         }
         .dash2-pdf-page-input::-webkit-outer-spin-button,
@@ -5904,7 +5905,11 @@
                         throw new Error('Storage upload failed: ' + up.error.message);
                     }
                     current.filePath = filePath;
-                    setUploadProgress(true, 'Starting OCR processing…');
+                    setUploadProgress(
+                        true,
+                        'Google OCR is processing your document…',
+                        'Large PDFs usually finish in a few minutes. Keep this window open until processing completes.'
+                    );
                     var procPromise = fetch('/process', {
                         method: 'POST',
                         headers: {

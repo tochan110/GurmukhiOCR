@@ -4,7 +4,7 @@ from google.cloud import vision
 from google.oauth2 import service_account
 import fitz  # PyMuPDF
 from PIL import Image, UnidentifiedImageError
-import io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request, urllib.parse, math, traceback, gzip
+import gc, io, mimetypes, tempfile, os, json, re, zipfile, sys, urllib.request, urllib.parse, math, traceback, gzip
 import subprocess, shutil, threading
 import requests
 from requests.adapters import HTTPAdapter
@@ -54,6 +54,18 @@ PROFILE_PAGES_MONTHLY_ALLOWANCE = 20
 PROFILE_PAGES_RESET_INTERVAL_DAYS = 30
 SUPABASE_STORAGE_BUCKET = "gbucket"
 SUPABASE_JSON_BUCKET = (os.environ.get("SUPABASE_JSON_BUCKET") or SUPABASE_STORAGE_BUCKET).strip()
+VISION_ASYNC_GCS_BUCKET = (
+    os.environ.get("VISION_ASYNC_GCS_BUCKET")
+    or os.environ.get("GURMUKHI_OCR_GCS_BUCKET")
+    or "gocr-processing-1"
+).strip()
+VISION_ASYNC_BATCH_SIZE = 100
+_GCP_CLOUD_PLATFORM_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
+_GCS_BASE_URL = "https://storage.googleapis.com/storage/v1"
+_GCS_UPLOAD_URL = "https://storage.googleapis.com/upload/storage/v1"
+_GCS_RETRY_STATUSES = {408, 429, 500, 502, 503, 504}
+_GCS_MAX_ATTEMPTS = 3
+_VISION_OPERATION_MAX_ATTEMPTS = 3
 
 # Temporary upload-pipeline profiling (remove after bottleneck is identified).
 _PROFILE_TAG = "[profile:upload]"
@@ -79,7 +91,8 @@ def _log_mem(tag: str) -> None:
         pass
 
 
-# Temporary render-concurrency instrumentation (remove after the spike is located).
+# Obsolete PDF OCR raster-path instrumentation. PDF OCR now uses Vision asyncBatchAnnotateFiles;
+# the separate PDF viewer renderer remains below in _render_stored_document_page_png().
 _render_inflight = 0
 _render_inflight_lock = threading.Lock()
 
@@ -386,54 +399,19 @@ _VISION_MAX_PIXELS = 75_000_000
 _VISION_MAX_IMAGE_BYTES = 20 * 1024 * 1024
 _VISION_MAX_EDGE = 16_384
 
-# PDF page rasterization: target 300 DPI, but cap the longest edge so huge pages (e.g. oversized
-# scans embedded in the PDF) do not allocate hundreds of MB per pixmap.
+# Obsolete PDF OCR raster constants. Kept only to make accidental old-path use obvious.
 _RENDER_TARGET_DPI = 300
 _RENDER_MAX_EDGE = 5000
 
 
 def render_pdf_page_to_image(doc, page_index):
-    """Render one PDF page for OCR. Targets 300 DPI; scales down proportionally when the page
-    would exceed _RENDER_MAX_EDGE px on its longest side. Returns a PIL Image; caller closes it.
-
-    Forces RGB (no stray alpha), converts CMYK/grayscale PDF content to RGB so channel count matches PIL.
-    """
-    global _render_inflight
-    with _render_inflight_lock:
-        _render_inflight += 1
-        inflight = _render_inflight
-    _log_mem(f"render_start page={page_index + 1} inflight={inflight}")
-    try:
-        page = doc[page_index]
-        scale = _RENDER_TARGET_DPI / 72
-        rect = page.rect
-        exp_w = rect.width * scale
-        exp_h = rect.height * scale
-        max_dim = max(exp_w, exp_h)
-        if max_dim > _RENDER_MAX_EDGE:
-            scale *= _RENDER_MAX_EDGE / max_dim
-        mat = fitz.Matrix(scale, scale)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        _log_mem(
-            f"render_after_get_pixmap page={page_index + 1} inflight={inflight} "
-            f"w={pix.width} h={pix.height} n={pix.n} px_bytes={pix.width * pix.height * pix.n}"
-        )
-        try:
-            if pix.n != 3:
-                rgb_pix = fitz.Pixmap(fitz.csRGB, pix)
-                del pix
-                pix = rgb_pix
-                _log_mem(f"render_after_rgb_convert page={page_index + 1} inflight={inflight}")
-            if pix.width < 1 or pix.height < 1:
-                raise ValueError(f"Degenerate page render: {pix.width}x{pix.height}")
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            _log_mem(f"render_after_frombytes page={page_index + 1} inflight={inflight}")
-            return img
-        finally:
-            del pix
-    finally:
-        with _render_inflight_lock:
-            _render_inflight -= 1
+    """Obsolete PDF OCR raster path, disabled after async Vision PDF OCR migration."""
+    raise RuntimeError("PDF OCR rasterization is disabled; use Vision async PDF OCR.")
+    # Old implementation intentionally commented out:
+    # - rendered each PDF page to a high-DPI image with PyMuPDF
+    # - converted that image through PIL
+    # - submitted one Vision text_detection request per page
+    # That path caused large memory spikes and is no longer used for OCR.
 
 
 def _pil_to_rgb_white_background(image: Image.Image) -> Image.Image:
@@ -629,6 +607,25 @@ def ocr_result_compiled_full_text(ocr_result: dict) -> str:
     return "\n\n".join(parts).strip()
 
 
+def _bounding_poly_vertices(poly) -> list[dict]:
+    """Return Vision vertices in the existing {x, y} shape, including async normalized vertices."""
+    if not poly:
+        return []
+    vertices = getattr(poly, "vertices", None)
+    if vertices:
+        return [{"x": v.x, "y": v.y} for v in vertices]
+    normalized = getattr(poly, "normalized_vertices", None)
+    if normalized:
+        return [
+            {
+                "x": _safe_ocr_float(getattr(v, "x", None)),
+                "y": _safe_ocr_float(getattr(v, "y", None)),
+            }
+            for v in normalized
+        ]
+    return []
+
+
 def _vision_response_to_page_data(response) -> dict:
     """Build `page_n` JSON from a Vision `text_detection` response."""
     page_data = {
@@ -641,18 +638,14 @@ def _vision_response_to_page_data(response) -> dict:
 
     if response.text_annotations:
         page_data["full_text"] = response.text_annotations[0].description
+    elif response.full_text_annotation and getattr(response.full_text_annotation, "text", None):
+        page_data["full_text"] = response.full_text_annotation.text
 
     if response.full_text_annotation:
         for page_annotation in response.full_text_annotation.pages:
             for block in page_annotation.blocks:
                 block_data = {
-                    "bounding_box": {
-                        "vertices": [
-                            {"x": v.x, "y": v.y} for v in block.bounding_box.vertices
-                        ]
-                        if block.bounding_box and block.bounding_box.vertices
-                        else []
-                    },
+                    "bounding_box": {"vertices": _bounding_poly_vertices(block.bounding_box)},
                     "paragraphs": [],
                 }
 
@@ -670,26 +663,14 @@ def _vision_response_to_page_data(response) -> dict:
                             para_words.append(
                                 {
                                     "text": word_text,
-                                    "bounding_box": {
-                                        "vertices": [
-                                            {"x": v.x, "y": v.y} for v in word.bounding_box.vertices
-                                        ]
-                                        if word.bounding_box and word.bounding_box.vertices
-                                        else []
-                                    },
+                                    "bounding_box": {"vertices": _bounding_poly_vertices(word.bounding_box)},
                                     "confidence": _safe_ocr_float(getattr(word, "confidence", None)),
                                 }
                             )
 
                     para_data = {
                         "text": para_text.strip(),
-                        "bounding_box": {
-                            "vertices": [
-                                {"x": v.x, "y": v.y} for v in paragraph.bounding_box.vertices
-                            ]
-                            if paragraph.bounding_box and paragraph.bounding_box.vertices
-                            else []
-                        },
+                        "bounding_box": {"vertices": _bounding_poly_vertices(paragraph.bounding_box)},
                         "words": para_words,
                     }
 
@@ -706,20 +687,12 @@ def _vision_response_to_page_data(response) -> dict:
 
 
 def _effective_ocr_worker_count(total_pages: int) -> int:
-    """
-    Number of parallel Vision calls. Set OCR_MAX_WORKERS=1 to force one page at a time
-    (lowest load on your Google quota, easier debugging). Default: up to 8, capped by page count.
-    """
-    if total_pages < 2:
-        return 1
-    raw = os.environ.get("OCR_MAX_WORKERS", "").strip()
-    if raw == "1":
-        return 1
-    if raw.isdigit() and int(raw) >= 1:
-        w = int(raw)
-    else:
-        w = min(8, max(2, (os.cpu_count() or 4) // 2))
-    return max(1, min(w, 16, total_pages))
+    """Obsolete PDF OCR raster worker-count helper, disabled after async Vision PDF OCR migration."""
+    raise RuntimeError("PDF OCR worker-count raster path is disabled; use Vision async PDF OCR.")
+    # Old implementation intentionally commented out:
+    # - read OCR_MAX_WORKERS
+    # - selected up to 8 concurrent per-page Vision text_detection requests
+    # Async PDF OCR now submits one long-running file request instead.
 
 
 def _import_max_workers(page_count: int) -> int:
@@ -740,46 +713,13 @@ def _import_max_workers(page_count: int) -> int:
 
 
 def _parallel_ocr_one_page(pdf_bytes, page_index: int, vision_client) -> tuple[int, dict]:
-    """One worker: open PDF, render a single page, OCR, return 1-based page number and `page_data`."""
-    import sys
-
-    page_num = page_index + 1
-    prof = _active_upload_profile()
-    if page_index == 0:
-        _log_mem("parallel_page1_start")
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    if page_index == 0:
-        _log_mem("parallel_page1_after_fitz_open")
-    try:
-        page_image = None
-        try:
-            t_render = time.perf_counter()
-            page_image = render_pdf_page_to_image(doc, page_index)
-            if prof:
-                prof.add("pdf_render", time.perf_counter() - t_render, "pdf_render_pages")
-            if page_index == 0:
-                _log_mem("parallel_page1_after_render")
-            try:
-                t_ocr = time.perf_counter()
-                response = ocr_pil_with_client(vision_client, page_image)
-                if prof:
-                    prof.add("ocr_api", time.perf_counter() - t_ocr, "ocr_api_pages")
-                if page_index == 0:
-                    _log_mem("parallel_page1_after_vision_ocr")
-            except VisionConfigurationError:
-                raise
-            except Exception as api_error:
-                error_msg = f"OCR API error on page {page_num}: {str(api_error)}"
-                print(f"[OCR Processing Error] {error_msg}", file=sys.stderr, flush=True)
-                raise Exception(
-                    f"OCR processing stopped due to API error: {str(api_error)}"
-                ) from api_error
-            return (page_num, _vision_response_to_page_data(response))
-        finally:
-            if page_image is not None:
-                page_image.close()
-    finally:
-        doc.close()
+    """Obsolete parallel raster PDF OCR helper, disabled after async Vision PDF OCR migration."""
+    raise RuntimeError("Parallel raster PDF OCR is disabled; use Vision async PDF OCR.")
+    # Old implementation intentionally commented out:
+    # - opened the PDF in each worker
+    # - rendered one page to an image
+    # - called ocr_pil_with_client()
+    # - converted the per-page response with _vision_response_to_page_data()
 
 
 def _assemble_pages_with_empty_detection(
@@ -882,10 +822,491 @@ def _raise_if_consecutive_empty(empties: list) -> None:
             first_empty_page = None
 
 
+def _vision_async_timeout_seconds() -> int:
+    raw = (os.environ.get("VISION_ASYNC_TIMEOUT_SECONDS") or "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return 3600
+
+
+def _gcs_object_url(bucket: str, object_name: str) -> str:
+    return f"{_GCS_BASE_URL}/b/{urllib.parse.quote(bucket, safe='')}/o/{urllib.parse.quote(object_name, safe='')}"
+
+
+class GCSOperationError(RuntimeError):
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _raise_gcs_error(response, action: str) -> None:
+    if response.ok:
+        return
+    detail = (getattr(response, "text", "") or "").strip()
+    if len(detail) > 1000:
+        detail = detail[:1000] + "..."
+    raise GCSOperationError(
+        f"GCS {action} failed ({response.status_code}): {detail or response.reason}",
+        getattr(response, "status_code", None),
+    )
+
+
+def _is_retryable_gcs_exception(exc: BaseException) -> bool:
+    if isinstance(exc, GCSOperationError):
+        return exc.status_code in _GCS_RETRY_STATUSES
+    return isinstance(exc, requests.RequestException)
+
+
+def _with_gcs_retries(action: str, fn):
+    last_exc = None
+    for attempt in range(1, _GCS_MAX_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= _GCS_MAX_ATTEMPTS or not _is_retryable_gcs_exception(exc):
+                raise
+            delay = min(8, 2 ** (attempt - 1))
+            print(
+                f"[Vision Async OCR] transient {action} failure; retrying "
+                f"({attempt + 1}/{_GCS_MAX_ATTEMPTS}) after {delay}s: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
+    raise last_exc
+
+
+def _is_retryable_vision_operation_exception(exc: BaseException) -> bool:
+    from google.api_core import exceptions as google_exceptions
+
+    retryable_types = tuple(
+        t
+        for t in (
+            getattr(google_exceptions, "Aborted", None),
+            getattr(google_exceptions, "DeadlineExceeded", None),
+            getattr(google_exceptions, "InternalServerError", None),
+            getattr(google_exceptions, "ResourceExhausted", None),
+            getattr(google_exceptions, "ServiceUnavailable", None),
+            getattr(google_exceptions, "TooManyRequests", None),
+        )
+        if t is not None
+    )
+    return isinstance(exc, retryable_types)
+
+
+def _wait_for_vision_operation(operation, timeout_seconds: int):
+    deadline = time.monotonic() + timeout_seconds
+    last_exc = None
+    for attempt in range(1, _VISION_OPERATION_MAX_ATTEMPTS + 1):
+        remaining = max(1, int(deadline - time.monotonic()))
+        try:
+            return operation.result(timeout=remaining)
+        except Exception as exc:
+            last_exc = exc
+            if (
+                attempt >= _VISION_OPERATION_MAX_ATTEMPTS
+                or time.monotonic() >= deadline
+                or not _is_retryable_vision_operation_exception(exc)
+            ):
+                raise
+            delay = min(15, 2 ** (attempt - 1))
+            print(
+                f"[Vision Async OCR] transient Vision operation polling failure; retrying "
+                f"({attempt + 1}/{_VISION_OPERATION_MAX_ATTEMPTS}) after {delay}s: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
+    raise last_exc
+
+
+def _with_vision_retries(action: str, fn):
+    last_exc = None
+    for attempt in range(1, _VISION_OPERATION_MAX_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= _VISION_OPERATION_MAX_ATTEMPTS or not _is_retryable_vision_operation_exception(exc):
+                raise
+            delay = min(15, 2 ** (attempt - 1))
+            print(
+                f"[Vision Async OCR] transient {action} failure; retrying "
+                f"({attempt + 1}/{_VISION_OPERATION_MAX_ATTEMPTS}) after {delay}s: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
+    raise last_exc
+
+
+def _vision_async_progress(progress_callback, completed: int, total: int, message: str) -> None:
+    print(f"[Vision Async OCR] {message}", file=sys.stderr, flush=True)
+    if progress_callback:
+        progress_callback(completed, total, message)
+
+
+def _vision_async_clients():
+    path = get_credentials_file_path()
+    if not path:
+        raise RuntimeError("No Google Cloud credentials configured (upload a key or set GURMUKHI_OCR_KEY_PATH).")
+    from google.auth.transport.requests import AuthorizedSession
+
+    creds = service_account.Credentials.from_service_account_file(
+        path,
+        scopes=_GCP_CLOUD_PLATFORM_SCOPES,
+    )
+    return vision.ImageAnnotatorClient(credentials=creds), AuthorizedSession(creds)
+
+
+def _gcs_upload_pdf_bytes(session_obj, bucket: str, object_name: str, pdf_bytes: bytes) -> None:
+    def _attempt():
+        url = f"{_GCS_UPLOAD_URL}/b/{urllib.parse.quote(bucket, safe='')}/o"
+        response = session_obj.post(
+            url,
+            params={"uploadType": "media", "name": object_name},
+            headers={"Content-Type": "application/pdf"},
+            data=pdf_bytes,
+        )
+        _raise_gcs_error(response, f"upload to gs://{bucket}/{object_name}")
+
+    return _with_gcs_retries(f"upload gs://{bucket}/{object_name}", _attempt)
+
+
+def _gcs_list_objects(session_obj, bucket: str, prefix: str) -> list[str]:
+    def _attempt():
+        url = f"{_GCS_BASE_URL}/b/{urllib.parse.quote(bucket, safe='')}/o"
+        names: list[str] = []
+        page_token: str | None = None
+        while True:
+            params = {"prefix": prefix}
+            if page_token:
+                params["pageToken"] = page_token
+            response = session_obj.get(url, params=params)
+            _raise_gcs_error(response, f"list gs://{bucket}/{prefix}")
+            payload = response.json()
+            names.extend(item["name"] for item in payload.get("items", []) if item.get("name"))
+            page_token = payload.get("nextPageToken")
+            if not page_token:
+                return names
+
+    return _with_gcs_retries(f"list gs://{bucket}/{prefix}", _attempt)
+
+
+def _gcs_download_object_to_file(session_obj, bucket: str, object_name: str, local_path: str) -> None:
+    part_path = f"{local_path}.part"
+
+    def _attempt():
+        try:
+            if os.path.exists(part_path):
+                os.remove(part_path)
+        except OSError:
+            pass
+        response = session_obj.get(_gcs_object_url(bucket, object_name), params={"alt": "media"}, stream=True)
+        try:
+            _raise_gcs_error(response, f"download gs://{bucket}/{object_name}")
+            with open(part_path, "wb") as out:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        out.write(chunk)
+            os.replace(part_path, local_path)
+        finally:
+            response.close()
+
+    try:
+        return _with_gcs_retries(f"download gs://{bucket}/{object_name}", _attempt)
+    finally:
+        try:
+            if os.path.exists(part_path):
+                os.remove(part_path)
+        except OSError:
+            pass
+
+
+def _gcs_delete_object(session_obj, bucket: str, object_name: str) -> None:
+    def _attempt():
+        response = session_obj.delete(_gcs_object_url(bucket, object_name))
+        if response.status_code == 404:
+            return
+        _raise_gcs_error(response, f"delete gs://{bucket}/{object_name}")
+
+    return _with_gcs_retries(f"delete gs://{bucket}/{object_name}", _attempt)
+
+
+def _best_effort_delete_gcs_object(session_obj, bucket: str, object_name: str) -> None:
+    try:
+        _gcs_delete_object(session_obj, bucket, object_name)
+    except Exception as e:
+        print(f"[Vision Async OCR] cleanup failed for gs://{bucket}/{object_name}: {e}", file=sys.stderr, flush=True)
+
+
+def _best_effort_delete_gcs_prefix(session_obj, bucket: str, prefix: str) -> None:
+    try:
+        for object_name in _gcs_list_objects(session_obj, bucket, prefix):
+            _best_effort_delete_gcs_object(session_obj, bucket, object_name)
+    except Exception as e:
+        print(f"[Vision Async OCR] cleanup list failed for gs://{bucket}/{prefix}: {e}", file=sys.stderr, flush=True)
+
+
+def _vision_output_page_range(object_name: str) -> tuple[int, int]:
+    base = object_name.rsplit("/", 1)[-1]
+    m = re.search(r"output-(\d+)-to-(\d+)\.json$", base, re.I)
+    if not m:
+        raise RuntimeError(
+            f"Unexpected Google Vision output filename: {base!r}; expected output-START-to-END.json."
+        )
+    start_page = int(m.group(1))
+    end_page = int(m.group(2))
+    if start_page < 1 or end_page < start_page:
+        raise RuntimeError(f"Invalid Google Vision output page range in filename: {base!r}.")
+    return start_page, end_page
+
+
+def _vision_output_sort_key(object_name: str):
+    start_page, end_page = _vision_output_page_range(object_name)
+    return (start_page, end_page, object_name)
+
+
+def _validate_vision_output_sequence(object_names: list[str], total_pages: int) -> None:
+    expected_start = 1
+    for object_name in object_names:
+        start_page, end_page = _vision_output_page_range(object_name)
+        if start_page != expected_start:
+            raise RuntimeError(
+                "Google Vision output batches are not contiguous: "
+                f"expected page {expected_start}, got {start_page}-{end_page} in {object_name}."
+            )
+        expected_start = end_page + 1
+    if expected_start != total_pages + 1:
+        raise RuntimeError(
+            f"Google Vision output batches covered pages 1-{expected_start - 1}, expected 1-{total_pages}."
+        )
+
+
+def _submit_async_pdf_ocr(vision_client, source_uri: str, output_uri: str):
+    def _attempt():
+        feature = vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)
+        input_config = vision.InputConfig(
+            gcs_source=vision.GcsSource(uri=source_uri),
+            mime_type="application/pdf",
+        )
+        output_config = vision.OutputConfig(
+            gcs_destination=vision.GcsDestination(uri=output_uri),
+            batch_size=VISION_ASYNC_BATCH_SIZE,
+        )
+        request = vision.AsyncAnnotateFileRequest(
+            features=[feature],
+            input_config=input_config,
+            output_config=output_config,
+        )
+        return vision_client.async_batch_annotate_files(requests=[request])
+
+    return _with_vision_retries("Vision async OCR submit", _attempt)
+
+
+def _vision_json_response_to_proto(response_json: dict):
+    from google.protobuf.json_format import ParseDict
+
+    pb_response = vision.AnnotateImageResponse.pb(vision.AnnotateImageResponse())
+    ParseDict(response_json, pb_response, ignore_unknown_fields=True)
+    response = vision.AnnotateImageResponse.wrap(pb_response)
+    return _finalize_text_detection_response(response)
+
+
+def _update_streaming_empty_page_state(page_num: int, page_data: dict, state: dict) -> None:
+    if is_page_empty(page_data):
+        if state["consecutive_empty_count"] == 0:
+            state["first_empty_page"] = page_num
+        state["consecutive_empty_count"] += 1
+        print(
+            f"[Empty Page Detection] Page {page_num} is empty "
+            f"(consecutive count: {state['consecutive_empty_count']})",
+            file=sys.stderr,
+            flush=True,
+        )
+        if state["consecutive_empty_count"] >= 10:
+            first_empty_page = state["first_empty_page"]
+            error_msg = (
+                f"OCR processing paused: 10 consecutive empty pages detected (pages {first_empty_page} to {page_num}). "
+                "This may indicate an issue with the PDF or OCR service."
+            )
+            print(f"[Empty Page Detection] ERROR: {error_msg}", file=sys.stderr, flush=True)
+            raise EmptyPagesError(first_empty_page, page_num, error_msg)
+    else:
+        state["consecutive_empty_count"] = 0
+        state["first_empty_page"] = None
+
+
+def _process_vision_async_output_file(
+    local_json_path: str,
+    next_page_num: int,
+    total_pages: int,
+    result: dict,
+    progress_callback,
+    save_callback,
+    empty_state: dict,
+) -> int:
+    with open(local_json_path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    responses = payload.get("responses")
+    if not isinstance(responses, list):
+        raise RuntimeError(f"Vision output file {local_json_path} did not contain a responses list.")
+
+    stream = save_callback is not None
+    for response_index, response_json in enumerate(responses):
+        if not isinstance(response_json, dict):
+            raise RuntimeError(f"Vision output file {local_json_path} contained an invalid response.")
+        page_num = next_page_num
+        response = _vision_json_response_to_proto(response_json)
+        page_data = _vision_response_to_page_data(response)
+        try:
+            _update_streaming_empty_page_state(page_num, page_data, empty_state)
+            if stream:
+                _invoke_save_callback(save_callback, page_num, page_data)
+            else:
+                result[f"page_{page_num}"] = page_data
+            if progress_callback:
+                progress_callback(page_num, total_pages, f"Completed page {page_num} of {total_pages}…")
+        finally:
+            if stream:
+                del page_data
+            del response
+            responses[response_index] = None
+            del response_json
+        next_page_num += 1
+
+    del payload
+    del responses
+    return next_page_num
+
+
+def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callback=None, save_callback=None):
+    if not VISION_ASYNC_GCS_BUCKET:
+        raise RuntimeError("VISION_ASYNC_GCS_BUCKET must be configured for async PDF OCR.")
+
+    prof = _active_upload_profile()
+    result: dict = {}
+    run_id = uuid.uuid4().hex
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_prefix = f"vision_async_pdf/{timestamp}-{run_id}/"
+    input_object = f"{run_prefix}input/document.pdf"
+    output_prefix = f"{run_prefix}output/"
+    source_uri = f"gs://{VISION_ASYNC_GCS_BUCKET}/{input_object}"
+    output_uri = f"gs://{VISION_ASYNC_GCS_BUCKET}/{output_prefix}"
+    local_paths: set[str] = set()
+
+    _vision_async_progress(
+        progress_callback,
+        0,
+        total_pages,
+        f"Starting async PDF OCR: {total_pages} page(s), Vision batch size {VISION_ASYNC_BATCH_SIZE}…",
+    )
+
+    vision_client, storage_session = _vision_async_clients()
+    try:
+        t_upload = time.perf_counter()
+        _vision_async_progress(progress_callback, 0, total_pages, "Uploading PDF to Google Cloud Storage…")
+        _gcs_upload_pdf_bytes(storage_session, VISION_ASYNC_GCS_BUCKET, input_object, pdf_bytes)
+        if prof:
+            prof.log_step("vision_async_gcs_upload", time.perf_counter() - t_upload, bytes=len(pdf_bytes))
+
+        t_submit = time.perf_counter()
+        _log_mem("vision_async_before_request")
+        _vision_async_progress(progress_callback, 0, total_pages, "Starting Google Vision async OCR job…")
+        operation = _submit_async_pdf_ocr(vision_client, source_uri, output_uri)
+        if prof:
+            prof.log_step("vision_async_submit", time.perf_counter() - t_submit)
+
+        t_ocr = time.perf_counter()
+        _vision_async_progress(progress_callback, 0, total_pages, "Waiting for Google OCR to complete…")
+        _wait_for_vision_operation(operation, _vision_async_timeout_seconds())
+        _log_mem("vision_async_after_vision_complete")
+        if prof:
+            prof.log_step("vision_async_operation_wait", time.perf_counter() - t_ocr, pages=total_pages)
+
+        _vision_async_progress(progress_callback, 0, total_pages, "Downloading OCR results…")
+        output_objects = sorted(
+            [name for name in _gcs_list_objects(storage_session, VISION_ASYNC_GCS_BUCKET, output_prefix) if name.lower().endswith(".json")],
+            key=_vision_output_sort_key,
+        )
+        if not output_objects:
+            raise RuntimeError(f"Google Vision async OCR produced no JSON output under {output_uri}.")
+        _validate_vision_output_sequence(output_objects, total_pages)
+
+        empty_state = {"consecutive_empty_count": 0, "first_empty_page": None}
+        next_page_num = 1
+        with tempfile.TemporaryDirectory(prefix="vision_async_pdf_") as tmp_dir:
+            total_batches = len(output_objects)
+            for batch_index, object_name in enumerate(output_objects, start=1):
+                local_json_path = os.path.join(tmp_dir, object_name.rsplit("/", 1)[-1] or f"output_{next_page_num}.json")
+                local_paths.add(local_json_path)
+                try:
+                    batch_start_page = next_page_num
+                    _log_mem(f"vision_async_before_download_batch_{batch_index}")
+                    _vision_async_progress(
+                        progress_callback,
+                        max(0, next_page_num - 1),
+                        total_pages,
+                        f"Downloading OCR results batch {batch_index} of {total_batches}…",
+                    )
+                    t_download = time.perf_counter()
+                    _gcs_download_object_to_file(storage_session, VISION_ASYNC_GCS_BUCKET, object_name, local_json_path)
+                    if prof:
+                        prof.add("vision_async_json_download", time.perf_counter() - t_download, "vision_async_json_files")
+                    _vision_async_progress(
+                        progress_callback,
+                        max(0, next_page_num - 1),
+                        total_pages,
+                        f"Processing OCR pages starting at page {next_page_num}…",
+                    )
+                    next_page_num = _process_vision_async_output_file(
+                        local_json_path,
+                        next_page_num,
+                        total_pages,
+                        result,
+                        progress_callback,
+                        save_callback,
+                        empty_state,
+                    )
+                    _log_mem(
+                        f"vision_async_after_processing_batch_{batch_index} "
+                        f"pages={batch_start_page}-{next_page_num - 1}"
+                    )
+                finally:
+                    try:
+                        if os.path.exists(local_json_path):
+                            os.remove(local_json_path)
+                    finally:
+                        local_paths.discard(local_json_path)
+                    _best_effort_delete_gcs_object(storage_session, VISION_ASYNC_GCS_BUCKET, object_name)
+                    gc.collect()
+                    _log_mem(f"vision_async_after_delete_batch_{batch_index}")
+
+        processed_pages = next_page_num - 1
+        if processed_pages != total_pages:
+            raise RuntimeError(
+                f"Google Vision async OCR returned {processed_pages} page response(s), expected {total_pages}."
+            )
+
+        _vision_async_progress(progress_callback, total_pages, total_pages, "Finished async PDF OCR.")
+        _log_mem("vision_async_complete")
+        return result
+    finally:
+        for local_path in list(local_paths):
+            try:
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+            except OSError:
+                pass
+        _best_effort_delete_gcs_prefix(storage_session, VISION_ASYNC_GCS_BUCKET, run_prefix)
+        gc.collect()
+        _log_mem("vision_async_after_final_cleanup")
+
+
 def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback=None):
     """
-    Extract text with location data per page. Renders at 300 DPI, sends Vision-friendly JPEGs.
-    Uses a thread pool for concurrent Vision API calls (see OCR_MAX_WORKERS); sequential if workers=1.
+    Extract text with location data per PDF page using Vision async PDF OCR.
 
     Streaming mode: when `save_callback` is provided, each page is handed to the callback and
     released immediately (never accumulated), so peak memory stays flat regardless of page
@@ -906,114 +1327,12 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
     if prof:
         prof.log_step("pdf_parse_page_count", time.perf_counter() - t_meta, pages=total_pages)
 
-    _log_mem("before_vision_client")
-    vclient = get_vision_client()
-    _log_mem("after_vision_client")
-    workers = _effective_ocr_worker_count(total_pages)
-    result: dict = {}
-
-    if progress_callback:
-        progress_callback(
-            0,
-            total_pages,
-            f"Starting OCR: {total_pages} page(s), {workers} concurrent Vision request(s) max…",
-        )
-
-    stream = save_callback is not None
-    empties: list = [False] * total_pages if stream else []
-
-    if workers < 2:
-        page_datas: list = []
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        try:
-            for page_index in range(total_pages):
-                page_num = page_index + 1
-                page_image = None
-                try:
-                    t_render = time.perf_counter()
-                    page_image = render_pdf_page_to_image(doc, page_index)
-                    if prof:
-                        prof.add("pdf_render", time.perf_counter() - t_render, "pdf_render_pages")
-                    if progress_callback:
-                        progress_callback(
-                            page_num,
-                            total_pages,
-                            f"Processing page {page_num} of {total_pages}…",
-                        )
-                    try:
-                        t_ocr = time.perf_counter()
-                        response = ocr_pil_with_client(vclient, page_image)
-                        if prof:
-                            prof.add("ocr_api", time.perf_counter() - t_ocr, "ocr_api_pages")
-                    except VisionConfigurationError:
-                        raise
-                    except Exception as api_error:
-                        err = f"OCR API error on page {page_num}: {str(api_error)}"
-                        print(f"[OCR Processing Error] {err}", file=sys.stderr, flush=True)
-                        raise Exception(
-                            f"OCR processing stopped due to API error: {str(api_error)}"
-                        ) from api_error
-                    page_data = _vision_response_to_page_data(response)
-                finally:
-                    if page_image is not None:
-                        page_image.close()
-                if stream:
-                    # Stream this page to the sink and drop it immediately; only a bool
-                    # per page is retained (for the consecutive-empty rule).
-                    empties[page_index] = is_page_empty(page_data)
-                    _invoke_save_callback(save_callback, page_num, page_data)
-                    del page_data
-                else:
-                    page_datas.append(page_data)
-        finally:
-            doc.close()
-        if stream:
-            _raise_if_consecutive_empty(empties)
-        else:
-            _assemble_pages_with_empty_detection(
-                page_datas, total_pages, result, progress_callback, save_callback
-            )
-    else:
-        page_datas = [] if stream else [None] * total_pages
-        completed = 0
-        _log_mem("before_create_threadpool")
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            _log_mem("after_create_threadpool")
-            _log_mem(f"before_submit_ocr_tasks workers={workers} total_pages={total_pages}")
-            futures = []
-            for i in range(total_pages):
-                futures.append(ex.submit(_parallel_ocr_one_page, pdf_bytes, i, vclient))
-                if i % 25 == 0:
-                    _log_mem(f"submit_loop_i={i}")
-            _log_mem("after_submit_ocr_tasks")
-            for fut in as_completed(futures):
-                page_num, pdata = fut.result()
-                completed += 1
-                if stream:
-                    # Hand each finished page straight to the sink and release it so the
-                    # full OCR result is never held in memory at once.
-                    empties[page_num - 1] = is_page_empty(pdata)
-                    _invoke_save_callback(save_callback, page_num, pdata)
-                    del pdata
-                else:
-                    page_datas[page_num - 1] = pdata
-                if progress_callback:
-                    progress_callback(
-                        completed,
-                        total_pages,
-                        f"OCR finished {completed} of {total_pages} page(s) (parallel)…",
-                    )
-        if stream:
-            _raise_if_consecutive_empty(empties)
-        else:
-            _assemble_pages_with_empty_detection(
-                page_datas, total_pages, result, None, save_callback
-            )
-    
-    if progress_callback:
-        progress_callback(total_pages, total_pages, "OCR processing complete!")
-    
-    return result
+    return _extract_text_with_async_pdf_ocr(
+        pdf_bytes,
+        total_pages,
+        progress_callback=progress_callback,
+        save_callback=save_callback,
+    )
 
 
 def supabase_access_token_to_user_id(access_token: str) -> str | None:
@@ -1951,34 +2270,17 @@ def process_supabase_ocr():
                         raw, file_name or os.path.basename(file_path), save_callback=None
                     )
             else:
-                # Multi-page: stream each page to per-page storage as its OCR completes so
-                # the whole OCR result is never held in memory at once. Uploads still run in
-                # parallel via a dedicated executor; OCR (the slow stage) paces the backlog,
-                # keeping only a handful of pages in flight regardless of document size.
-                upload_ex = ThreadPoolExecutor(max_workers=_import_max_workers(doc_pages))
-                upload_futures: list = []
-
                 def _save_original_page(page_num, page_data):
-                    upload_futures.append(
-                        upload_ex.submit(
-                            _upload_page_json, user_id, inserted_id_str, "original", page_num, page_data
-                        )
-                    )
+                    _upload_page_json(user_id, inserted_id_str, "original", page_num, page_data)
 
-                try:
-                    with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=False):
-                        run_ocr_on_file_bytes(
-                            raw,
-                            file_name or os.path.basename(file_path),
-                            save_callback=_save_original_page,
-                        )
-                    with profile.time_step("json_upload_parallel", pages=doc_pages):
-                        upload_ex.shutdown(wait=True)
-                        for f in upload_futures:
-                            f.result()
-                finally:
-                    # Ensure worker threads are always released, even on OCR/upload failure.
-                    upload_ex.shutdown(wait=True)
+                # Multi-page PDF OCR now receives Vision JSON batches quickly, so save each
+                # page synchronously to avoid retaining page payloads in an upload backlog.
+                with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=False):
+                    run_ocr_on_file_bytes(
+                        raw,
+                        file_name or os.path.basename(file_path),
+                        save_callback=_save_original_page,
+                    )
         except VisionConfigurationError as e:
             mark_file_failed(e.user_message)
             return jsonify_vision_configuration_error(e)
