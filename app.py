@@ -65,6 +65,7 @@ _GCS_BASE_URL = "https://storage.googleapis.com/storage/v1"
 _GCS_UPLOAD_URL = "https://storage.googleapis.com/upload/storage/v1"
 _GCS_RETRY_STATUSES = {408, 429, 500, 502, 503, 504}
 _GCS_MAX_ATTEMPTS = 3
+_STORAGE_STREAM_CHUNK = 8 * 1024 * 1024
 _VISION_OPERATION_MAX_ATTEMPTS = 3
 _OCR_LEASE_SECONDS = 120
 _ocr_bg_lock = threading.Lock()
@@ -837,7 +838,82 @@ def _raise_gcs_error(response, action: str) -> None:
 def _is_retryable_gcs_exception(exc: BaseException) -> bool:
     if isinstance(exc, GCSOperationError):
         return exc.status_code in _GCS_RETRY_STATUSES
-    return isinstance(exc, requests.RequestException)
+    if isinstance(exc, requests.RequestException):
+        return True
+    try:
+        from google.api_core import exceptions as gcp_exc
+
+        return isinstance(
+            exc,
+            (
+                gcp_exc.ServiceUnavailable,
+                gcp_exc.TooManyRequests,
+                gcp_exc.InternalServerError,
+                gcp_exc.GatewayTimeout,
+                gcp_exc.DeadlineExceeded,
+            ),
+        )
+    except Exception:
+        return False
+
+
+def _gcs_client_error(exc: BaseException, action: str) -> GCSOperationError:
+    if isinstance(exc, GCSOperationError):
+        return exc
+    status_code = 500
+    code = getattr(exc, "code", None)
+    if isinstance(code, int):
+        status_code = code
+    return GCSOperationError(f"GCS {action} failed: {exc}", status_code)
+
+
+def _gcs_storage_client():
+    path = get_credentials_file_path()
+    from google.cloud import storage
+
+    creds = service_account.Credentials.from_service_account_file(
+        path,
+        scopes=_GCP_CLOUD_PLATFORM_SCOPES,
+    )
+    return storage.Client(credentials=creds)
+
+
+def _unlink_temp_files(paths: list[str] | tuple[str, ...] | None) -> None:
+    if not paths:
+        return
+    for path in paths:
+        if not path:
+            continue
+        for candidate in (path, f"{path}.part", f"{path}.lin.pdf"):
+            if os.path.exists(candidate):
+                try:
+                    os.remove(candidate)
+                except OSError:
+                    pass
+
+
+def _gcs_upload_pdf_file(bucket: str, object_name: str, local_path: str) -> int:
+    """Stream a local PDF file to GCS via blob.open('wb'). Returns bytes uploaded."""
+
+    def _attempt():
+        client = _gcs_storage_client()
+        blob = client.bucket(bucket).blob(object_name)
+        blob.content_type = "application/pdf"
+        bytes_uploaded = 0
+        try:
+            with blob.open("wb", chunk_size=_STORAGE_STREAM_CHUNK) as writer:
+                with open(local_path, "rb") as reader:
+                    while True:
+                        chunk = reader.read(_STORAGE_STREAM_CHUNK)
+                        if not chunk:
+                            break
+                        writer.write(chunk)
+                        bytes_uploaded += len(chunk)
+        except Exception as exc:
+            raise _gcs_client_error(exc, f"upload to gs://{bucket}/{object_name}") from exc
+        return bytes_uploaded
+
+    return _with_gcs_retries(f"upload gs://{bucket}/{object_name}", _attempt)
 
 
 def _with_gcs_retries(action: str, fn):
@@ -1237,8 +1313,16 @@ def _wait_for_named_vision_operation(vision_client, operation_name: str, timeout
     raise TimeoutError(f"Timed out waiting for Vision operation {operation_name}")
 
 
-def _start_async_pdf_ocr_job(pdf_bytes, total_pages: int, progress_callback=None) -> dict:
+def _start_async_pdf_ocr_job(
+    total_pages: int,
+    progress_callback=None,
+    *,
+    pdf_bytes: bytes | None = None,
+    pdf_path: str | None = None,
+) -> dict:
     """Upload PDF to GCS and submit Vision async OCR. Returns durable job metadata."""
+    if (pdf_bytes is None) == (pdf_path is None):
+        raise ValueError("Exactly one of pdf_bytes or pdf_path must be provided.")
     if not VISION_ASYNC_GCS_BUCKET:
         raise RuntimeError("VISION_ASYNC_GCS_BUCKET must be configured for async PDF OCR.")
 
@@ -1262,9 +1346,24 @@ def _start_async_pdf_ocr_job(pdf_bytes, total_pages: int, progress_callback=None
     try:
         t_upload = time.perf_counter()
         _vision_async_progress(progress_callback, 0, total_pages, "Uploading PDF to Google Cloud Storage…")
-        _gcs_upload_pdf_bytes(storage_session, VISION_ASYNC_GCS_BUCKET, input_object, pdf_bytes)
-        if prof:
-            prof.log_step("vision_async_gcs_upload", time.perf_counter() - t_upload, bytes=len(pdf_bytes))
+        if pdf_path is not None:
+            _log_mem("before_stream_upload")
+            bytes_uploaded = _gcs_upload_pdf_file(VISION_ASYNC_GCS_BUCKET, input_object, pdf_path)
+            elapsed = time.perf_counter() - t_upload
+            _log_mem("after_stream_upload")
+            if prof:
+                avg_mbps = (bytes_uploaded / (1024 * 1024)) / elapsed if elapsed > 0 else 0.0
+                prof.log_step(
+                    "stream_supabase_to_gcs",
+                    elapsed,
+                    bytes=bytes_uploaded,
+                    avg_mbps=f"{avg_mbps:.2f}",
+                )
+                prof.log_step("vision_async_gcs_upload", elapsed, bytes=bytes_uploaded)
+        else:
+            _gcs_upload_pdf_bytes(storage_session, VISION_ASYNC_GCS_BUCKET, input_object, pdf_bytes)
+            if prof:
+                prof.log_step("vision_async_gcs_upload", time.perf_counter() - t_upload, bytes=len(pdf_bytes))
 
         t_submit = time.perf_counter()
         _log_mem("vision_async_before_request")
@@ -1527,7 +1626,11 @@ def _finish_async_pdf_ocr_job(job: dict, progress_callback=None, save_callback=N
 
 def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callback=None, save_callback=None):
     """Synchronous wrapper used by legacy routes: start Vision job, then finish streaming."""
-    job = _start_async_pdf_ocr_job(pdf_bytes, total_pages, progress_callback=progress_callback)
+    job = _start_async_pdf_ocr_job(
+        total_pages,
+        progress_callback=progress_callback,
+        pdf_bytes=pdf_bytes,
+    )
     return _finish_async_pdf_ocr_job(job, progress_callback=progress_callback, save_callback=save_callback)
 
 
@@ -1697,6 +1800,68 @@ def _storage_download(bucket: str, storage_path: str, timeout: int | None = None
         ) from e
 
 
+def _storage_download_to_file(
+    bucket: str, storage_path: str, local_path: str, timeout: int | None = None
+) -> int:
+    """Stream a Supabase Storage object to a local file. Returns bytes written."""
+    if not supabase_url or not supabase_secret_key:
+        raise RuntimeError("Supabase storage download requires SUPABASE_URL and SUPABASE_SECRET_KEY.")
+    if not storage_path or storage_path.startswith("/") or ".." in storage_path:
+        raise ValueError("Invalid storage path.")
+    part_path = f"{local_path}.part"
+
+    def _attempt() -> int:
+        try:
+            if os.path.exists(part_path):
+                os.remove(part_path)
+        except OSError:
+            pass
+        nbytes = 0
+        resp = _storage_http_session().get(
+            _storage_object_url(bucket, storage_path),
+            headers=_storage_auth_headers(),
+            timeout=timeout or 600,
+            stream=True,
+        )
+        try:
+            resp.raise_for_status()
+            with open(part_path, "wb") as out:
+                for chunk in resp.iter_content(chunk_size=_STORAGE_STREAM_CHUNK):
+                    if chunk:
+                        out.write(chunk)
+                        nbytes += len(chunk)
+            os.replace(part_path, local_path)
+            return nbytes
+        finally:
+            resp.close()
+
+    last_exc: Exception | None = None
+    for attempt in range(1, _GCS_MAX_ATTEMPTS + 1):
+        try:
+            return _attempt()
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt >= _GCS_MAX_ATTEMPTS:
+                break
+            delay = min(2.0 ** (attempt - 1), 8.0)
+            print(
+                f"[storage] download retry for {storage_path} "
+                f"({attempt + 1}/{_GCS_MAX_ATTEMPTS}) after {delay}s: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
+        finally:
+            try:
+                if os.path.exists(part_path):
+                    os.remove(part_path)
+            except OSError:
+                pass
+    raise RuntimeError(
+        f"Supabase Storage download failed for {storage_path} in bucket {bucket}: {last_exc!s}"
+    ) from last_exc
+
+
 def _storage_upload(
     bucket: str, storage_path: str, content: bytes, content_type: str = "application/octet-stream"
 ) -> None:
@@ -1725,6 +1890,47 @@ def _storage_upload(
         raise RuntimeError(
             f"Supabase Storage upload failed for {storage_path} in bucket {bucket} "
             f"(timeout {timeout}s, {len(content)} bytes): {e!s}"
+        ) from e
+    finally:
+        if prof:
+            metric = "json_storage_upload" if bucket == SUPABASE_JSON_BUCKET else "storage_upload"
+            prof.add(metric, time.perf_counter() - t0, f"{metric}_ops")
+
+
+def _storage_upload_file(
+    bucket: str,
+    storage_path: str,
+    local_path: str,
+    content_type: str = "application/octet-stream",
+) -> int:
+    """Stream a local file to Supabase Storage. Returns bytes uploaded."""
+    if not supabase_url or not supabase_secret_key:
+        raise RuntimeError("Supabase storage upload requires SUPABASE_URL and SUPABASE_SECRET_KEY.")
+    if not storage_path or storage_path.startswith("/") or ".." in storage_path:
+        raise ValueError("Invalid storage path.")
+    nbytes = os.path.getsize(local_path)
+    timeout = _storage_timeout_seconds(nbytes)
+    prof = _active_upload_profile()
+    t0 = time.perf_counter()
+    try:
+        with open(local_path, "rb") as src:
+            resp = _storage_http_session().post(
+                _storage_object_url(bucket, storage_path),
+                data=src,
+                headers=_storage_auth_headers(
+                    {
+                        "Content-Type": content_type,
+                        "x-upsert": "true",
+                    }
+                ),
+                timeout=timeout,
+            )
+        resp.raise_for_status()
+        return nbytes
+    except requests.RequestException as e:
+        raise RuntimeError(
+            f"Supabase Storage upload failed for {storage_path} in bucket {bucket} "
+            f"(timeout {timeout}s, {nbytes} bytes): {e!s}"
         ) from e
     finally:
         if prof:
@@ -2272,8 +2478,48 @@ def _cleanup_ocr_job_gcs(job: dict | None) -> None:
         print(f"[ocr-job] GCS cleanup failed for prefix {run_prefix}: {e}", file=sys.stderr, flush=True)
 
 
-def _mark_ocr_job_failed(file_id: str, user_id: str, job: dict | None, message: str) -> None:
-    """Mark files.status=failed and keep failure details in job_metadata."""
+def _refund_profile_pages(user_id: str, delta: int) -> tuple[bool, str | None, int | None]:
+    """Add delta back to profiles.pages_remaining (e.g. when OCR fails after a charge)."""
+    if delta <= 0:
+        cur, err = _get_profile_pages_remaining(user_id)
+        return (True, err, cur) if cur is not None else (False, err or "No profile.", None)
+    cur, err = _get_profile_pages_remaining(user_id)
+    if cur is None:
+        return False, err or "No profile row found for this user.", None
+    new_v = cur + delta
+    try:
+        res = (
+            supabase_client.table("profiles")
+            .update({"pages_remaining": new_v})
+            .eq("id", user_id)
+            .eq("pages_remaining", cur)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            latest, latest_err = _get_profile_pages_remaining(user_id)
+            if latest is not None:
+                return False, latest_err or "Credit balance changed while refunding. Try again.", latest
+            return False, latest_err or "Credit balance changed while refunding. Try again.", None
+    except Exception as e:
+        print(f"[profiles] refund pages_remaining: {e}", file=sys.stderr, flush=True)
+        return False, str(e), cur
+    return True, None, new_v
+
+
+def _mark_ocr_job_failed(
+    file_id: str,
+    user_id: str,
+    job: dict | None,
+    message: str,
+    *,
+    refund_pages: int | None = None,
+) -> int | None:
+    """Mark files.status=failed, keep failure details in job_metadata, refund credits if charged.
+
+    Returns the user's new pages_remaining when a refund was applied, else None.
+    Pass refund_pages=0 to skip refunding (e.g. credits were never consumed).
+    """
     job = dict(job or {})
     now = _utc_now_iso()
     updates = {
@@ -2285,21 +2531,64 @@ def _mark_ocr_job_failed(file_id: str, user_id: str, job: dict | None, message: 
         "lease_expires": None,
         "updated_at": now,
     }
-    # Preserve the stage where failure occurred when available.
     if job.get("stage") and str(job.get("stage")).strip().lower() not in ("complete", "failed"):
         updates["stage"] = job.get("stage")
     else:
         updates["stage"] = "failed"
+
+    pages_remaining: int | None = None
     if not supabase_client:
-        return
+        return None
+
+    charge = 0
+    if refund_pages is not None:
+        charge = max(0, int(refund_pages))
+    else:
+        try:
+            sel = (
+                supabase_client.table("files")
+                .select("credits_used")
+                .eq("id", str(file_id))
+                .eq("user_id", str(user_id))
+                .in_("status", ["processing", "pending"])
+                .limit(1)
+                .execute()
+            )
+            rows = getattr(sel, "data", None) or []
+            if rows:
+                charge = max(0, int(rows[0].get("credits_used") or 0))
+        except Exception as e:
+            print(f"[ocr-job] could not read credits for refund {file_id}: {e}", file=sys.stderr, flush=True)
+
     try:
+        fail_res = (
+            supabase_client.table("files")
+            .update({"status": "failed", "credits_used": 0})
+            .eq("id", str(file_id))
+            .eq("user_id", str(user_id))
+            .in_("status", ["processing", "pending"])
+            .execute()
+        )
+        failed_rows = getattr(fail_res, "data", None) or []
+        if failed_rows and charge > 0:
+            ok, err, pages_remaining = _refund_profile_pages(user_id, charge)
+            if not ok:
+                print(
+                    f"[ocr-job] credit refund failed for {file_id} ({charge} pages): {err}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[ocr-job] refunded {charge} credit(s) to user {user_id} for failed file {file_id}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         merge_job_metadata(file_id, updates)
-        supabase_client.table("files").update({"status": "failed"}).eq("id", str(file_id)).eq(
-            "user_id", str(user_id)
-        ).execute()
     except Exception as e:
         print(f"[ocr-job] failed to mark failed for {file_id}: {e}", file=sys.stderr, flush=True)
     _cleanup_ocr_job_gcs(job)
+    return pages_remaining
 
 
 def _mark_ocr_job_completed(
@@ -2585,7 +2874,7 @@ def _ocr_status_payload(row: dict) -> dict:
     total_pages = int(job.get("total_pages") or row.get("credits_used") or 0)
     label = _OCR_STAGE_LABELS.get(stage) or stage.replace("_", " ").title()
     percent = _ocr_progress_percent(job, status=status_out)
-    return {
+    payload = {
         "file_id": row.get("id"),
         "job_id": row.get("id"),
         "status": status_out,
@@ -2599,6 +2888,13 @@ def _ocr_status_payload(row: dict) -> dict:
         "updated_at": job.get("updated_at"),
         "operation_name": job.get("operation_name"),
     }
+    if status_out == "failed":
+        owner_id = str(row.get("user_id") or "").strip()
+        if owner_id:
+            pr, _pr_err = _get_profile_pages_remaining(owner_id)
+            if pr is not None:
+                payload["pages_remaining"] = pr
+    return payload
 
 
 def run_ocr_on_file_bytes(content: bytes, filename: str, save_callback=None) -> dict:
@@ -2818,40 +3114,55 @@ def process_supabase_ocr():
     profile = _UploadProfile(profile_job_id)
     _set_active_upload_profile(profile)
     profile_finished = False
+    temp_paths: list[str] = []
+    pdf_for_gcs: str | None = None
     try:
+        fd, temp_path = tempfile.mkstemp(suffix=".upload")
+        os.close(fd)
+        temp_paths.append(temp_path)
+
         with profile.time_step("storage_download", file_path=file_path):
             try:
-                raw = download_from_gbucket(file_path)
+                nbytes = _storage_download_to_file(SUPABASE_STORAGE_BUCKET, file_path, temp_path)
             except Exception as e:
                 print(f"[process] Storage download failed: {e}", file=sys.stderr, flush=True)
                 return jsonify({"error": f"Could not download file from storage: {e!s}"}), 502
 
-        if not raw:
+        if not nbytes:
             return jsonify({"error": "Downloaded file was empty."}), 400
 
-        _log_mem("after_storage_download")
+        _log_mem("after_storage_download_to_file")
 
-        with profile.time_step("pdf_parse_page_count", bytes=len(raw)):
+        with profile.time_step("pdf_parse_page_count", bytes=nbytes):
             try:
-                doc_kind, doc_pages = _document_kind_and_page_count(raw)
+                doc_kind, doc_pages = _document_kind_and_page_count_from_path(temp_path)
             except ValueError as e:
                 return jsonify({"error": str(e)}), 400
 
         # Linearize PDFs ("fast web view") so the viewer can render page 1 from the first
         # ~few hundred KB instead of downloading the whole file. Client-uploaded originals
         # aren't linearized; re-upload the optimized copy in place. Best-effort.
+        pdf_for_gcs = temp_path
         if doc_kind == "pdf":
-            linearized = _linearize_pdf_bytes(raw)
-            if linearized is not raw and linearized != raw:
+            lin_path = _linearize_pdf_file(temp_path)
+            if lin_path != temp_path:
+                if lin_path not in temp_paths:
+                    temp_paths.append(lin_path)
+                pdf_for_gcs = lin_path
                 try:
-                    with profile.time_step("pdf_linearize_reupload", bytes=len(linearized)):
-                        _storage_upload(SUPABASE_STORAGE_BUCKET, file_path, linearized, "application/pdf")
-                    raw = linearized
+                    with profile.time_step(
+                        "pdf_linearize_reupload",
+                        bytes=os.path.getsize(lin_path),
+                    ):
+                        _storage_upload_file(
+                            SUPABASE_STORAGE_BUCKET, file_path, lin_path, "application/pdf"
+                        )
                 except Exception as e:
-                    print(f"[process] linearized re-upload failed (using original): {e}", file=sys.stderr, flush=True)
-            # Release the temporary linearized buffer so two full PDF copies aren't retained
-            # into the memory-heavy OCR stage (raw now holds whichever copy we keep).
-            del linearized
+                    print(
+                        f"[process] linearized re-upload failed (using original): {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
         page_charge = doc_pages if doc_kind == "pdf" else 1
 
@@ -2914,16 +3225,19 @@ def process_supabase_ocr():
         if not inserted_id:
             return jsonify({"error": "Inserted row has no id.", "error_type": "db_error"}), 500
 
-        def mark_file_failed(message: str) -> None:
-            try:
-                supabase_client.table("files").update({"status": "failed"}).eq("id", str(inserted_id)).eq("user_id", user_id).execute()
-            except Exception as status_e:
-                print(f"[process] failed to mark file failed ({message}): {status_e}", file=sys.stderr, flush=True)
+        def mark_file_failed(message: str, *, refund_pages: int | None = None) -> int | None:
+            return _mark_ocr_job_failed(
+                str(inserted_id),
+                user_id,
+                get_job_metadata(str(inserted_id)),
+                message,
+                refund_pages=refund_pages,
+            )
 
         with profile.time_step("db_consume_credits", pages=page_charge):
             ok_q, err_q, new_remaining = _consume_profile_pages(user_id, page_charge)
         if not ok_q:
-            mark_file_failed(err_q or "Could not update credit balance.")
+            mark_file_failed(err_q or "Could not update credit balance.", refund_pages=0)
             return jsonify(
                 {
                     "error": err_q or "Could not update credit balance.",
@@ -2939,9 +3253,13 @@ def process_supabase_ocr():
             if use_inline_json:
                 # Single page: keep the page data in memory so it can be stored inline on
                 # the row (1 page is tiny). No streaming needed.
+                with open(pdf_for_gcs or temp_path, "rb") as inline_src:
+                    inline_bytes = inline_src.read()
                 with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=True):
                     ocr_result = run_ocr_on_file_bytes(
-                        raw, file_name or os.path.basename(file_path), save_callback=None
+                        inline_bytes,
+                        file_name or os.path.basename(file_path),
+                        save_callback=None,
                     )
             else:
                 # Multi-page PDFs: start Vision async in-request, then finish in a background
@@ -2968,10 +3286,12 @@ def process_supabase_ocr():
                 )
 
                 with profile.time_step("ocr_vision_start", pages=doc_pages):
-                    job = _start_async_pdf_ocr_job(raw, doc_pages, progress_callback=None)
+                    job = _start_async_pdf_ocr_job(
+                        doc_pages,
+                        progress_callback=None,
+                        pdf_path=pdf_for_gcs or temp_path,
+                    )
 
-                # PDF bytes are in GCS now; free them before returning the HTTP response.
-                raw = None
                 gc.collect()
 
                 job["original_json_prefix"] = original_json_prefix
@@ -3034,18 +3354,15 @@ def process_supabase_ocr():
                     }
                 )
         except VisionConfigurationError as e:
-            try:
-                _mark_ocr_job_failed(
-                    inserted_id_str, user_id, get_job_metadata(inserted_id_str), e.user_message
-                )
-            except Exception:
-                mark_file_failed(e.user_message)
-            return jsonify_vision_configuration_error(e)
+            refunded = mark_file_failed(e.user_message)
+            resp, code = jsonify_vision_configuration_error(e)
+            if refunded is not None:
+                data = resp.get_json()
+                data["pages_remaining"] = refunded
+                return jsonify(data), code
+            return resp, code
         except EmptyPagesError as e:
-            try:
-                _mark_ocr_job_failed(inserted_id_str, user_id, get_job_metadata(inserted_id_str), str(e))
-            except Exception:
-                mark_file_failed(str(e))
+            refunded = mark_file_failed(str(e))
             # Streaming uploads may have already written some per-page JSONs before the
             # consecutive-empty check tripped. Remove the orphans (both prefixes, no-op if
             # absent) without ever masking the original EmptyPagesError.
@@ -3058,29 +3375,25 @@ def process_supabase_ocr():
                     file=sys.stderr,
                     flush=True,
                 )
-            return jsonify(
-                {
-                    "error": str(e),
-                    "error_type": "empty_pages",
-                    "start_page": e.start_page,
-                    "end_page": e.end_page,
-                    "file_id": str(inserted_id),
-                }
-            ), 500
+            err_body = {
+                "error": str(e),
+                "error_type": "empty_pages",
+                "start_page": e.start_page,
+                "end_page": e.end_page,
+                "file_id": str(inserted_id),
+            }
+            if refunded is not None:
+                err_body["pages_remaining"] = refunded
+            return jsonify(err_body), 500
         except Exception as e:
             print(f"[process] OCR failed: {e}", file=sys.stderr, flush=True)
-            try:
-                meta = get_job_metadata(inserted_id_str)
-                if meta is not None:
-                    _mark_ocr_job_failed(inserted_id_str, user_id, meta, str(e))
-                else:
-                    mark_file_failed(str(e))
-            except Exception:
-                mark_file_failed(str(e))
-            return jsonify({"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}), 500
+            refunded = mark_file_failed(str(e))
+            err_body = {"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}
+            if refunded is not None:
+                err_body["pages_remaining"] = refunded
+            return jsonify(err_body), 500
 
-        # The source PDF is no longer needed; release it before serializing DB updates.
-        raw = None
+        # Temp files are removed in finally; OCR no longer needs the on-disk PDF here.
 
         processing_duration_seconds = max(0, round(time.perf_counter() - profile.t0))
         if use_inline_json:
@@ -3121,7 +3434,8 @@ def process_supabase_ocr():
                     row = upd_rows
             except Exception as e:
                 print(f"[process] final files row update failed: {e}", file=sys.stderr, flush=True)
-                mark_file_failed(str(e))
+                # OCR succeeded; pages may already be in storage — do not refund credits.
+                mark_file_failed(str(e), refund_pages=0)
                 return jsonify({"error": f"Final database update failed: {e!s}", "error_type": "db_error", "file_id": str(inserted_id)}), 500
 
         profile.finish(
@@ -3147,6 +3461,7 @@ def process_supabase_ocr():
             }
         )
     finally:
+        _unlink_temp_files(temp_paths)
         if not profile_finished:
             profile.finish(status="incomplete")
         _set_active_upload_profile(None)
@@ -3497,6 +3812,23 @@ def _document_kind_and_page_count(file_bytes: bytes) -> tuple[str, int]:
         raise ValueError("File is not a PDF or a supported raster image.") from e
 
 
+def _document_kind_and_page_count_from_path(file_path: str) -> tuple[str, int]:
+    with open(file_path, "rb") as f:
+        head = f.read(4)
+    if head == b"%PDF":
+        doc = fitz.open(file_path)
+        try:
+            return "pdf", len(doc)
+        finally:
+            doc.close()
+    try:
+        with open(file_path, "rb") as f:
+            Image.open(f).load()
+        return "image", 1
+    except Exception as e:
+        raise ValueError("File is not a PDF or a supported raster image.") from e
+
+
 def _parse_profile_timestamp(val) -> datetime | None:
     """Parse profiles.last_reset (or similar) to timezone-aware UTC datetime."""
     if val is None:
@@ -3626,6 +3958,73 @@ _QPDF_BIN = shutil.which("qpdf")
 def _pdf_is_linearized(raw: bytes) -> bool:
     """A linearized ("fast web view") PDF declares /Linearized in its first object."""
     return b"/Linearized" in raw[:2048]
+
+
+def _pdf_is_linearized_path(file_path: str) -> bool:
+    with open(file_path, "rb") as f:
+        head = f.read(2048)
+    return b"/Linearized" in head
+
+
+def _linearize_pdf_file(in_path: str) -> str:
+    """Return a linearized PDF path, or in_path when linearization is skipped/failed."""
+    prof = _active_upload_profile()
+    t0 = time.perf_counter()
+    if not in_path or not os.path.isfile(in_path):
+        if prof:
+            prof.log_step("pdf_linearize", time.perf_counter() - t0, skipped="missing_input")
+        return in_path
+    with open(in_path, "rb") as f:
+        if f.read(4) != b"%PDF":
+            if prof:
+                prof.log_step("pdf_linearize", time.perf_counter() - t0, skipped="not_pdf")
+            return in_path
+    if _pdf_is_linearized_path(in_path):
+        if prof:
+            prof.log_step("pdf_linearize", time.perf_counter() - t0, skipped="already_linearized")
+        return in_path
+    if not _QPDF_BIN:
+        print("[linearize] qpdf not found on PATH; skipping linearization", file=sys.stderr, flush=True)
+        if prof:
+            prof.log_step("pdf_linearize", time.perf_counter() - t0, skipped="no_qpdf")
+        return in_path
+
+    out_path = in_path + ".lin.pdf"
+    try:
+        proc = subprocess.run(
+            [_QPDF_BIN, "--linearize", in_path, out_path],
+            capture_output=True,
+            timeout=120,
+        )
+        if proc.returncode not in (0, 3) or not os.path.exists(out_path):
+            print(
+                f"[linearize] qpdf failed (exit {proc.returncode}): "
+                f"{proc.stderr.decode('utf-8', 'replace')[:300]}",
+                file=sys.stderr,
+                flush=True,
+            )
+            if prof:
+                prof.log_step("pdf_linearize", time.perf_counter() - t0, result="failed")
+            return in_path
+        with open(out_path, "rb") as f:
+            if f.read(4) != b"%PDF":
+                if prof:
+                    prof.log_step("pdf_linearize", time.perf_counter() - t0, result="invalid_output")
+                return in_path
+        if prof:
+            prof.log_step(
+                "pdf_linearize",
+                time.perf_counter() - t0,
+                result="ok",
+                input_bytes=os.path.getsize(in_path),
+                output_bytes=os.path.getsize(out_path),
+            )
+        return out_path
+    except Exception as e:
+        print(f"[linearize] error: {e}", file=sys.stderr, flush=True)
+        if prof:
+            prof.log_step("pdf_linearize", time.perf_counter() - t0, result="error")
+        return in_path
 
 
 def _linearize_pdf_bytes(raw: bytes) -> bytes:

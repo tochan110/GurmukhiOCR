@@ -1744,8 +1744,29 @@
         .dash2-search-bar {
             margin-bottom: 0.5rem;
         }
+        .dash2-search-row {
+            display: flex;
+            align-items: stretch;
+            gap: 0.45rem;
+        }
+        .dash2-search-scope {
+            flex: 0 0 auto;
+            min-width: 7.25rem;
+            padding: 0.55rem 0.65rem;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.15);
+            color: var(--text);
+            font-size: 0.85rem;
+            font-family: inherit;
+        }
+        body.light-mode .dash2-search-scope {
+            background: #fff;
+        }
         .dash2-search-field {
             position: relative;
+            flex: 1 1 auto;
+            min-width: 0;
         }
         .dash2-search-input {
             width: 100%;
@@ -2609,17 +2630,27 @@
                                     </div>
                                 </div>
                                 <div class="dash2-search-bar">
-                                    <div class="dash2-search-field">
-                                        <input
-                                            type="text"
-                                            class="dash2-search-input"
-                                            id="dash2SearchInput"
-                                            placeholder="Search in OCR text…"
-                                            autocomplete="off"
-                                        />
-                                        <div class="dash2-search-loading" id="dash2SearchLoading" hidden role="status" aria-live="polite">
-                                            <span class="dash2-spinner dash2-spinner--sm" aria-hidden="true"></span>
-                                            <span>Searching…</span>
+                                    <div class="dash2-search-row">
+                                        <select
+                                            class="dash2-search-scope"
+                                            id="dash2SearchScope"
+                                            aria-label="Search scope"
+                                        >
+                                            <option value="page" selected>This page</option>
+                                            <option value="book">Whole book</option>
+                                        </select>
+                                        <div class="dash2-search-field">
+                                            <input
+                                                type="text"
+                                                class="dash2-search-input"
+                                                id="dash2SearchInput"
+                                                placeholder="Search this page…"
+                                                autocomplete="off"
+                                            />
+                                            <div class="dash2-search-loading" id="dash2SearchLoading" hidden role="status" aria-live="polite">
+                                                <span class="dash2-spinner dash2-spinner--sm" aria-hidden="true"></span>
+                                                <span>Searching…</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2932,6 +2963,44 @@
             return 'Complete';
         }
 
+        function ocrProgressLabel(ocrSt, status) {
+            if (!ocrSt || !isProcessingStatus(status)) return '';
+            var progressLabel = ocrSt.stage_label || fileStatusLabel(status);
+            if (
+                ocrSt.total_pages &&
+                (ocrSt.stage === 'processing_pages' || ocrSt.pages_done > 0)
+            ) {
+                progressLabel +=
+                    ' (' +
+                    String(ocrSt.pages_done || 0) +
+                    '/' +
+                    String(ocrSt.total_pages) +
+                    ')';
+            } else if (ocrSt.progress_percent != null && ocrSt.stage === 'waiting_vision') {
+                progressLabel += ' (' + String(ocrSt.progress_percent) + '%)';
+            }
+            return progressLabel;
+        }
+
+        function updateFileRowStatusBadge(rowEl, status, ocrSt) {
+            var badgesWrap = rowEl.querySelector('.dash2-file-row-badges');
+            if (!badgesWrap) return;
+            var progressLabel = ocrProgressLabel(ocrSt, status);
+            var badge = badgesWrap.querySelector('.dash2-file-status');
+            if (!isProcessingStatus(status) && status !== 'failed') {
+                if (badge) badge.remove();
+                return;
+            }
+            if (badge) {
+                badge.textContent =
+                    isProcessingStatus(status) && progressLabel
+                        ? progressLabel
+                        : fileStatusLabel(status);
+                return;
+            }
+            badgesWrap.insertAdjacentHTML('afterbegin', fileStatusBadgeHtml(status, progressLabel));
+        }
+
         function fileStatusBadgeHtml(status, progressLabel) {
             if (!isProcessingStatus(status) && status !== 'failed') return '';
             var badgeStatus = isProcessingStatus(status)
@@ -2984,7 +3053,7 @@
         function startOcrFilesPolling(listShell) {
             if (!listShell || listShell._ocrPollTimer) return;
             listShell._ocrPollTimer = window.setInterval(function () {
-                listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+                listShell.dispatchEvent(new CustomEvent('dash2-refresh-file-badges'));
             }, 4000);
         }
 
@@ -3058,7 +3127,12 @@
                                 var stJson = await stRes.json().catch(function () {
                                     return null;
                                 });
-                                if (stJson) ocrStatusById[fid] = stJson;
+                                if (stJson) {
+                                    ocrStatusById[fid] = stJson;
+                                    if (stJson.pages_remaining != null) {
+                                        setDash2PagesRemaining(stJson.pages_remaining);
+                                    }
+                                }
                             } catch (_stErr) {
                                 /* non-fatal */
                             }
@@ -3079,23 +3153,7 @@
                         var fid = row.id != null ? escapeHtml(String(row.id)) : '';
                         var status = normalizedFileStatus(row);
                         var ocrSt = row.id != null ? ocrStatusById[String(row.id)] : null;
-                        var progressLabel = '';
-                        if (ocrSt && isProcessingStatus(status)) {
-                            progressLabel = ocrSt.stage_label || fileStatusLabel(status);
-                            if (
-                                ocrSt.total_pages &&
-                                (ocrSt.stage === 'processing_pages' || ocrSt.pages_done > 0)
-                            ) {
-                                progressLabel +=
-                                    ' (' +
-                                    String(ocrSt.pages_done || 0) +
-                                    '/' +
-                                    String(ocrSt.total_pages) +
-                                    ')';
-                            } else if (ocrSt.progress_percent != null && ocrSt.stage === 'waiting_vision') {
-                                progressLabel += ' (' + String(ocrSt.progress_percent) + '%)';
-                            }
-                        }
+                        var progressLabel = ocrProgressLabel(ocrSt, status);
                         var selectable = !isProcessingStatus(status) && status !== 'failed';
                         var selectHtml =
                             '<label class="dash2-file-select-wrap" title="Select file">' +
@@ -3494,6 +3552,65 @@
                 refreshPagesRemainingDisplay();
             }
 
+            async function refreshOcrFileBadges() {
+                if (filesListSource !== 'mine' || !root || !listShell) return;
+                var processingRows = root.querySelectorAll(
+                    '.dash2-file-row[data-file-status="processing"], .dash2-file-row[data-file-status="pending"]'
+                );
+                if (!processingRows.length) {
+                    stopOcrFilesPolling(listShell);
+                    return;
+                }
+
+                var sessionRes = await supabase.auth.getSession();
+                var token =
+                    sessionRes.data &&
+                    sessionRes.data.session &&
+                    sessionRes.data.session.access_token;
+                if (!token) return;
+
+                var needsFullRefresh = false;
+                await Promise.all(
+                    Array.from(processingRows).map(function (rowEl) {
+                        return (async function () {
+                            var fid = rowEl.getAttribute('data-file-id');
+                            if (!fid) return;
+                            try {
+                                var stRes = await fetch('/api/ocr-status/' + encodeURIComponent(fid), {
+                                    headers: { Authorization: 'Bearer ' + token },
+                                    credentials: 'same-origin',
+                                });
+                                if (!stRes.ok) return;
+                                var stJson = await stRes.json().catch(function () {
+                                    return null;
+                                });
+                                if (!stJson) return;
+                                if (stJson.pages_remaining != null) {
+                                    setDash2PagesRemaining(stJson.pages_remaining);
+                                }
+                                var apiStatus = String(stJson.status || '').toLowerCase();
+                                if (
+                                    apiStatus === 'complete' ||
+                                    apiStatus === 'completed' ||
+                                    apiStatus === 'failed'
+                                ) {
+                                    needsFullRefresh = true;
+                                    return;
+                                }
+                                var rowStatus = rowEl.getAttribute('data-file-status') || 'processing';
+                                updateFileRowStatusBadge(rowEl, rowStatus, stJson);
+                            } catch (_badgeErr) {
+                                /* non-fatal */
+                            }
+                        })();
+                    })
+                );
+
+                if (needsFullRefresh) {
+                    refresh();
+                }
+            }
+
             if (tabMine) {
                 tabMine.addEventListener('click', function () {
                     setFilesListSource('mine');
@@ -3535,6 +3652,9 @@
             });
 
             listShell.addEventListener('dash2-refresh-files', refresh);
+            listShell.addEventListener('dash2-refresh-file-badges', function () {
+                void refreshOcrFileBadges();
+            });
 
             listShell.addEventListener('dash2-ownership-transferred', function () {
                 setFilesListSource('shared');
@@ -3547,6 +3667,7 @@
                 var pdfBox = document.getElementById('dash2PdfViewer');
                 var textEl = document.getElementById('dash2TextContent');
                 var searchInput = document.getElementById('dash2SearchInput');
+                var searchScopeSelect = document.getElementById('dash2SearchScope');
                 var searchLoading = document.getElementById('dash2SearchLoading');
                 var searchNav = document.getElementById('dash2SearchNav');
                 var matchInfo = document.getElementById('dash2MatchInfo');
@@ -3619,6 +3740,43 @@
                     if (mainEl) mainEl.scrollTop = 0;
                 }
 
+                function getSearchScope() {
+                    if (!searchScopeSelect) return 'page';
+                    return searchScopeSelect.value === 'book' ? 'book' : 'page';
+                }
+
+                function syncSearchScopeUi() {
+                    if (!searchScopeSelect || !searchInput) return;
+                    var scope = getSearchScope();
+                    var singlePage = totalPages <= 1;
+                    var bookOpt = searchScopeSelect.querySelector('option[value="book"]');
+                    if (bookOpt) {
+                        bookOpt.disabled = singlePage;
+                        bookOpt.hidden = singlePage;
+                    }
+                    if (singlePage && scope === 'book') {
+                        searchScopeSelect.value = 'page';
+                        scope = 'page';
+                    }
+                    searchInput.placeholder =
+                        scope === 'book' ? 'Search whole book…' : 'Search this page…';
+                }
+
+                function clearSearchState() {
+                    if (searchInput) searchInput.value = '';
+                    searchMatches = [];
+                    currentMatchIndex = -1;
+                    currentSearchTerm = '';
+                    searchLoadGen += 1;
+                    setSearchLoading(false);
+                    if (searchNav) searchNav.classList.remove('is-visible');
+                }
+
+                function resetSearchScope() {
+                    if (searchScopeSelect) searchScopeSelect.value = 'page';
+                    syncSearchScopeUi();
+                }
+
                 function teardownViewer() {
                     destroyPdfJsViewer();
                     originalLoadGen += 1;
@@ -3631,14 +3789,9 @@
                     totalPages = 0;
                     exportTxtBtn.style.display = 'none';
                     setActiveRow(null);
-                    searchInput.value = '';
-                    searchMatches = [];
-                    currentMatchIndex = -1;
-                    currentSearchTerm = '';
-                    searchLoadGen += 1;
-                    setSearchLoading(false);
+                    clearSearchState();
+                    resetSearchScope();
                     setFormatMenuOpen(false);
-                    searchNav.classList.remove('is-visible');
                     isEditMode = false;
                     textEl.contentEditable = 'false';
                     textEl.classList.remove('dash2-text-content--editable');
@@ -3647,7 +3800,7 @@
                     cancelBtn.style.display = 'none';
                     if (formatBtn) formatBtn.disabled = true;
                     if (revertBtn) revertBtn.disabled = true;
-                    searchInput.disabled = false;
+                    if (searchInput) searchInput.disabled = false;
                     if (saveOverlay) saveOverlay.hidden = true;
                     pdfBox.innerHTML = '<p class="dash2-empty">Select a file from the list.</p>';
                     textEl.textContent = 'Select a file from the list.';
@@ -4317,6 +4470,9 @@
                                 console.error('PDF page render failed:', err);
                             }
                         }
+                        if (getSearchScope() === 'page' && currentSearchTerm) {
+                            void runOcrSearch(currentSearchTerm);
+                        }
                     } finally {
                         pageSyncLock = false;
                     }
@@ -4623,12 +4779,7 @@
                     saveBtn.textContent = 'Save';
                     saveBtn.disabled = false;
                     if (scope === 'all') {
-                        searchInput.disabled = false;
-                        searchInput.value = '';
-                        searchMatches = [];
-                        currentMatchIndex = -1;
-                        currentSearchTerm = '';
-                        searchNav.classList.remove('is-visible');
+                        clearSearchState();
                     }
                     updateText(currentPage);
                     var saveJobs = [];
@@ -4803,20 +4954,34 @@
                     }
                 }
 
-                async function searchAllPages(term) {
+                function findMatchesOnPage(pageNum, text, term) {
+                    var matches = [];
+                    if (!text || !term) return matches;
+                    var rx = new RegExp(escapeRe(term), 'gi');
+                    var m;
+                    while ((m = rx.exec(text)) !== null) {
+                        matches.push({ page: pageNum, index: m.index, length: m[0].length });
+                    }
+                    return matches;
+                }
+
+                async function runOcrSearch(term) {
                     var gen = ++searchLoadGen;
-                    if (!fileId || !(term || '').trim()) {
-                        setSearchLoading(false);
-                        searchMatches = [];
-                        currentMatchIndex = -1;
-                        currentSearchTerm = '';
-                        searchNav.classList.remove('is-visible');
+                    var trimmed = (term || '').trim();
+                    if (!fileId || !trimmed) {
+                        clearSearchState();
+                        if (searchInput) searchInput.value = '';
                         updateText(currentPage);
                         return;
                     }
+                    var scope = getSearchScope();
                     setSearchLoading(true);
                     try {
-                        await ensureAllPagesLoaded(fileId);
+                        if (scope === 'book') {
+                            await ensureAllPagesLoaded(fileId);
+                        } else {
+                            await ensurePageLoaded(fileId, currentPage);
+                        }
                     } catch (e) {
                         if (gen === searchLoadGen) setSearchLoading(false);
                         alert(String((e && e.message) || e));
@@ -4824,18 +4989,20 @@
                     }
                     if (gen !== searchLoadGen) return;
                     setSearchLoading(false);
-                    currentSearchTerm = term.trim();
+                    currentSearchTerm = trimmed;
                     searchMatches = [];
-                    for (var p = 1; p <= totalPages; p++) {
-                        var pd = pageCache[p];
-                        if (!pd) continue;
-                        var t = pd.full_text || pd.text || '';
-                        if (!t) continue;
-                        var rx = new RegExp(escapeRe(currentSearchTerm), 'gi');
-                        var m;
-                        while ((m = rx.exec(t)) !== null) {
-                            searchMatches.push({ page: p, index: m.index, length: m[0].length });
+                    if (scope === 'book') {
+                        for (var p = 1; p <= totalPages; p++) {
+                            var pd = pageCache[p];
+                            if (!pd) continue;
+                            var t = pd.full_text || pd.text || '';
+                            if (!t) continue;
+                            searchMatches = searchMatches.concat(findMatchesOnPage(p, t, currentSearchTerm));
                         }
+                    } else {
+                        var pageData = pageCache[currentPage];
+                        var pageText = pageData ? pageData.full_text || pageData.text || '' : '';
+                        searchMatches = findMatchesOnPage(currentPage, pageText, currentSearchTerm);
                     }
                     if (searchMatches.length) {
                         currentMatchIndex = 0;
@@ -4917,12 +5084,8 @@
                         vTitle.textContent = nameEl ? nameEl.textContent : 'Document';
                         resetPageCacheState();
                         destroyPdfJsViewer();
-                        searchInput.value = '';
-                        searchMatches = [];
-                        currentMatchIndex = -1;
-                        currentSearchTerm = '';
-                        searchLoadGen += 1;
-                        setSearchLoading(false);
+                        clearSearchState();
+                        resetSearchScope();
                         setFormatMenuOpen(false);
                         searchNav.classList.remove('is-visible');
                         isEditMode = false;
@@ -4938,6 +5101,7 @@
                         fileAccess = meta.access || { role: 'owner', can_edit: true, is_owner: true };
                         totalPages = meta.page_count || 1;
                         currentPage = 1;
+                        syncSearchScopeUi();
                         applyFileAccessUI();
                         metadataCollaborators = await loadMetadataCollaborators(fid);
                         populateAssigneeOptions(metadataCollaborators);
@@ -5785,8 +5949,19 @@
                 }
 
                 searchInput.addEventListener('input', function (e) {
-                    void searchAllPages(e.target.value);
+                    void runOcrSearch(e.target.value);
                 });
+                if (searchScopeSelect) {
+                    searchScopeSelect.addEventListener('change', function () {
+                        syncSearchScopeUi();
+                        if (searchInput && searchInput.value.trim()) {
+                            void runOcrSearch(searchInput.value);
+                        } else {
+                            clearSearchState();
+                            updateText(currentPage);
+                        }
+                    });
+                }
                 searchInput.addEventListener('keydown', function (e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
