@@ -1114,6 +1114,36 @@
             color: var(--muted);
             line-height: 1.45;
         }
+        .dash2-upload-progress--checking {
+            margin-top: 1rem;
+            padding: 1.15rem 1.2rem;
+            border-color: rgba(107, 140, 255, 0.32);
+            background: rgba(107, 140, 255, 0.12);
+        }
+        body.light-mode .dash2-upload-progress--checking {
+            border-color: rgba(74, 108, 220, 0.28);
+            background: rgba(74, 108, 220, 0.1);
+        }
+        .dash2-upload-progress--checking .dash2-spinner {
+            width: 2.35rem;
+            height: 2.35rem;
+            border-width: 3px;
+            margin-top: 0.05rem;
+        }
+        .dash2-upload-progress--checking .dash2-upload-progress-main {
+            font-size: 1.08rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .dash2-upload-progress--checking .dash2-upload-progress-sub {
+            margin-top: 0.45rem;
+            font-size: 0.92rem;
+            color: var(--text);
+            opacity: 0.82;
+        }
+        .dash2-upload-progress--checking .dash2-upload-keep-open {
+            display: none;
+        }
         .dash2-import-form.is-busy {
             pointer-events: none;
             opacity: 0.45;
@@ -6094,14 +6124,20 @@
                 if (cameraInput) cameraInput.value = '';
             }
 
-            function setUploadProgress(active, mainText, subText) {
-                if (uploadProgress) uploadProgress.hidden = !active;
+            function setUploadProgress(active, mainText, subText, options) {
+                options = options || {};
+                if (uploadProgress) {
+                    uploadProgress.hidden = !active;
+                    uploadProgress.classList.toggle('dash2-upload-progress--checking', !!(active && options.checking));
+                }
                 if (uploadStatus) uploadStatus.hidden = !!active;
                 if (uploadProgressMain && mainText) uploadProgressMain.textContent = mainText;
                 if (uploadProgressSub) {
                     uploadProgressSub.textContent =
                         subText ||
-                        'Your file may take a few minutes to appear in My files.';
+                        (options.checking
+                            ? 'This only takes a moment.'
+                            : 'Your file may take a few minutes to appear in My files.');
                 }
             }
 
@@ -6176,7 +6212,12 @@
                 }
                 var accessToken = session.access_token;
                 uploadStatus.classList.remove('dash2-upload-status--error');
-                uploadStatus.textContent = 'Checking page count and available credits…';
+                setUploadProgress(
+                    true,
+                    'Checking page count and available credits…',
+                    'Reading your file to count pages and verify your credit balance.',
+                    { checking: true }
+                );
                 setUploadBusy(true);
                 var errors = [];
                 for (var i = 0; i < filesArr.length; i++) {
@@ -6227,11 +6268,13 @@
                         if (preflightJson.pages_remaining != null) {
                             setDash2PagesRemaining(preflightJson.pages_remaining);
                         }
+                        setUploadProgress(false);
                         showUploadConfirm(preflightJson, file);
                         uploadStatus.textContent = 'Confirm below to start OCR processing.';
                     }
                 }
                 setUploadBusy(false);
+                setUploadProgress(false);
                 resetUploadInputs();
                 if (errors.length) {
                     uploadStatus.innerHTML = errors.join(' · ');
