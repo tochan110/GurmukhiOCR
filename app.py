@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for, g, Response
+from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, Response
 from dotenv import load_dotenv
 from google.cloud import vision
 from google.oauth2 import service_account
@@ -309,10 +309,8 @@ def jsonify_vision_configuration_error(exc: VisionConfigurationError):
 # Directory structure
 UPLOADS_DIR = "uploads"
 BUNDLES_DIR = os.path.join(UPLOADS_DIR, "bundles")
-SESSION_CREDS_ROOT = os.path.join(UPLOADS_DIR, "session_credentials")
 
-# Session credential storage only; OCR results are not written under BUNDLES_DIR (client download only).
-os.makedirs(SESSION_CREDS_ROOT, exist_ok=True)
+# Legacy bundle dirs; OCR results are not written under BUNDLES_DIR (client download only).
 
 
 def _resolve_bundle_dir(bundle_id: str) -> str | None:
@@ -332,31 +330,11 @@ def _resolve_bundle_dir(bundle_id: str) -> str | None:
     return abs_path
 
 
-def _is_service_account_key(data):
-    return (
-        isinstance(data, dict)
-        and data.get("type") == "service_account"
-        and data.get("private_key")
-        and data.get("client_email")
-    )
-
-
-def _session_credential_path():
-    sid = session.get("cred_session_id")
-    if not sid:
-        return None
-    return os.path.join(SESSION_CREDS_ROOT, sid, "google-ocr-key.json")
-
-
 def _default_shared_ocr_key_path() -> str | None:
-    """Path to the server default Vision service account JSON (used when the user has not uploaded a key).
-
-    Set in environment (e.g. ``.env``):
+    """Path to the server Vision service account JSON from environment.
 
     - ``GURMUKHI_OCR_KEY_PATH`` — preferred; absolute path to the JSON file.
-    - ``GOOGLE_APPLICATION_CREDENTIALS`` — used only if the above is unset/invalid but this points to an existing file.
-
-    Session credentials from ``/setup-credentials`` always override when present.
+    - ``GOOGLE_APPLICATION_CREDENTIALS`` — fallback when the above is unset/invalid.
     """
     for env_name in ("GURMUKHI_OCR_KEY_PATH", "GOOGLE_APPLICATION_CREDENTIALS"):
         p = (os.environ.get(env_name) or "").strip()
@@ -365,38 +343,37 @@ def _default_shared_ocr_key_path() -> str | None:
     return None
 
 
-def _ensure_cred_session_id():
-    session.permanent = True
-    if "cred_session_id" not in session:
-        session["cred_session_id"] = str(uuid.uuid4())
-        session.modified = True
-
-
-def has_ocr_credentials():
-    sp = _session_credential_path()
-    if sp and os.path.isfile(sp):
-        return True
+def has_ocr_credentials() -> bool:
+    """True when a server-side Vision service account JSON is configured."""
     return _default_shared_ocr_key_path() is not None
 
 
-def get_credentials_file_path():
-    """Path to Vision service account JSON: session upload wins, else server default."""
-    sp = _session_credential_path()
-    if sp and os.path.isfile(sp):
-        return sp
-    return _default_shared_ocr_key_path()
-
-
-def get_vision_client():
-    """Build Vision client for the current request (cached on g)."""
-    if hasattr(g, "vision_client"):
-        return g.vision_client
-    path = get_credentials_file_path()
+def get_credentials_file_path() -> str:
+    """Path to the server Vision service account JSON (environment only)."""
+    path = _default_shared_ocr_key_path()
     if not path:
-        raise RuntimeError("No Google Cloud credentials configured (upload a key or set GURMUKHI_OCR_KEY_PATH).")
-    creds = service_account.Credentials.from_service_account_file(path)
-    g.vision_client = vision.ImageAnnotatorClient(credentials=creds)
-    return g.vision_client
+        raise RuntimeError(
+            "No Google Cloud credentials configured. Set GURMUKHI_OCR_KEY_PATH or "
+            "GOOGLE_APPLICATION_CREDENTIALS to a service account JSON file."
+        )
+    return path
+
+
+_ocr_vision_client_lock = threading.Lock()
+_ocr_vision_client_cache: tuple[str, vision.ImageAnnotatorClient] | None = None
+
+
+def get_vision_client() -> vision.ImageAnnotatorClient:
+    """Build or return a cached Vision client using the server environment key."""
+    global _ocr_vision_client_cache
+    path = get_credentials_file_path()
+    with _ocr_vision_client_lock:
+        if _ocr_vision_client_cache is not None and _ocr_vision_client_cache[0] == path:
+            return _ocr_vision_client_cache[1]
+        creds = service_account.Credentials.from_service_account_file(path)
+        client = vision.ImageAnnotatorClient(credentials=creds)
+        _ocr_vision_client_cache = (path, client)
+        return client
 
 
 # Vision accepts large images but very large rasters or malformed buffers cause INVALID_ARGUMENT / "bad image data".
@@ -955,8 +932,6 @@ def _vision_async_progress(progress_callback, completed: int, total: int, messag
 
 def _vision_async_clients():
     path = get_credentials_file_path()
-    if not path:
-        raise RuntimeError("No Google Cloud credentials configured (upload a key or set GURMUKHI_OCR_KEY_PATH).")
     from google.auth.transport.requests import AuthorizedSession
 
     creds = service_account.Credentials.from_service_account_file(
@@ -2667,15 +2642,7 @@ def require_google_ocr_key():
         return None
     if request.endpoint == "static":
         return None
-    if request.path == "/process" and request.method == "OPTIONS":
-        _ensure_cred_session_id()
-        return None
-    if request.path.startswith("/api/files/") or request.path.startswith("/api/me/") or request.path.startswith("/api/ocr-status/"):
-        _ensure_cred_session_id()
-        return None
     exempt = {
-        "setup_credentials",
-        "api_credentials",
         "api_auth_status",
         "landing",
         "login_page",
@@ -2687,9 +2654,7 @@ def require_google_ocr_key():
         "api_ocr_status",
     }
     if request.endpoint in exempt:
-        _ensure_cred_session_id()
         return None
-    _ensure_cred_session_id()
     if has_ocr_credentials():
         return None
     if (
@@ -2698,65 +2663,32 @@ def require_google_ocr_key():
         or request.is_json
     ):
         return jsonify(
-            {"error": "Google OCR service account key required.", "needs_credentials": True}
-        ), 401
+            {
+                "error": "Google OCR is not configured on the server.",
+                "error_type": "cloud_configuration",
+                "needs_credentials": False,
+            }
+        ), 503
     if request.method in ("GET", "HEAD"):
-        return redirect(url_for("setup_credentials"))
+        return redirect(url_for("landing"))
     return jsonify(
-        {"error": "Google OCR service account key required.", "needs_credentials": True}
-    ), 401
-
-
-@app.route("/setup-credentials", methods=["GET"])
-def setup_credentials():
-    _ensure_cred_session_id()
-    return render_template("setup_credentials.html")
+        {
+            "error": "Google OCR is not configured on the server.",
+            "error_type": "cloud_configuration",
+            "needs_credentials": False,
+        }
+    ), 503
 
 
 @app.route("/api/auth/status", methods=["GET"])
 def api_auth_status():
-    _ensure_cred_session_id()
-    return jsonify({"has_credentials": has_ocr_credentials()})
+    return jsonify({"has_credentials": has_ocr_credentials(), "source": "environment"})
 
 
-@app.route("/api/credentials", methods=["POST", "DELETE"])
-def api_credentials():
-    _ensure_cred_session_id()
-    if request.method == "DELETE":
-        path = _session_credential_path()
-        if path and os.path.isfile(path):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-        session.pop("has_uploaded_credentials", None)
-        session.modified = True
-        return jsonify({"success": True, "message": "Session credentials removed."})
-
-    raw = None
-    if request.files.get("file"):
-        raw = request.files["file"].read()
-    if raw is None:
-        body = request.get_json(silent=True) or {}
-        if isinstance(body.get("json"), str):
-            raw = body["json"].encode("utf-8")
-    if not raw:
-        return jsonify({"error": "Provide a JSON key file in the 'file' field, or JSON body with a 'json' string."}), 400
-    try:
-        data = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return jsonify({"error": "Invalid JSON."}), 400
-    if not _is_service_account_key(data):
-        return jsonify(
-            {"error": "Invalid Google service account key (expected type service_account with private_key and client_email)."}
-        ), 400
-    sess_dir = os.path.join(SESSION_CREDS_ROOT, session["cred_session_id"])
-    os.makedirs(sess_dir, exist_ok=True)
-    dest = os.path.join(sess_dir, "google-ocr-key.json")
-    with open(dest, "w", encoding="utf-8") as out:
-        json.dump(data, out, ensure_ascii=False, indent=2)
-    session.modified = True
-    return jsonify({"success": True, "message": "Credentials saved for this browser session."})
+@app.route("/setup-credentials", methods=["GET"])
+def setup_credentials_redirect():
+    """Legacy route: per-session OCR keys are no longer supported."""
+    return redirect(url_for("dashboard2_page"))
 
 
 @app.route("/", methods=["GET"])
