@@ -2932,18 +2932,22 @@
             return 'Complete';
         }
 
-        function fileStatusBadgeHtml(status) {
+        function fileStatusBadgeHtml(status, progressLabel) {
             if (!isProcessingStatus(status) && status !== 'failed') return '';
             var badgeStatus = isProcessingStatus(status)
                 ? status === 'pending'
                     ? 'pending'
                     : 'processing'
                 : 'failed';
+            var label = fileStatusLabel(status);
+            if (isProcessingStatus(status) && progressLabel) {
+                label = progressLabel;
+            }
             return (
                 '<span class="dash2-file-status dash2-file-status--' +
                 escapeHtml(badgeStatus) +
                 '">' +
-                escapeHtml(fileStatusLabel(status)) +
+                escapeHtml(label) +
                 '</span>'
             );
         }
@@ -2969,6 +2973,19 @@
 
         function setListShell(listShell, populated) {
             listShell.classList.toggle('dash2-files-list--populated', populated);
+        }
+
+        function stopOcrFilesPolling(listShell) {
+            if (!listShell || !listShell._ocrPollTimer) return;
+            window.clearInterval(listShell._ocrPollTimer);
+            listShell._ocrPollTimer = null;
+        }
+
+        function startOcrFilesPolling(listShell) {
+            if (!listShell || listShell._ocrPollTimer) return;
+            listShell._ocrPollTimer = window.setInterval(function () {
+                listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
+            }, 4000);
         }
 
         async function renderFilesInto(supabase, root, listShell) {
@@ -3009,7 +3026,48 @@
                 root.innerHTML =
                     '<div class="dash2-files-list-inner"><p class="dash2-empty">No files in your library yet. Uploads will appear here once they are saved to Supabase.</p></div>';
                 setListShell(listShell, false);
+                stopOcrFilesPolling(listShell);
                 return;
+            }
+
+            var processingIds = rows
+                .filter(function (row) {
+                    return isProcessingStatus(normalizedFileStatus(row));
+                })
+                .map(function (row) {
+                    return row.id != null ? String(row.id) : '';
+                })
+                .filter(Boolean);
+
+            var ocrStatusById = {};
+            if (processingIds.length) {
+                var sessionRes = await supabase.auth.getSession();
+                var token =
+                    sessionRes.data &&
+                    sessionRes.data.session &&
+                    sessionRes.data.session.access_token;
+                if (token) {
+                    await Promise.all(
+                        processingIds.map(async function (fid) {
+                            try {
+                                var stRes = await fetch('/api/ocr-status/' + encodeURIComponent(fid), {
+                                    headers: { Authorization: 'Bearer ' + token },
+                                    credentials: 'same-origin',
+                                });
+                                if (!stRes.ok) return;
+                                var stJson = await stRes.json().catch(function () {
+                                    return null;
+                                });
+                                if (stJson) ocrStatusById[fid] = stJson;
+                            } catch (_stErr) {
+                                /* non-fatal */
+                            }
+                        })
+                    );
+                }
+                startOcrFilesPolling(listShell);
+            } else {
+                stopOcrFilesPolling(listShell);
             }
 
             var html =
@@ -3020,6 +3078,24 @@
                         var meta = escapeHtml(fileMetaLine(row));
                         var fid = row.id != null ? escapeHtml(String(row.id)) : '';
                         var status = normalizedFileStatus(row);
+                        var ocrSt = row.id != null ? ocrStatusById[String(row.id)] : null;
+                        var progressLabel = '';
+                        if (ocrSt && isProcessingStatus(status)) {
+                            progressLabel = ocrSt.stage_label || fileStatusLabel(status);
+                            if (
+                                ocrSt.total_pages &&
+                                (ocrSt.stage === 'processing_pages' || ocrSt.pages_done > 0)
+                            ) {
+                                progressLabel +=
+                                    ' (' +
+                                    String(ocrSt.pages_done || 0) +
+                                    '/' +
+                                    String(ocrSt.total_pages) +
+                                    ')';
+                            } else if (ocrSt.progress_percent != null && ocrSt.stage === 'waiting_vision') {
+                                progressLabel += ' (' + String(ocrSt.progress_percent) + '%)';
+                            }
+                        }
                         var selectable = !isProcessingStatus(status) && status !== 'failed';
                         var selectHtml =
                             '<label class="dash2-file-select-wrap" title="Select file">' +
@@ -3044,7 +3120,7 @@
                             name +
                             '</div>' +
                             '<div class="dash2-file-row-badges">' +
-                            fileStatusBadgeHtml(status) +
+                            fileStatusBadgeHtml(status, progressLabel) +
                             fileRowOwnerActionsHtml(status) +
                             '</div>' +
                             '</div>' +
@@ -3340,8 +3416,47 @@
             var filesListSource = 'mine';
             var tabMine = document.getElementById('dash2FilesTabMine');
             var tabShared = document.getElementById('dash2FilesTabShared');
+            var suppressDash2LocationSync = false;
+            var dash2OpenFileById = null;
 
-            function setFilesListSource(source) {
+            function parseDash2Location() {
+                var raw = String(window.location.hash || '').replace(/^#/, '').trim();
+                if (!raw) return { view: 'upload' };
+                var parts = raw.split('/').filter(Boolean);
+                var head = (parts[0] || '').toLowerCase();
+                if (head === 'upload') return { view: 'upload' };
+                if (head === 'files') {
+                    return {
+                        view: 'files',
+                        source: (parts[1] || '').toLowerCase() === 'shared' ? 'shared' : 'mine',
+                    };
+                }
+                if (head === 'file' && parts[1]) {
+                    return { view: 'file', fileId: decodeURIComponent(parts[1]) };
+                }
+                return { view: 'upload' };
+            }
+
+            function dash2LocationHash(state) {
+                if (!state || state.view === 'upload') return '#upload';
+                if (state.view === 'file' && state.fileId) {
+                    return '#file/' + encodeURIComponent(String(state.fileId));
+                }
+                if (state.view === 'files' && state.source === 'shared') return '#files/shared';
+                return '#files';
+            }
+
+            function syncDash2Location(state, push) {
+                if (suppressDash2LocationSync) return;
+                var next = dash2LocationHash(state);
+                if (window.location.hash === next) return;
+                var url = window.location.pathname + window.location.search + next;
+                if (push) history.pushState({ dash2: true }, '', url);
+                else history.replaceState({ dash2: true }, '', url);
+            }
+
+            function setFilesListSource(source, opts) {
+                opts = opts || {};
                 filesListSource = source === 'shared' ? 'shared' : 'mine';
                 if (tabMine) {
                     tabMine.classList.toggle('is-active', filesListSource === 'mine');
@@ -3350,6 +3465,13 @@
                 if (tabShared) {
                     tabShared.classList.toggle('is-active', filesListSource === 'shared');
                     tabShared.setAttribute('aria-selected', filesListSource === 'shared' ? 'true' : 'false');
+                }
+                if (!opts.skipLocationSync) {
+                    var paneViewer = document.getElementById('dash2PaneViewer');
+                    var onViewer = !!(paneViewer && paneViewer.classList.contains('is-active'));
+                    if (!onViewer) {
+                        syncDash2Location({ view: 'files', source: filesListSource }, false);
+                    }
                 }
             }
 
@@ -3487,6 +3609,11 @@
                         if (mode === 'files') paneFiles.classList.add('is-active');
                         if (tabU) tabU.classList.toggle('is-active', mode === 'upload');
                         if (tabF) tabF.classList.toggle('is-active', mode === 'files');
+                        if (mode === 'upload') {
+                            syncDash2Location({ view: 'upload' }, false);
+                        } else if (mode === 'files') {
+                            syncDash2Location({ view: 'files', source: filesListSource }, false);
+                        }
                     }
                     var mainEl = document.querySelector('main.dash2-main');
                     if (mainEl) mainEl.scrollTop = 0;
@@ -4750,9 +4877,23 @@
                     ocrPageInfo.textContent = 'OCR page ' + currentPage + ' of ' + totalPages;
                 }
 
-                async function openFile(fid, li) {
+                async function openFile(fid, li, opts) {
+                    opts = opts || {};
                     try {
-                        if (!fid || !li) return;
+                        if (!fid) return;
+                        fid = String(fid).trim();
+                        if (!fid) return;
+                        if (!li && listRoot) {
+                            try {
+                                li = listRoot.querySelector(
+                                    '.dash2-file-row--selectable[data-file-id="' +
+                                        (window.CSS && CSS.escape ? CSS.escape(fid) : fid) +
+                                        '"]'
+                                );
+                            } catch (_selErr) {
+                                li = null;
+                            }
+                        }
                         exportTxtBtn.style.display = 'none';
                         if (copyBtn) {
                             if (copyBtnRevertTimer) {
@@ -4764,14 +4905,15 @@
                             if (_copyLab) _copyLab.textContent = 'Copy';
                         }
                         fileId = fid;
-                        setActiveRow(li);
+                        setActiveRow(li || null);
                         if (saveOverlay) saveOverlay.hidden = true;
                         applyWorkspaceMode('viewer');
+                        syncDash2Location({ view: 'file', fileId: fid }, !opts.fromLocation);
                         pdfBox.innerHTML = dash2LoadingBlock('Loading document…');
                         textEl.contentEditable = 'false';
                         textEl.classList.remove('dash2-text-content--editable');
                         textEl.innerHTML = dash2LoadingBlock('Loading OCR text…');
-                        var nameEl = li.querySelector('.dash2-file-name');
+                        var nameEl = li ? li.querySelector('.dash2-file-name') : null;
                         vTitle.textContent = nameEl ? nameEl.textContent : 'Document';
                         resetPageCacheState();
                         destroyPdfJsViewer();
@@ -4790,7 +4932,7 @@
                         searchInput.disabled = false;
 
                         var cacheVersion =
-                            (li.getAttribute('data-cache-version') || fid || '').trim() || fid;
+                            ((li && li.getAttribute('data-cache-version')) || fid || '').trim() || fid;
                         resetPageCacheState();
                         var meta = await fetchPageMeta(fid);
                         fileAccess = meta.access || { role: 'owner', can_edit: true, is_owner: true };
@@ -4799,6 +4941,9 @@
                         applyFileAccessUI();
                         metadataCollaborators = await loadMetadataCollaborators(fid);
                         populateAssigneeOptions(metadataCollaborators);
+                        if (!nameEl && meta.file_name) {
+                            vTitle.textContent = meta.file_name;
+                        }
 
                         // Render the OCR editor immediately from page 1 — do NOT wait for the
                         // PDF document to finish loading. Large / non-linearized PDFs can take a
@@ -4830,6 +4975,10 @@
                     teardownViewer();
                     applyWorkspaceMode('files');
                 }
+
+                dash2OpenFileById = function (fid, opts) {
+                    return openFile(fid, null, opts || {});
+                };
 
                 function enterEditMode() {
                     if (!fileId || !pageCache[currentPage]) return;
@@ -5696,6 +5845,44 @@
 
             initDash2FileViewer(supabase, root, listShell);
 
+            function restoreDash2LocationFromHash() {
+                var state = parseDash2Location();
+                suppressDash2LocationSync = true;
+                try {
+                    if (state.view === 'file' && state.fileId) {
+                        if (typeof dash2OpenFileById === 'function') {
+                            void dash2OpenFileById(state.fileId, { fromLocation: true });
+                        }
+                        return;
+                    }
+                    if (state.view === 'files') {
+                        setFilesListSource(state.source || 'mine', { skipLocationSync: true });
+                        refresh();
+                        var tabFiles = document.getElementById('dash2TabFiles');
+                        if (tabFiles) tabFiles.click();
+                        return;
+                    }
+                    var tabUpload = document.getElementById('dash2TabUpload');
+                    if (tabUpload) tabUpload.click();
+                } finally {
+                    suppressDash2LocationSync = false;
+                }
+            }
+
+            // Persist / restore workspace view across refresh via URL hash:
+            // #upload | #files | #files/shared | #file/<id>
+            if (!window.location.hash) {
+                syncDash2Location({ view: 'upload' }, false);
+            } else {
+                restoreDash2LocationFromHash();
+            }
+            window.addEventListener('hashchange', function () {
+                restoreDash2LocationFromHash();
+            });
+            window.addEventListener('popstate', function () {
+                restoreDash2LocationFromHash();
+            });
+
             function sanitizeForStoragePath(name) {
                 var base = (name && String(name).trim()) || 'upload.bin';
                 base = base.replace(/[/\\]/g, '_');
@@ -5907,8 +6094,8 @@
                     current.filePath = filePath;
                     setUploadProgress(
                         true,
-                        'Google OCR is processing your document…',
-                        'Large PDFs usually finish in a few minutes. Keep this window open until processing completes.'
+                        'Starting Google OCR…',
+                        'Large PDFs keep processing in the background after this step returns.'
                     );
                     var procPromise = fetch('/process', {
                         method: 'POST',
@@ -5947,8 +6134,13 @@
                     }
                     hideUploadConfirm();
                     setUploadProgress(false);
-                    uploadStatus.textContent =
-                        'Processing started. Your file may take a few minutes to appear in My files.';
+                    if (procJson.async || procJson.status === 'processing') {
+                        uploadStatus.textContent =
+                            'OCR is running in the background. Watch progress under My files — you can leave this page.';
+                        startOcrFilesPolling(listShell);
+                    } else {
+                        uploadStatus.textContent = 'Processing complete. Your file is ready in My files.';
+                    }
                     listShell.dispatchEvent(new CustomEvent('dash2-refresh-files'));
                 } catch (err) {
                     setUploadProgress(false);

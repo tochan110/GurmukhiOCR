@@ -66,6 +66,12 @@ _GCS_UPLOAD_URL = "https://storage.googleapis.com/upload/storage/v1"
 _GCS_RETRY_STATUSES = {408, 429, 500, 502, 503, 504}
 _GCS_MAX_ATTEMPTS = 3
 _VISION_OPERATION_MAX_ATTEMPTS = 3
+_OCR_LEASE_SECONDS = 120
+_ocr_bg_lock = threading.Lock()
+_ocr_bg_running: set[str] = set()
+_ocr_resume_lock = threading.Lock()
+_ocr_resume_started = False
+_OCR_WORKER_ID = f"pid{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 # Temporary upload-pipeline profiling (remove after bottleneck is identified).
 _PROFILE_TAG = "[profile:upload]"
@@ -1068,19 +1074,23 @@ def _vision_output_sort_key(object_name: str):
     return (start_page, end_page, object_name)
 
 
-def _validate_vision_output_sequence(object_names: list[str], total_pages: int) -> None:
-    expected_start = 1
+def _validate_vision_output_sequence(
+    object_names: list[str], total_pages: int, expected_start: int = 1
+) -> None:
+    """Validate Vision output batches cover expected_start..total_pages contiguously."""
+    cursor = int(expected_start)
     for object_name in object_names:
         start_page, end_page = _vision_output_page_range(object_name)
-        if start_page != expected_start:
+        if start_page != cursor:
             raise RuntimeError(
                 "Google Vision output batches are not contiguous: "
-                f"expected page {expected_start}, got {start_page}-{end_page} in {object_name}."
+                f"expected page {cursor}, got {start_page}-{end_page} in {object_name}."
             )
-        expected_start = end_page + 1
-    if expected_start != total_pages + 1:
+        cursor = end_page + 1
+    if cursor != total_pages + 1:
         raise RuntimeError(
-            f"Google Vision output batches covered pages 1-{expected_start - 1}, expected 1-{total_pages}."
+            f"Google Vision output batches covered pages {expected_start}-{cursor - 1}, "
+            f"expected {expected_start}-{total_pages}."
         )
 
 
@@ -1140,13 +1150,21 @@ def _update_streaming_empty_page_state(page_num: int, page_data: dict, state: di
 
 def _process_vision_async_output_file(
     local_json_path: str,
-    next_page_num: int,
+    batch_start_page: int,
     total_pages: int,
     result: dict,
     progress_callback,
     save_callback,
     empty_state: dict,
+    resume_from_page: int = 1,
 ) -> int:
+    """Convert one Vision output JSON into page saves.
+
+    ``batch_start_page`` is the first page covered by this file (from the filename).
+    Pages with number < ``resume_from_page`` are skipped (already uploaded) so mid-batch
+    resume does not re-upload or require a contiguous GCS object start.
+    Returns the next page number after the last response in this file.
+    """
     with open(local_json_path, "r", encoding="utf-8") as f:
         payload = json.load(f)
     responses = payload.get("responses")
@@ -1154,10 +1172,20 @@ def _process_vision_async_output_file(
         raise RuntimeError(f"Vision output file {local_json_path} did not contain a responses list.")
 
     stream = save_callback is not None
+    next_page_num = int(batch_start_page)
     for response_index, response_json in enumerate(responses):
         if not isinstance(response_json, dict):
             raise RuntimeError(f"Vision output file {local_json_path} contained an invalid response.")
-        page_num = next_page_num
+        page_num = int(batch_start_page) + response_index
+        next_page_num = page_num + 1
+        if page_num < int(resume_from_page):
+            responses[response_index] = None
+            del response_json
+            continue
+        if page_num > total_pages:
+            raise RuntimeError(
+                f"Vision output file {local_json_path} produced page {page_num}, expected at most {total_pages}."
+            )
         response = _vision_json_response_to_proto(response_json)
         page_data = _vision_response_to_page_data(response)
         try:
@@ -1174,19 +1202,72 @@ def _process_vision_async_output_file(
             del response
             responses[response_index] = None
             del response_json
-        next_page_num += 1
 
     del payload
     del responses
     return next_page_num
 
 
-def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callback=None, save_callback=None):
+def _vision_operation_name(operation) -> str:
+    wrapped = getattr(operation, "operation", None)
+    name = getattr(wrapped, "name", None) or getattr(operation, "name", None)
+    if not name:
+        raise RuntimeError("Google Vision did not return an operation name.")
+    return str(name)
+
+
+def _wait_for_named_vision_operation(vision_client, operation_name: str, timeout_seconds: int, on_poll=None):
+    """Poll a long-running Vision operation by resource name (supports resume after restart)."""
+    ops_client = vision_client.transport.operations_client
+    deadline = time.monotonic() + timeout_seconds
+    last_exc = None
+    while time.monotonic() < deadline:
+        if callable(on_poll):
+            try:
+                on_poll()
+            except Exception:
+                raise
+        try:
+            try:
+                op = ops_client.get_operation(operation_name)
+            except TypeError:
+                op = ops_client.get_operation(request={"name": operation_name})
+            if getattr(op, "done", False):
+                err = getattr(op, "error", None)
+                if err and getattr(err, "code", 0):
+                    raise RuntimeError(getattr(err, "message", None) or "Vision operation failed")
+                return op
+            last_exc = None
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_vision_operation_exception(exc):
+                print(
+                    f"[Vision Async OCR] operation poll error for {operation_name}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[Vision Async OCR] operation poll retry for {operation_name}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        time.sleep(5)
+    if last_exc:
+        raise TimeoutError(
+            f"Timed out waiting for Vision operation {operation_name}: {last_exc}"
+        ) from last_exc
+    raise TimeoutError(f"Timed out waiting for Vision operation {operation_name}")
+
+
+def _start_async_pdf_ocr_job(pdf_bytes, total_pages: int, progress_callback=None) -> dict:
+    """Upload PDF to GCS and submit Vision async OCR. Returns durable job metadata."""
     if not VISION_ASYNC_GCS_BUCKET:
         raise RuntimeError("VISION_ASYNC_GCS_BUCKET must be configured for async PDF OCR.")
 
     prof = _active_upload_profile()
-    result: dict = {}
     run_id = uuid.uuid4().hex
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_prefix = f"vision_async_pdf/{timestamp}-{run_id}/"
@@ -1194,7 +1275,6 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
     output_prefix = f"{run_prefix}output/"
     source_uri = f"gs://{VISION_ASYNC_GCS_BUCKET}/{input_object}"
     output_uri = f"gs://{VISION_ASYNC_GCS_BUCKET}/{output_prefix}"
-    local_paths: set[str] = set()
 
     _vision_async_progress(
         progress_callback,
@@ -1215,35 +1295,178 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
         _log_mem("vision_async_before_request")
         _vision_async_progress(progress_callback, 0, total_pages, "Starting Google Vision async OCR job…")
         operation = _submit_async_pdf_ocr(vision_client, source_uri, output_uri)
+        operation_name = _vision_operation_name(operation)
         if prof:
             prof.log_step("vision_async_submit", time.perf_counter() - t_submit)
 
+        return {
+            "status": "processing",
+            "operation_name": operation_name,
+            "gcs_bucket": VISION_ASYNC_GCS_BUCKET,
+            "gcs_input_object": input_object,
+            "gcs_output_prefix": output_prefix,
+            "run_prefix": run_prefix,
+            "source_uri": source_uri,
+            "output_uri": output_uri,
+            "stage": "waiting_vision",
+            "pages_done": 0,
+            "total_pages": int(total_pages),
+            "started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "error": None,
+            "lease_owner": None,
+            "lease_expires": None,
+            "retry_count": 0,
+        }
+    except Exception:
+        _best_effort_delete_gcs_prefix(storage_session, VISION_ASYNC_GCS_BUCKET, run_prefix)
+        raise
+
+
+def _validate_vision_output_covers(
+    object_names: list[str], total_pages: int, resume_from_page: int
+) -> None:
+    """Validate remaining Vision batches cover resume_from_page..total_pages.
+
+    The first batch may start before resume_from_page (mid-batch resume); later batches
+    must be contiguous through total_pages.
+    """
+    if not object_names:
+        raise RuntimeError("Google Vision async OCR produced no remaining JSON output batches.")
+    first_start, first_end = _vision_output_page_range(object_names[0])
+    if first_end < resume_from_page:
+        raise RuntimeError(
+            f"Google Vision output batches do not cover resume page {resume_from_page} "
+            f"(first remaining batch is {first_start}-{first_end})."
+        )
+    if first_start > resume_from_page:
+        raise RuntimeError(
+            f"Google Vision output has a gap before page {resume_from_page} "
+            f"(first remaining batch starts at {first_start})."
+        )
+    cursor = first_start
+    for object_name in object_names:
+        start_page, end_page = _vision_output_page_range(object_name)
+        if start_page != cursor:
+            raise RuntimeError(
+                "Google Vision output batches are not contiguous: "
+                f"expected page {cursor}, got {start_page}-{end_page} in {object_name}."
+            )
+        cursor = end_page + 1
+    if cursor != total_pages + 1:
+        raise RuntimeError(
+            f"Google Vision output batches covered through page {cursor - 1}, expected {total_pages}."
+        )
+
+
+def _finish_async_pdf_ocr_job(job: dict, progress_callback=None, save_callback=None) -> dict:
+    """Wait for a started Vision job, then stream page JSON through save_callback.
+
+    Supports resume: when job['pages_done'] > 0, already-finished pages are skipped
+    (including mid-batch), and processing continues from the next page. Never submits a
+    new Vision operation — always polls the existing operation_name.
+    """
+    bucket = (job.get("gcs_bucket") or VISION_ASYNC_GCS_BUCKET or "").strip()
+    output_prefix = (
+        (job.get("gcs_output_prefix") or job.get("output_prefix") or "").strip()
+    )
+    input_object = (job.get("gcs_input_object") or job.get("input_object") or "").strip()
+    run_prefix = (job.get("run_prefix") or "").strip()
+    if not run_prefix and input_object and "/input/" in input_object:
+        run_prefix = input_object.split("/input/", 1)[0].rstrip("/") + "/"
+    operation_name = (job.get("operation_name") or "").strip()
+    total_pages = int(job.get("total_pages") or 0)
+    pages_done = max(0, int(job.get("pages_done") or 0))
+    if not bucket or not output_prefix or not operation_name or total_pages < 1:
+        raise RuntimeError("Invalid OCR job metadata; cannot finish async PDF OCR.")
+
+    prof = _active_upload_profile()
+    result: dict = {}
+    local_paths: set[str] = set()
+    vision_client, storage_session = _vision_async_clients()
+    output_uri = job.get("output_uri") or f"gs://{bucket}/{output_prefix}"
+    finished_ok = False
+
+    def _set_stage(stage: str) -> None:
+        job["stage"] = stage
+        on_progress = job.get("_on_progress")
+        if callable(on_progress):
+            try:
+                on_progress(job)
+            except Exception as cb_exc:
+                print(
+                    f"[Vision Async OCR] progress callback failed: {cb_exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    def _renew_lease_or_raise() -> None:
+        on_renew = job.get("_on_lease_renew")
+        if callable(on_renew):
+            on_renew()
+
+    try:
+        if pages_done >= total_pages:
+            job["pages_done"] = total_pages
+            _set_stage("complete")
+            _vision_async_progress(progress_callback, total_pages, total_pages, "Finished async PDF OCR.")
+            finished_ok = True
+            return result
+
         t_ocr = time.perf_counter()
-        _vision_async_progress(progress_callback, 0, total_pages, "Waiting for Google OCR to complete…")
-        _wait_for_vision_operation(operation, _vision_async_timeout_seconds())
+        _set_stage("waiting_vision")
+        _vision_async_progress(
+            progress_callback, pages_done, total_pages, "Waiting for Google OCR to complete…"
+        )
+        _wait_for_named_vision_operation(
+            vision_client,
+            operation_name,
+            _vision_async_timeout_seconds(),
+            on_poll=_renew_lease_or_raise,
+        )
         _log_mem("vision_async_after_vision_complete")
         if prof:
             prof.log_step("vision_async_operation_wait", time.perf_counter() - t_ocr, pages=total_pages)
 
-        _vision_async_progress(progress_callback, 0, total_pages, "Downloading OCR results…")
-        output_objects = sorted(
-            [name for name in _gcs_list_objects(storage_session, VISION_ASYNC_GCS_BUCKET, output_prefix) if name.lower().endswith(".json")],
+        _set_stage("downloading")
+        _vision_async_progress(progress_callback, pages_done, total_pages, "Downloading OCR results…")
+        all_output_objects = sorted(
+            [
+                name
+                for name in _gcs_list_objects(storage_session, bucket, output_prefix)
+                if name.lower().endswith(".json")
+            ],
             key=_vision_output_sort_key,
         )
+        resume_from_page = pages_done + 1
+        # Keep any batch that still contains pages we need (supports mid-batch resume).
+        output_objects = [
+            name
+            for name in all_output_objects
+            if _vision_output_page_range(name)[1] >= resume_from_page
+        ]
         if not output_objects:
+            if pages_done >= total_pages:
+                _set_stage("complete")
+                finished_ok = True
+                return result
             raise RuntimeError(f"Google Vision async OCR produced no JSON output under {output_uri}.")
-        _validate_vision_output_sequence(output_objects, total_pages)
+        _validate_vision_output_covers(output_objects, total_pages, resume_from_page)
 
         empty_state = {"consecutive_empty_count": 0, "first_empty_page": None}
-        next_page_num = 1
+        next_page_num = resume_from_page
         with tempfile.TemporaryDirectory(prefix="vision_async_pdf_") as tmp_dir:
             total_batches = len(output_objects)
             for batch_index, object_name in enumerate(output_objects, start=1):
-                local_json_path = os.path.join(tmp_dir, object_name.rsplit("/", 1)[-1] or f"output_{next_page_num}.json")
+                batch_start_page, _batch_end_page = _vision_output_page_range(object_name)
+                local_json_path = os.path.join(
+                    tmp_dir, object_name.rsplit("/", 1)[-1] or f"output_{batch_start_page}.json"
+                )
                 local_paths.add(local_json_path)
                 try:
-                    batch_start_page = next_page_num
                     _log_mem(f"vision_async_before_download_batch_{batch_index}")
+                    _set_stage("downloading")
+                    _renew_lease_or_raise()
                     _vision_async_progress(
                         progress_callback,
                         max(0, next_page_num - 1),
@@ -1251,9 +1474,14 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
                         f"Downloading OCR results batch {batch_index} of {total_batches}…",
                     )
                     t_download = time.perf_counter()
-                    _gcs_download_object_to_file(storage_session, VISION_ASYNC_GCS_BUCKET, object_name, local_json_path)
+                    _gcs_download_object_to_file(storage_session, bucket, object_name, local_json_path)
                     if prof:
-                        prof.add("vision_async_json_download", time.perf_counter() - t_download, "vision_async_json_files")
+                        prof.add(
+                            "vision_async_json_download",
+                            time.perf_counter() - t_download,
+                            "vision_async_json_files",
+                        )
+                    _set_stage("processing_pages")
                     _vision_async_progress(
                         progress_callback,
                         max(0, next_page_num - 1),
@@ -1262,16 +1490,28 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
                     )
                     next_page_num = _process_vision_async_output_file(
                         local_json_path,
-                        next_page_num,
+                        batch_start_page,
                         total_pages,
                         result,
                         progress_callback,
                         save_callback,
                         empty_state,
+                        resume_from_page=resume_from_page,
                     )
+                    job["pages_done"] = next_page_num - 1
+                    resume_from_page = next_page_num
+                    if callable(job.get("_on_pages_done")):
+                        try:
+                            job["_on_pages_done"](next_page_num - 1, total_pages)
+                        except Exception as cb_exc:
+                            print(
+                                f"[Vision Async OCR] pages_done callback failed: {cb_exc}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
                     _log_mem(
                         f"vision_async_after_processing_batch_{batch_index} "
-                        f"pages={batch_start_page}-{next_page_num - 1}"
+                        f"pages_through={next_page_num - 1}"
                     )
                 finally:
                     try:
@@ -1279,7 +1519,7 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
                             os.remove(local_json_path)
                     finally:
                         local_paths.discard(local_json_path)
-                    _best_effort_delete_gcs_object(storage_session, VISION_ASYNC_GCS_BUCKET, object_name)
+                    _best_effort_delete_gcs_object(storage_session, bucket, object_name)
                     gc.collect()
                     _log_mem(f"vision_async_after_delete_batch_{batch_index}")
 
@@ -1289,8 +1529,11 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
                 f"Google Vision async OCR returned {processed_pages} page response(s), expected {total_pages}."
             )
 
+        job["pages_done"] = total_pages
+        _set_stage("complete")
         _vision_async_progress(progress_callback, total_pages, total_pages, "Finished async PDF OCR.")
         _log_mem("vision_async_complete")
+        finished_ok = True
         return result
     finally:
         for local_path in list(local_paths):
@@ -1299,9 +1542,18 @@ def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callb
                     os.remove(local_path)
             except OSError:
                 pass
-        _best_effort_delete_gcs_prefix(storage_session, VISION_ASYNC_GCS_BUCKET, run_prefix)
+        # Success: delete temp GCS prefix. Failure: leave it for resume; terminal
+        # failure cleanup is handled in _mark_ocr_job_failed / _cleanup_ocr_job_gcs.
+        if finished_ok and run_prefix:
+            _best_effort_delete_gcs_prefix(storage_session, bucket, run_prefix)
         gc.collect()
         _log_mem("vision_async_after_final_cleanup")
+
+
+def _extract_text_with_async_pdf_ocr(pdf_bytes, total_pages: int, progress_callback=None, save_callback=None):
+    """Synchronous wrapper used by legacy routes: start Vision job, then finish streaming."""
+    job = _start_async_pdf_ocr_job(pdf_bytes, total_pages, progress_callback=progress_callback)
+    return _finish_async_pdf_ocr_job(job, progress_callback=progress_callback, save_callback=save_callback)
 
 
 def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback=None):
@@ -1896,6 +2148,484 @@ def _download_json_dict_from_storage_path(storage_path: str) -> dict:
     return _parse_stored_json_bytes(raw, storage_path)
 
 
+_OCR_STAGE_LABELS = {
+    "queued": "Queued",
+    "uploading": "Uploading PDF",
+    "waiting_vision": "Google OCR running",
+    "downloading": "Downloading OCR results",
+    "processing_pages": "Processing pages",
+    "complete": "Complete",
+    "failed": "Failed",
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _public_job_metadata(metadata: dict | None) -> dict | None:
+    """Drop in-process-only keys (callbacks) before writing job_metadata."""
+    if metadata is None:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    return {k: v for k, v in metadata.items() if not str(k).startswith("_")}
+
+
+def get_job_metadata(file_id: str) -> dict | None:
+    """Read the files.job_metadata JSONB column for a file."""
+    if not supabase_client or not file_id:
+        return None
+    try:
+        res = (
+            supabase_client.table("files")
+            .select("job_metadata")
+            .eq("id", str(file_id))
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        print(f"[ocr-job] get_job_metadata failed for {file_id}: {e}", file=sys.stderr, flush=True)
+        return None
+    rows = getattr(res, "data", None) or []
+    if not rows:
+        return None
+    meta = _json_field_to_python(rows[0].get("job_metadata"))
+    return dict(meta) if isinstance(meta, dict) else None
+
+
+def update_job_metadata(file_id: str, metadata: dict | None) -> None:
+    """Replace files.job_metadata entirely (pass None to clear)."""
+    if not supabase_client or not file_id:
+        return
+    payload = _public_job_metadata(metadata) if metadata is not None else None
+    try:
+        supabase_client.table("files").update({"job_metadata": payload}).eq("id", str(file_id)).execute()
+    except Exception as e:
+        print(f"[ocr-job] update_job_metadata failed for {file_id}: {e}", file=sys.stderr, flush=True)
+        raise
+
+
+def clear_job_metadata(file_id: str) -> None:
+    """Set files.job_metadata to NULL."""
+    update_job_metadata(file_id, None)
+
+
+def merge_job_metadata(file_id: str, updates: dict) -> dict:
+    """Merge updates into existing job_metadata and persist. Always refreshes updated_at."""
+    current = get_job_metadata(file_id) or {}
+    merged = {**current, **(_public_job_metadata(updates) or {})}
+    merged["updated_at"] = _utc_now_iso()
+    update_job_metadata(file_id, merged)
+    return merged
+
+
+def _job_metadata_from_row(row: dict | None) -> dict | None:
+    if not isinstance(row, dict):
+        return None
+    meta = _json_field_to_python(row.get("job_metadata"))
+    return dict(meta) if isinstance(meta, dict) else None
+
+
+def _parse_iso_timestamp(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _contiguous_pages_done(page_nums: list[int]) -> int:
+    have = set(page_nums or [])
+    done = 0
+    while (done + 1) in have:
+        done += 1
+    return done
+
+
+def _ocr_progress_percent(job: dict, status: str | None = None) -> int:
+    stage = (job.get("stage") or "").strip().lower()
+    status_l = (status or job.get("status") or "").strip().lower()
+    if status_l in ("completed", "complete") or stage == "complete":
+        return 100
+    if status_l == "failed" or stage == "failed":
+        return 0
+    pages_done = max(0, int(job.get("pages_done") or 0))
+    total_pages = max(0, int(job.get("total_pages") or 0))
+    if stage in ("queued",):
+        return 2
+    if stage == "uploading":
+        return 8
+    if stage == "waiting_vision":
+        started = _parse_iso_timestamp(job.get("started_at"))
+        if started and total_pages > 0:
+            elapsed = max(0.0, (datetime.now(timezone.utc) - started).total_seconds())
+            expected = max(30.0, total_pages * 0.25)
+            return min(45, 10 + int(35 * min(1.0, elapsed / expected)))
+        return 20
+    if stage == "downloading":
+        return 50
+    if stage == "processing_pages" and total_pages > 0:
+        return min(99, 50 + int(50 * (pages_done / total_pages)))
+    if total_pages > 0 and pages_done > 0:
+        return min(99, int(100 * (pages_done / total_pages)))
+    return 5
+
+
+def _cleanup_ocr_job_gcs(job: dict | None) -> None:
+    """Best-effort delete of the temporary Vision GCS prefix for a job."""
+    if not isinstance(job, dict):
+        return
+    bucket = (job.get("gcs_bucket") or VISION_ASYNC_GCS_BUCKET or "").strip()
+    run_prefix = (job.get("run_prefix") or "").strip()
+    input_object = (job.get("gcs_input_object") or "").strip()
+    if not run_prefix and input_object and "/input/" in input_object:
+        run_prefix = input_object.split("/input/", 1)[0].rstrip("/") + "/"
+    if not bucket or not run_prefix:
+        return
+    try:
+        _vision_client, storage_session = _vision_async_clients()
+        _best_effort_delete_gcs_prefix(storage_session, bucket, run_prefix)
+    except Exception as e:
+        print(f"[ocr-job] GCS cleanup failed for prefix {run_prefix}: {e}", file=sys.stderr, flush=True)
+
+
+def _mark_ocr_job_failed(file_id: str, user_id: str, job: dict | None, message: str) -> None:
+    """Mark files.status=failed and keep failure details in job_metadata."""
+    job = dict(job or {})
+    now = _utc_now_iso()
+    updates = {
+        "status": "failed",
+        "error": (message or "OCR failed")[:2000],
+        "pages_done": int(job.get("pages_done") or 0),
+        "total_pages": int(job.get("total_pages") or 0),
+        "lease_owner": None,
+        "lease_expires": None,
+        "updated_at": now,
+    }
+    # Preserve the stage where failure occurred when available.
+    if job.get("stage") and str(job.get("stage")).strip().lower() not in ("complete", "failed"):
+        updates["stage"] = job.get("stage")
+    else:
+        updates["stage"] = "failed"
+    if not supabase_client:
+        return
+    try:
+        merge_job_metadata(file_id, updates)
+        supabase_client.table("files").update({"status": "failed"}).eq("id", str(file_id)).eq(
+            "user_id", str(user_id)
+        ).execute()
+    except Exception as e:
+        print(f"[ocr-job] failed to mark failed for {file_id}: {e}", file=sys.stderr, flush=True)
+    _cleanup_ocr_job_gcs(job)
+
+
+def _mark_ocr_job_completed(
+    file_id: str,
+    user_id: str,
+    *,
+    original_json_prefix: str,
+    total_pages: int,
+    processing_duration_seconds: int,
+    credits_used: int | None = None,
+) -> None:
+    if not supabase_client:
+        return
+    update_row = {
+        "status": "completed",
+        "job_metadata": None,
+        "original_json": None,
+        "original_json_path": original_json_prefix,
+        "editable_json_path": original_json_prefix,
+        "processing_duration_seconds": max(0, int(processing_duration_seconds)),
+    }
+    if credits_used is not None:
+        update_row["credits_used"] = int(credits_used)
+    try:
+        supabase_client.table("files").update(update_row).eq("id", str(file_id)).eq(
+            "user_id", str(user_id)
+        ).execute()
+    except Exception as e:
+        print(f"[ocr-job] failed to mark completed for {file_id}: {e}", file=sys.stderr, flush=True)
+        raise
+
+
+def _try_acquire_ocr_lease(file_id: str, job: dict | None = None, *, renew_only: bool = False) -> bool:
+    """Claim or renew the OCR job lease for this worker.
+
+    Returns False if another worker holds an unexpired lease. After writing, re-reads
+    job_metadata and confirms this worker still owns the lease (reduces dual-claim races).
+    """
+    now = datetime.now(timezone.utc)
+    meta = dict(job or get_job_metadata(file_id) or {})
+    owner = (meta.get("lease_owner") or "").strip()
+    expires = _parse_iso_timestamp(meta.get("lease_expires"))
+    if owner and owner != _OCR_WORKER_ID and expires and expires > now:
+        return False
+    if renew_only and owner and owner != _OCR_WORKER_ID:
+        return False
+    if renew_only and owner == _OCR_WORKER_ID and expires and expires > now:
+        # Still ours; extend.
+        pass
+    lease_expires = (now + timedelta(seconds=_OCR_LEASE_SECONDS)).isoformat().replace("+00:00", "Z")
+    if job is not None:
+        job["lease_owner"] = _OCR_WORKER_ID
+        job["lease_expires"] = lease_expires
+    try:
+        merge_job_metadata(
+            file_id,
+            {"lease_owner": _OCR_WORKER_ID, "lease_expires": lease_expires},
+        )
+        latest = get_job_metadata(file_id) or {}
+        if (latest.get("lease_owner") or "").strip() != _OCR_WORKER_ID:
+            return False
+    except Exception as e:
+        print(f"[ocr-job] lease acquire failed for {file_id}: {e}", file=sys.stderr, flush=True)
+        return False
+    return True
+
+
+class OcrLeaseLostError(RuntimeError):
+    """Raised when this worker no longer holds the OCR job lease."""
+
+
+def _run_background_ocr_finish(file_id: str, user_id: str, job: dict | None = None) -> None:
+    """Poll Vision, stream pages to storage, and finalize the files row."""
+    job = dict(job or get_job_metadata(file_id) or {})
+    total_pages = int(job.get("total_pages") or 0)
+    original_json_prefix = (
+        (job.get("original_json_prefix") or "").strip()
+        or _json_kind_prefix(user_id, file_id, "original")
+    )
+    job["original_json_prefix"] = original_json_prefix
+    started = _parse_iso_timestamp(job.get("started_at")) or datetime.now(timezone.utc)
+    t0 = time.perf_counter()
+
+    # Align pages_done with pages already uploaded (restart recovery).
+    try:
+        existing = _contiguous_pages_done(_page_numbers_from_prefix(original_json_prefix))
+        job["pages_done"] = max(int(job.get("pages_done") or 0), existing)
+    except Exception as e:
+        print(f"[ocr-job] could not list existing pages for {file_id}: {e}", file=sys.stderr, flush=True)
+
+    if total_pages > 0 and int(job.get("pages_done") or 0) >= total_pages:
+        duration = max(0, round((datetime.now(timezone.utc) - started).total_seconds()))
+        try:
+            _mark_ocr_job_completed(
+                file_id,
+                user_id,
+                original_json_prefix=original_json_prefix,
+                total_pages=total_pages,
+                processing_duration_seconds=duration,
+                credits_used=total_pages,
+            )
+        except Exception:
+            pass
+        return
+
+    if not _try_acquire_ocr_lease(file_id, job):
+        print(f"[ocr-job] skip {file_id}: leased by another worker", file=sys.stderr, flush=True)
+        return
+
+    last_persist_pages = [int(job.get("pages_done") or 0)]
+    last_stage = [job.get("stage")]
+
+    def _on_lease_renew() -> None:
+        # Renew while waiting on Vision / processing. If another worker holds the lease,
+        # abort so we do not double-process — do not mark the job failed.
+        if not _try_acquire_ocr_lease(file_id, job, renew_only=True):
+            raise OcrLeaseLostError("Lost OCR job lease to another worker")
+
+    def _on_progress(j: dict) -> None:
+        stage = j.get("stage")
+        pages_done = int(j.get("pages_done") or 0)
+        if stage != last_stage[0] or pages_done - last_persist_pages[0] >= 10:
+            last_stage[0] = stage
+            last_persist_pages[0] = pages_done
+            try:
+                merge_job_metadata(
+                    file_id,
+                    {
+                        "status": "processing",
+                        "stage": stage,
+                        "pages_done": pages_done,
+                    },
+                )
+            except Exception as e:
+                print(f"[ocr-job] progress merge failed for {file_id}: {e}", file=sys.stderr, flush=True)
+
+    def _on_pages_done(done: int, _total: int) -> None:
+        job["pages_done"] = int(done)
+        job["stage"] = "processing_pages"
+        last_persist_pages[0] = int(done)
+        last_stage[0] = "processing_pages"
+        try:
+            merge_job_metadata(
+                file_id,
+                {
+                    "status": "processing",
+                    "stage": "processing_pages",
+                    "pages_done": int(done),
+                },
+            )
+            _on_lease_renew()
+        except OcrLeaseLostError:
+            raise
+        except Exception as e:
+            print(f"[ocr-job] pages_done merge failed for {file_id}: {e}", file=sys.stderr, flush=True)
+            raise
+
+    job["_on_progress"] = _on_progress
+    job["_on_pages_done"] = _on_pages_done
+    job["_on_lease_renew"] = _on_lease_renew
+
+    def _save_original_page(page_num, page_data):
+        _upload_page_json(user_id, file_id, "original", page_num, page_data)
+
+    try:
+        _finish_async_pdf_ocr_job(job, progress_callback=None, save_callback=_save_original_page)
+        duration = max(
+            0,
+            round((datetime.now(timezone.utc) - started).total_seconds()),
+            round(time.perf_counter() - t0),
+        )
+        _mark_ocr_job_completed(
+            file_id,
+            user_id,
+            original_json_prefix=original_json_prefix,
+            total_pages=total_pages,
+            processing_duration_seconds=duration,
+            credits_used=total_pages,
+        )
+        print(
+            f"[ocr-job] completed file_id={file_id} pages={total_pages} duration_s={duration}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except OcrLeaseLostError as e:
+        print(f"[ocr-job] yielding file_id={file_id}: {e}", file=sys.stderr, flush=True)
+        return
+    except EmptyPagesError as e:
+        print(f"[ocr-job] empty pages for {file_id}: {e}", file=sys.stderr, flush=True)
+        try:
+            _delete_page_json_prefix(original_json_prefix)
+            _delete_page_json_prefix(_json_kind_prefix(user_id, file_id, "editable"))
+        except Exception as cleanup_e:
+            print(f"[ocr-job] orphan cleanup failed: {cleanup_e}", file=sys.stderr, flush=True)
+        _mark_ocr_job_failed(file_id, user_id, job, str(e))
+    except Exception as e:
+        print(f"[ocr-job] failed file_id={file_id}: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        _mark_ocr_job_failed(file_id, user_id, job, str(e))
+
+
+def _spawn_background_ocr_finish(file_id: str, user_id: str, job: dict | None = None) -> bool:
+    fid = str(file_id)
+    with _ocr_bg_lock:
+        if fid in _ocr_bg_running:
+            return False
+        _ocr_bg_running.add(fid)
+
+    def _run():
+        try:
+            _run_background_ocr_finish(fid, str(user_id), job)
+        finally:
+            with _ocr_bg_lock:
+                _ocr_bg_running.discard(fid)
+
+    threading.Thread(target=_run, name=f"ocr-finish-{fid[:8]}", daemon=True).start()
+    return True
+
+
+def _resume_orphaned_ocr_jobs() -> None:
+    """After deploy/restart, resume processing files that still have Vision job_metadata."""
+    if not supabase_client:
+        return
+    try:
+        res = (
+            supabase_client.table("files")
+            .select("id,user_id,job_metadata,status,original_json_path,credits_used")
+            .eq("status", "processing")
+            .execute()
+        )
+    except Exception as e:
+        print(f"[ocr-job] resume query failed: {e}", file=sys.stderr, flush=True)
+        return
+    rows = getattr(res, "data", None) or []
+    resumed = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        job = _job_metadata_from_row(row)
+        if not job or not (job.get("operation_name") or "").strip():
+            continue
+        job_status = (job.get("status") or "").strip().lower()
+        if job_status == "failed":
+            continue
+        file_id = str(row.get("id") or "")
+        user_id = str(row.get("user_id") or "")
+        if not file_id or not user_id:
+            continue
+        if not (job.get("original_json_prefix") or "").strip():
+            prefix = (row.get("original_json_path") or "").strip()
+            if prefix:
+                job["original_json_prefix"] = prefix
+        if not _try_acquire_ocr_lease(file_id, job):
+            continue
+        if _spawn_background_ocr_finish(file_id, user_id, job):
+            resumed += 1
+            print(f"[ocr-job] resumed file_id={file_id}", file=sys.stderr, flush=True)
+    if resumed:
+        print(f"[ocr-job] resumed {resumed} orphaned OCR job(s)", file=sys.stderr, flush=True)
+
+
+def _ocr_status_payload(row: dict) -> dict:
+    """Build OCR status API payload entirely from files.job_metadata (+ row status)."""
+    file_status = (row.get("status") or "").strip().lower() or "unknown"
+    job = _job_metadata_from_row(row) or {}
+    job_status = (job.get("status") or "").strip().lower()
+    stage = (job.get("stage") or "").strip().lower()
+
+    if file_status == "completed":
+        status_out = "complete"
+        stage = "complete"
+    elif file_status == "failed" or job_status == "failed":
+        status_out = "failed"
+        stage = stage or "failed"
+    else:
+        status_out = job_status or file_status
+        if status_out == "completed":
+            status_out = "complete"
+        if not stage:
+            stage = "queued" if status_out in ("processing", "pending") else status_out
+
+    pages_done = int(job.get("pages_done") or 0)
+    total_pages = int(job.get("total_pages") or row.get("credits_used") or 0)
+    label = _OCR_STAGE_LABELS.get(stage) or stage.replace("_", " ").title()
+    percent = _ocr_progress_percent(job, status=status_out)
+    return {
+        "file_id": row.get("id"),
+        "job_id": row.get("id"),
+        "status": status_out,
+        "stage": stage,
+        "stage_label": label,
+        "progress_percent": percent,
+        "pages_done": pages_done,
+        "total_pages": total_pages,
+        "error": job.get("error"),
+        "started_at": job.get("started_at"),
+        "updated_at": job.get("updated_at"),
+        "operation_name": job.get("operation_name"),
+    }
+
+
 def run_ocr_on_file_bytes(content: bytes, filename: str, save_callback=None) -> dict:
     """PDF → multi-page OCR; images → single page_1 (same Vision pipeline as /pdf-json)."""
     name_l = (filename or "").lower()
@@ -1922,6 +2652,17 @@ def run_ocr_on_file_bytes(content: bytes, filename: str, save_callback=None) -> 
 
 @app.before_request
 def require_google_ocr_key():
+    global _ocr_resume_started
+    # Once per worker process: resume any OCR jobs left processing after a restart.
+    if not _ocr_resume_started:
+        with _ocr_resume_lock:
+            if not _ocr_resume_started:
+                _ocr_resume_started = True
+                threading.Thread(
+                    target=_resume_orphaned_ocr_jobs,
+                    name="ocr-resume",
+                    daemon=True,
+                ).start()
     if request.endpoint is None:
         return None
     if request.endpoint == "static":
@@ -1929,7 +2670,7 @@ def require_google_ocr_key():
     if request.path == "/process" and request.method == "OPTIONS":
         _ensure_cred_session_id()
         return None
-    if request.path.startswith("/api/files/") or request.path.startswith("/api/me/"):
+    if request.path.startswith("/api/files/") or request.path.startswith("/api/me/") or request.path.startswith("/api/ocr-status/"):
         _ensure_cred_session_id()
         return None
     exempt = {
@@ -1943,6 +2684,7 @@ def require_google_ocr_key():
         "dashboard_legacy_redirect",
         "process_supabase_preflight",
         "process_supabase_preflight_upload",
+        "api_ocr_status",
     }
     if request.endpoint in exempt:
         _ensure_cred_session_id()
@@ -2270,22 +3012,108 @@ def process_supabase_ocr():
                         raw, file_name or os.path.basename(file_path), save_callback=None
                     )
             else:
-                def _save_original_page(page_num, page_data):
-                    _upload_page_json(user_id, inserted_id_str, "original", page_num, page_data)
+                # Multi-page PDFs: start Vision async in-request, then finish in a background
+                # thread so gunicorn can return before long OCR / page streaming completes.
+                started_at = _utc_now_iso()
+                update_job_metadata(
+                    inserted_id_str,
+                    {
+                        "status": "processing",
+                        "stage": "uploading",
+                        "pages_done": 0,
+                        "total_pages": int(doc_pages),
+                        "started_at": started_at,
+                        "updated_at": started_at,
+                        "error": None,
+                        "operation_name": None,
+                        "gcs_input_object": None,
+                        "gcs_output_prefix": None,
+                        "lease_owner": None,
+                        "lease_expires": None,
+                        "retry_count": 0,
+                        "original_json_prefix": original_json_prefix,
+                    },
+                )
 
-                # Multi-page PDF OCR now receives Vision JSON batches quickly, so save each
-                # page synchronously to avoid retaining page payloads in an upload backlog.
-                with profile.time_step("ocr_pipeline", pages=doc_pages, inline_json=False):
-                    run_ocr_on_file_bytes(
-                        raw,
-                        file_name or os.path.basename(file_path),
-                        save_callback=_save_original_page,
-                    )
+                with profile.time_step("ocr_vision_start", pages=doc_pages):
+                    job = _start_async_pdf_ocr_job(raw, doc_pages, progress_callback=None)
+
+                # PDF bytes are in GCS now; free them before returning the HTTP response.
+                raw = None
+                gc.collect()
+
+                job["original_json_prefix"] = original_json_prefix
+                job["status"] = "processing"
+                job["stage"] = "waiting_vision"
+                if not job.get("started_at"):
+                    job["started_at"] = started_at
+                merge_job_metadata(
+                    inserted_id_str,
+                    {
+                        "status": "processing",
+                        "stage": "waiting_vision",
+                        "operation_name": job.get("operation_name"),
+                        "gcs_bucket": job.get("gcs_bucket"),
+                        "gcs_input_object": job.get("gcs_input_object"),
+                        "gcs_output_prefix": job.get("gcs_output_prefix"),
+                        "run_prefix": job.get("run_prefix"),
+                        "source_uri": job.get("source_uri"),
+                        "output_uri": job.get("output_uri"),
+                        "pages_done": 0,
+                        "total_pages": int(doc_pages),
+                        "started_at": job.get("started_at") or started_at,
+                        "error": None,
+                        "original_json_prefix": original_json_prefix,
+                        "retry_count": int(job.get("retry_count") or 0),
+                    },
+                )
+                _spawn_background_ocr_finish(inserted_id_str, user_id, job)
+
+                profile.finish(
+                    file_path=file_path,
+                    page_count=doc_pages,
+                    json_storage="per-page",
+                    doc_kind=doc_kind,
+                    async_ocr=True,
+                )
+                profile_finished = True
+                return jsonify(
+                    {
+                        "success": True,
+                        "async": True,
+                        "file_id": inserted_id_str,
+                        "job_id": inserted_id_str,
+                        "file_path": file_path,
+                        "page_count": doc_pages,
+                        "status": "processing",
+                        "stage": "waiting_vision",
+                        "stage_label": _OCR_STAGE_LABELS["waiting_vision"],
+                        "pages_remaining": new_remaining,
+                        "pages_charged": page_charge,
+                        "credits_used": page_charge,
+                        "json_storage": "per-page",
+                        "profile_job_id": profile_job_id,
+                        "row": {
+                            "id": inserted_id_str,
+                            "status": "processing",
+                            "file_name": file_name or os.path.basename(file_path),
+                            "credits_used": page_charge,
+                        },
+                    }
+                )
         except VisionConfigurationError as e:
-            mark_file_failed(e.user_message)
+            try:
+                _mark_ocr_job_failed(
+                    inserted_id_str, user_id, get_job_metadata(inserted_id_str), e.user_message
+                )
+            except Exception:
+                mark_file_failed(e.user_message)
             return jsonify_vision_configuration_error(e)
         except EmptyPagesError as e:
-            mark_file_failed(str(e))
+            try:
+                _mark_ocr_job_failed(inserted_id_str, user_id, get_job_metadata(inserted_id_str), str(e))
+            except Exception:
+                mark_file_failed(str(e))
             # Streaming uploads may have already written some per-page JSONs before the
             # consecutive-empty check tripped. Remove the orphans (both prefixes, no-op if
             # absent) without ever masking the original EmptyPagesError.
@@ -2309,7 +3137,14 @@ def process_supabase_ocr():
             ), 500
         except Exception as e:
             print(f"[process] OCR failed: {e}", file=sys.stderr, flush=True)
-            mark_file_failed(str(e))
+            try:
+                meta = get_job_metadata(inserted_id_str)
+                if meta is not None:
+                    _mark_ocr_job_failed(inserted_id_str, user_id, meta, str(e))
+                else:
+                    mark_file_failed(str(e))
+            except Exception:
+                mark_file_failed(str(e))
             return jsonify({"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}), 500
 
         # The source PDF is no longer needed; release it before serializing DB updates.
@@ -2370,6 +3205,8 @@ def process_supabase_ocr():
                 "file_path": file_path,
                 "page_count": page_count,
                 "row": row,
+                "file_id": str(inserted_id),
+                "status": "completed",
                 "pages_remaining": new_remaining,
                 "pages_charged": page_charge,
                 "credits_used": page_charge,
@@ -2381,6 +3218,24 @@ def process_supabase_ocr():
         if not profile_finished:
             profile.finish(status="incomplete")
         _set_active_upload_profile(None)
+
+
+@app.route("/api/ocr-status/<uuid:file_id>", methods=["GET"])
+def api_ocr_status(file_id):
+    """Poll background OCR progress for a file the caller can access."""
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing Authorization bearer token."}), 401
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired session token."}), 401
+    if not supabase_client:
+        return jsonify({"error": "Supabase is not configured on the server."}), 503
+
+    access = _file_access_for_user(str(file_id), user_id)
+    if not access or not access.row:
+        return jsonify({"error": "File not found."}), 404
+    return jsonify(_ocr_status_payload(access.row))
 
 
 @app.route("/api/process/preflight", methods=["POST"])

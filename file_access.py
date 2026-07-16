@@ -13,7 +13,7 @@ from typing import Any
 
 FILE_SELECT = (
     "id,user_id,original_file_path,file_name,original_json,edited_json,"
-    "original_json_path,editable_json_path,credits_used,status"
+    "original_json_path,editable_json_path,credits_used,status,job_metadata"
 )
 
 _VALID_PERMISSIONS = frozenset({"view", "edit"})
