@@ -4340,6 +4340,55 @@ def api_files_import_bundle():
     )
 
 
+@app.route("/api/files/<uuid:file_id>/name", methods=["PATCH"])
+def api_file_rename(file_id):
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing Authorization bearer token."}), 401
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired token."}), 401
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 400
+
+    access = _file_access_for_user(str(file_id), user_id)
+    if not access:
+        return jsonify({"error": "File not found."}), 404
+    if not access.is_owner:
+        return jsonify({"error": "Only the file owner can rename this file."}), 403
+
+    body = request.get_json(silent=True) or {}
+    file_name = str(body.get("file_name") or "").strip()
+    if not file_name:
+        return jsonify({"error": "File name cannot be empty."}), 400
+    if len(file_name) > 255:
+        return jsonify({"error": "File name must be 255 characters or fewer."}), 400
+    if any(ord(ch) < 32 for ch in file_name):
+        return jsonify({"error": "File name contains unsupported characters."}), 400
+
+    old_name = str(access.row.get("file_name") or "").strip()
+    if old_name.lower().endswith(".pdf") and not file_name.lower().endswith(".pdf"):
+        return jsonify({"error": "PDF file names must keep the .pdf extension."}), 400
+    if file_name == old_name:
+        return jsonify({"success": True, "file_id": str(file_id), "file_name": file_name})
+
+    try:
+        result = (
+            supabase_client.table("files")
+            .update({"file_name": file_name})
+            .eq("id", str(file_id))
+            .eq("user_id", user_id)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            return jsonify({"error": "File could not be renamed."}), 409
+        return jsonify({"success": True, "file_id": str(file_id), "file_name": file_name})
+    except Exception as e:
+        print(f"[api/files/{file_id}/name] rename failed: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Could not rename the file."}), 500
+
+
 @app.route("/api/files/<uuid:file_id>/json/meta", methods=["GET"])
 def api_file_json_meta(file_id):
     try:
@@ -4365,6 +4414,7 @@ def api_file_json_meta(file_id):
         return jsonify(
             {
                 "file_id": str(file_id),
+                "file_name": row.get("file_name"),
                 "page_count": page_count,
                 "original_json_path": row.get("original_json_path"),
                 "editable_json_path": row.get("editable_json_path"),

@@ -690,6 +690,46 @@
             word-break: break-word;
             line-height: 1.35;
         }
+        .dash2-file-name-wrap,
+        .dash2-viewer-title-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            min-width: 0;
+        }
+        .dash2-file-name-wrap {
+            flex: 1;
+        }
+        .dash2-rename-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.65rem;
+            height: 1.65rem;
+            flex: 0 0 auto;
+            padding: 0;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+        }
+        .dash2-rename-btn:hover {
+            color: var(--text);
+            border-color: var(--stroke);
+            background: rgba(107, 140, 255, 0.1);
+        }
+        .dash2-rename-btn:disabled {
+            opacity: 0.45;
+            cursor: wait;
+        }
+        .dash2-rename-btn[hidden] {
+            display: none !important;
+        }
+        .dash2-rename-btn svg {
+            width: 0.9rem;
+            height: 0.9rem;
+        }
         .dash2-file-title-row {
             display: flex;
             align-items: center;
@@ -2573,7 +2613,15 @@
                     <section class="dash2-viewer-wrap" id="dash2ViewerWrap">
                         <div class="dash2-viewer-head">
                             <div class="dash2-viewer-head-main">
-                                <h2 class="dash2-viewer-title" id="dash2ViewerTitle">Document</h2>
+                                <div class="dash2-viewer-title-wrap">
+                                    <h2 class="dash2-viewer-title" id="dash2ViewerTitle">Document</h2>
+                                    <button type="button" class="dash2-rename-btn" id="dash2ViewerRenameBtn" title="Rename file" aria-label="Rename file" hidden>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M12 20h9" />
+                                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                        </svg>
+                                    </button>
+                                </div>
                                 <span class="dash2-viewer-access-badge" id="dash2ViewerAccessBadge" hidden></span>
                             </div>
                             <div class="dash2-viewer-actions">
@@ -2804,6 +2852,25 @@
                     <li class="dash2-empty" style="max-width: none; margin: 0">Loading…</li>
                 </ul>
             </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="dash2RenameModal" role="dialog" aria-modal="true" aria-labelledby="dash2RenameModalTitle">
+        <div class="modal-dialog" style="max-width: 28rem">
+            <button type="button" class="modal-close" id="dash2RenameModalClose" aria-label="Close">&times;</button>
+            <h2 id="dash2RenameModalTitle">Rename file</h2>
+            <p class="modal-body">Enter a new name for this file. This changes the name shown throughout your library.</p>
+            <form class="dash2-share-form" id="dash2RenameForm">
+                <div class="dash2-share-field">
+                    <label for="dash2RenameInput">File name</label>
+                    <input type="text" id="dash2RenameInput" name="file_name" required maxlength="255" autocomplete="off" />
+                </div>
+                <p class="modal-body" id="dash2RenameConfirmText">Are you sure you want to change this file name?</p>
+                <div class="dash2-transfer-actions">
+                    <button type="submit" class="dash2-btn" id="dash2RenameSubmit">Rename file</button>
+                    <button type="button" class="dash2-btn dash2-btn--ghost" id="dash2RenameCancel">Cancel</button>
+                </div>
+            </form>
+            <p class="dash2-share-status" id="dash2RenameStatus" aria-live="polite"></p>
         </div>
     </div>
     <div class="modal-overlay" id="dash2TransferModal" role="dialog" aria-modal="true" aria-labelledby="dash2TransferModalTitle">
@@ -3204,9 +3271,15 @@
                             selectHtml +
                             '<div class="dash2-file-row-main">' +
                             '<div class="dash2-file-title-row">' +
-                            '<div class="dash2-file-name">' +
+                            '<div class="dash2-file-name-wrap"><div class="dash2-file-name">' +
                             name +
                             '</div>' +
+                            '<button type="button" class="dash2-rename-btn" data-file-action="rename" title="Rename file" aria-label="Rename ' +
+                            name +
+                            '">' +
+                            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                            '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>' +
+                            '</svg></button></div>' +
                             '<div class="dash2-file-row-badges">' +
                             fileStatusBadgeHtml(status, progressLabel) +
                             fileRowOwnerActionsHtml(status) +
@@ -3732,6 +3805,7 @@
                 var pageMetaStatus = document.getElementById('dash2PageMetaStatus');
                 var shareBtn = document.getElementById('dash2ShareBtn');
                 var transferBtn = document.getElementById('dash2TransferBtn');
+                var viewerRenameBtn = document.getElementById('dash2ViewerRenameBtn');
                 var accessBadge = document.getElementById('dash2ViewerAccessBadge');
                 var ocrSubtitle = document.getElementById('dash2OcrSubtitle');
                 if (!wrap || !pdfBox || !textEl || !listRoot || !exportTxtBtn || !ocrNav || !ocrPrev || !ocrNext || !ocrPageInfo)
@@ -3868,6 +3942,7 @@
                     if (revertBtn) revertBtn.disabled = !canEdit || isEditMode;
                     if (shareBtn) shareBtn.style.display = isOwner && fileId ? 'inline-block' : 'none';
                     if (transferBtn) transferBtn.style.display = isOwner && fileId ? 'inline-block' : 'none';
+                    if (viewerRenameBtn) viewerRenameBtn.hidden = !(isOwner && fileId);
                     if (accessBadge) {
                         if (fileAccess && fileAccess.role === 'view') {
                             accessBadge.hidden = false;
@@ -5234,6 +5309,163 @@
 
                 var fileListEventRoot = listShellForEvents && listShellForEvents.nodeType ? listShellForEvents : listRoot;
 
+                var renameModal = document.getElementById('dash2RenameModal');
+                var renameModalClose = document.getElementById('dash2RenameModalClose');
+                var renameForm = document.getElementById('dash2RenameForm');
+                var renameInput = document.getElementById('dash2RenameInput');
+                var renameSubmit = document.getElementById('dash2RenameSubmit');
+                var renameCancel = document.getElementById('dash2RenameCancel');
+                var renameStatus = document.getElementById('dash2RenameStatus');
+                var renameConfirmText = document.getElementById('dash2RenameConfirmText');
+                var renameTarget = null;
+
+                function setRenameStatus(message, isError) {
+                    if (!renameStatus) return;
+                    renameStatus.textContent = message || '';
+                    renameStatus.classList.toggle('dash2-share-status--error', !!isError);
+                    renameStatus.classList.remove('dash2-share-status--ok');
+                }
+
+                function closeRenameModal() {
+                    if (!renameModal) return;
+                    renameModal.classList.remove('is-open');
+                    document.body.style.overflow = '';
+                    renameTarget = null;
+                    setRenameStatus('', false);
+                }
+
+                function renameFile(fid, currentName, triggerBtn) {
+                    fid = String(fid || '').trim();
+                    currentName = String(currentName || '').trim();
+                    if (!fid || !renameModal || !renameInput) return;
+                    renameTarget = {
+                        fileId: fid,
+                        currentName: currentName,
+                        triggerBtn: triggerBtn || null,
+                    };
+                    renameInput.value = currentName;
+                    if (renameConfirmText) {
+                        renameConfirmText.textContent =
+                            'Are you sure you want to change the name of “' +
+                            currentName +
+                            '”?';
+                    }
+                    setRenameStatus('', false);
+                    renameModal.classList.add('is-open');
+                    document.body.style.overflow = 'hidden';
+                    window.setTimeout(function () {
+                        renameInput.focus();
+                        renameInput.select();
+                    }, 0);
+                }
+
+                async function submitRename() {
+                    if (!renameTarget || !renameInput) return;
+                    var target = renameTarget;
+                    var proposed = String(renameInput.value || '').trim();
+                    if (!proposed) {
+                        setRenameStatus('File name cannot be empty.', true);
+                        renameInput.focus();
+                        return;
+                    }
+                    if (proposed === target.currentName) {
+                        closeRenameModal();
+                        return;
+                    }
+                    if (renameSubmit) {
+                        renameSubmit.disabled = true;
+                        renameSubmit.textContent = 'Renaming…';
+                    }
+                    if (target.triggerBtn) target.triggerBtn.disabled = true;
+                    setRenameStatus('', false);
+                    try {
+                        var headers = await authHeaders();
+                        headers['Content-Type'] = 'application/json';
+                        var response = await fetch(
+                            '/api/files/' + encodeURIComponent(target.fileId) + '/name',
+                            {
+                                method: 'PATCH',
+                                headers: headers,
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ file_name: proposed }),
+                            }
+                        );
+                        var payload = await response.json().catch(function () {
+                            return {};
+                        });
+                        if (!response.ok) {
+                            throw new Error(payload.error || response.statusText || 'Rename failed.');
+                        }
+                        var savedName = payload.file_name || proposed;
+                        listRoot
+                            .querySelectorAll(
+                                '.dash2-file-row[data-file-id="' + target.fileId + '"]'
+                            )
+                            .forEach(function (row) {
+                                var nameEl = row.querySelector('.dash2-file-name');
+                                var renameBtn = row.querySelector('[data-file-action="rename"]');
+                                if (nameEl) nameEl.textContent = savedName;
+                                if (renameBtn) renameBtn.setAttribute('aria-label', 'Rename ' + savedName);
+                            });
+                        if (fileId === target.fileId && vTitle) vTitle.textContent = savedName;
+                        closeRenameModal();
+                    } catch (renameErr) {
+                        setRenameStatus(
+                            String((renameErr && renameErr.message) || renameErr),
+                            true
+                        );
+                    } finally {
+                        if (renameSubmit) {
+                            renameSubmit.disabled = false;
+                            renameSubmit.textContent = 'Rename file';
+                        }
+                        if (target.triggerBtn) target.triggerBtn.disabled = false;
+                    }
+                }
+
+                if (renameForm) {
+                    renameForm.addEventListener('submit', function (event) {
+                        event.preventDefault();
+                        void submitRename();
+                    });
+                }
+                if (renameInput) {
+                    renameInput.addEventListener('input', function () {
+                        if (!renameTarget || !renameConfirmText) return;
+                        var nextName = String(renameInput.value || '').trim();
+                        renameConfirmText.textContent = nextName
+                            ? 'Are you sure you want to change “' +
+                              renameTarget.currentName +
+                              '” to “' +
+                              nextName +
+                              '”?'
+                            : 'Enter a new file name to continue.';
+                    });
+                }
+                if (renameModalClose) renameModalClose.addEventListener('click', closeRenameModal);
+                if (renameCancel) renameCancel.addEventListener('click', closeRenameModal);
+                if (renameModal) {
+                    renameModal.addEventListener('click', function (event) {
+                        if (event.target === renameModal) closeRenameModal();
+                    });
+                }
+                document.addEventListener('keydown', function (event) {
+                    if (
+                        event.key === 'Escape' &&
+                        renameModal &&
+                        renameModal.classList.contains('is-open')
+                    ) {
+                        closeRenameModal();
+                    }
+                });
+
+                if (viewerRenameBtn) {
+                    viewerRenameBtn.addEventListener('click', function () {
+                        if (!fileId || !fileAccess || !fileAccess.is_owner) return;
+                        renameFile(fileId, vTitle ? vTitle.textContent : '', viewerRenameBtn);
+                    });
+                }
+
                 var selectShell =
                     listShellForEvents && listShellForEvents.classList ? listShellForEvents : listRoot;
                 var bulkShareBtn = document.getElementById('dash2BulkShare');
@@ -5346,6 +5578,10 @@
                         var action = actionBtn.getAttribute('data-file-action');
                         if (action === 'share') openShareModalForFile(fid.trim());
                         if (action === 'transfer') openTransferModalForFile(fid.trim());
+                        if (action === 'rename') {
+                            var nameEl = row.querySelector('.dash2-file-name');
+                            renameFile(fid.trim(), nameEl ? nameEl.textContent : '', actionBtn);
+                        }
                         return;
                     }
                     var li = ev.target.closest('.dash2-file-row--selectable');
