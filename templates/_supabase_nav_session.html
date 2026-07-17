@@ -42,15 +42,24 @@
                     sessionRes.data.session &&
                     sessionRes.data.session.access_token;
                 if (!token) return;
-                var r = await fetch('/api/profile', {
-                    headers: { Authorization: 'Bearer ' + token },
-                    credentials: 'same-origin',
-                });
-                var data = await r.json().catch(function () {
-                    return {};
-                });
-                if (!r.ok) {
-                    setProfileUsernameStatus(data.error || r.statusText, 'error');
+                var r = null;
+                var data = {};
+                for (var attempt = 0; attempt < 3; attempt++) {
+                    r = await fetch('/api/profile', {
+                        headers: { Authorization: 'Bearer ' + token },
+                        credentials: 'same-origin',
+                    });
+                    data = await r.json().catch(function () {
+                        return {};
+                    });
+                    if (r.ok && data.username) break;
+                    if (r.status !== 404) break;
+                    await new Promise(function (resolve) {
+                        setTimeout(resolve, 250 * (attempt + 1));
+                    });
+                }
+                if (!r || !r.ok) {
+                    setProfileUsernameStatus((data && data.error) || (r && r.statusText) || 'Could not load username', 'error');
                     return;
                 }
                 if (data.username) profileUsernameInput.value = data.username;

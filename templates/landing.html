@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GurmukhiOCR</title>
+    <title>{% if pricing_page %}Pricing — {% endif %}GurmukhiOCR</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -157,6 +157,7 @@
             transition: color 0.2s ease;
         }
         .top a:not(.nav-brand):hover { color: var(--text); }
+        .top a.nav-active { color: var(--text); }
         @media (max-width: 720px) {
             .top {
                 flex-direction: column;
@@ -575,9 +576,12 @@
         }
         .pricing-section {
             width: 100%;
-            max-width: 56rem;
+            max-width: 72rem;
             margin: 2.5rem auto 3.25rem;
             padding: 0 0.25rem;
+        }
+        .pricing-section--page {
+            margin-top: 1.25rem;
         }
         .pricing-section-head {
             text-align: center;
@@ -612,10 +616,10 @@
         }
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 1.25rem;
             align-items: stretch;
-            max-width: 44rem;
+            max-width: 68rem;
             margin: 0 auto;
         }
         .pricing-tier--hidden {
@@ -836,6 +840,9 @@
             background: rgba(107, 140, 255, 0.11);
             color: var(--text);
             text-decoration: none;
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
             transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
         }
         .page-pack-btn:hover {
@@ -888,6 +895,24 @@
         }
         body.light-mode .page-pack-action {
             color: #3d5ccc;
+        }
+        .page-pack-btn:disabled {
+            opacity: 0.62;
+            cursor: wait;
+            transform: none;
+        }
+        .pricing-checkout-status {
+            min-height: 1.35rem;
+            margin: 0.9rem 0 0;
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+        .pricing-checkout-status.is-error {
+            color: #f0a8a8;
+        }
+        body.light-mode .pricing-checkout-status.is-error {
+            color: #b83232;
         }
         .pricing-credit-note {
             max-width: 42rem;
@@ -964,6 +989,7 @@
             <span>GurmukhiOCR</span>
         </a>
         <nav class="top-nav" aria-label="Main">
+            <a href="/pricing"{% if pricing_page %} class="nav-active"{% endif %}>Pricing</a>
             <span class="nav-auth-guest" id="navAuthGuest">
                 <a href="/login">Log in</a>
                 <a href="/signup">Sign up</a>
@@ -980,6 +1006,7 @@
         </nav>
     </header>
     <main>
+        {% if not pricing_page %}
         <section class="hero-layout" aria-labelledby="hero-heading">
             <div class="hero-copy">
                 <h1 class="gurmukhi" id="hero-heading">
@@ -1078,68 +1105,52 @@
                 </li>
             </ol>
         </section>
+        {% endif %}
 
-        <section class="pricing-section" aria-labelledby="pricing-heading">
+        <section class="pricing-section{% if pricing_page %} pricing-section--page{% endif %}" aria-labelledby="pricing-heading">
             <div class="pricing-section-head">
                 <p class="pricing-section-kicker">Plans</p>
-                <h2 class="pricing-section-title" id="pricing-heading">Free to use</h2>
-                <p class="pricing-section-sub">Every month you can run OCR on up to <strong>20 credits</strong> at no charge. Need more? Contact us for larger custom volumes.</p>
+                <h2 class="pricing-section-title" id="pricing-heading">{% if pricing_page %}Pricing{% else %}Simple OCR credits{% endif %}</h2>
+                <p class="pricing-section-sub">
+                    Get <strong>{{ monthly_free_credit_allowance }} free credits every month</strong>,
+                    or buy a one-time credit pack. Paid credits never expire.
+                </p>
             </div>
             <div class="pricing-grid">
                 <article class="pricing-tier pricing-tier--free" aria-label="Free monthly allowance">
                     <p class="pricing-tier-label">Included monthly</p>
-                    <p class="pricing-tier-price"><span class="amt">Free</span><span class="per">20 pages or images per month</span></p>
+                    <p class="pricing-tier-price"><span class="amt">Free</span><span class="per">{{ monthly_free_credit_allowance }} pages or images per month</span></p>
                     <p class="pricing-tier-note">Use the full workflow on real documents—within your monthly allowance.</p>
                     <ul class="pricing-tier-list">
-                        <li><strong>20 pages or images</strong> free each calendar month</li>
+                        <li><strong>{{ monthly_free_credit_allowance }} pages or images</strong> free each month</li>
                         <li>Full OCR quality on supported files (Image or PDF)</li>
                         <li>Full capabilities of our side-by-side editor</li>
                         <li>Gurmukhi, English and all languages supported by Google Cloud Vision, detected automatically OCR'd</li>
                         <li>Compiled full text exported as .txt file</li>
-                        <!-- <li>Large PDFs: ZIP download with JSON + full text</li> -->
                     </ul>
                 </article>
-                
-                <!--
+
                 <article class="pricing-tier pricing-tier--paid" aria-label="Lifetime page packs">
                     <p class="pricing-tier-label">Buy once</p>
-                    <p class="pricing-tier-price"><span class="amt">Lifetime packs</span><span class="per">credits never expire</span></p>
+                    <p class="pricing-tier-price"><span class="amt">Credit packs</span><span class="per">paid credits never expire</span></p>
                     <p class="pricing-tier-note">No subscription. No expiration.</p>
                     <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account forever.</p>
                     <div class="page-pack-options" aria-label="Choose a page pack">
-                        <a class="page-pack-btn" href="/signup?pack=100">
+                        {% for package in pricing_packages %}
+                        <button class="page-pack-btn" type="button" data-stripe-price-id="{{ package.price_id }}">
                             <span class="page-pack-info">
-                                <span class="page-pack-pages">100 pages</span>
-                                <span class="page-pack-rate">5¢ / page</span>
+                                <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} credits</span>
+                                <span class="page-pack-rate">One-time purchase</span>
                             </span>
                             <span class="page-pack-price">
-                                <span class="page-pack-amount">$5</span>
-                                <span class="page-pack-action">Buy</span>
+                                <span class="page-pack-action">Buy →</span>
                             </span>
-                        </a>
-                        <a class="page-pack-btn" href="/signup?pack=500">
-                            <span class="page-pack-info">
-                                <span class="page-pack-pages">500 pages</span>
-                                <span class="page-pack-rate">3¢ / page</span>
-                            </span>
-                            <span class="page-pack-price">
-                                <span class="page-pack-amount">$15</span>
-                                <span class="page-pack-action">Buy</span>
-                            </span>
-                        </a>
-                        <a class="page-pack-btn" href="/signup?pack=1200">
-                            <span class="page-pack-info">
-                                <span class="page-pack-pages">1200 pages</span>
-                                <span class="page-pack-rate">~2.1¢ / page</span>
-                            </span>
-                            <span class="page-pack-price">
-                                <span class="page-pack-amount">$25</span>
-                                <span class="page-pack-action">Buy</span>
-                            </span>
-                        </a>
+                        </button>
+                        {% endfor %}
                     </div>
+                    <p class="pricing-checkout-status" id="pricingCheckoutStatus" aria-live="polite"></p>
                 </article>
-                -->
+
                 <article class="pricing-tier pricing-tier--volume" aria-label="Custom volume">
                     <p class="pricing-tier-label">Need more?</p>
                     <p class="pricing-tier-price"><span class="amt">Custom</span><span class="per">when you outgrow the monthly allowance</span></p>
@@ -1156,10 +1167,10 @@
             </div>
             <p class="pricing-credit-note">
                 * Pages / images: 1 image = 1 credit. 1 page from a PDF = 1 image = 1 credit.
-                Unused credits stay on your account forever.
+                Paid credits stay on your account forever.
             </p>
             <div class="pricing-cta">
-                <a class="btn btn-primary" href="/signup">Use for Free</a>
+                <a class="btn btn-primary" id="pricingFreeCta" href="/signup">Use for Free</a>
                 <p class="cta-microcopy">No credit card required.</p>
             </div>
         </section>
@@ -1230,6 +1241,123 @@
             });
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && overlay.classList.contains('is-open')) close();
+            });
+        })();
+    </script>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        (async function () {
+            var PENDING_PRICE_KEY = 'pendingStripePriceId';
+            var buttons = Array.from(document.querySelectorAll('[data-stripe-price-id]'));
+            var statusEl = document.getElementById('pricingCheckoutStatus');
+            var freeCta = document.getElementById('pricingFreeCta');
+            var cfgEl = document.getElementById('supabase-config');
+            if (!buttons.length || !cfgEl) return;
+
+            function setStatus(message, isError) {
+                if (!statusEl) return;
+                statusEl.textContent = message || '';
+                statusEl.classList.toggle('is-error', !!isError);
+            }
+
+            function setBusy(isBusy) {
+                buttons.forEach(function (btn) {
+                    btn.disabled = !!isBusy;
+                });
+            }
+
+            var cfg;
+            try {
+                cfg = JSON.parse(cfgEl.textContent);
+            } catch (_err) {
+                return;
+            }
+            var key = cfg.publishableKey || cfg.anonKey;
+            if (!cfg.url || !key) {
+                setStatus('Checkout is unavailable right now.', true);
+                return;
+            }
+
+            var supabase = createClient(cfg.url, key);
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('checkout') === 'cancelled') {
+                try {
+                    sessionStorage.removeItem(PENDING_PRICE_KEY);
+                } catch (_cancelClearErr) {}
+                setStatus('Checkout cancelled. Choose a pack when you are ready.');
+            }
+
+            async function startCheckout(priceId) {
+                if (!priceId) return;
+                setBusy(true);
+                setStatus('Starting secure checkout…');
+                try {
+                    var sessionRes = await supabase.auth.getSession();
+                    var session = sessionRes.data && sessionRes.data.session;
+                    if (!session || !session.access_token) {
+                        try {
+                            sessionStorage.setItem(PENDING_PRICE_KEY, priceId);
+                        } catch (_storageErr) {}
+                        window.location.href =
+                            '/login?next=' + encodeURIComponent('/pricing');
+                        return;
+                    }
+                    var res = await fetch('/api/stripe/create-checkout-session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + session.access_token,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ price_id: priceId }),
+                    });
+                    var data = await res.json().catch(function () {
+                        return {};
+                    });
+                    if (!res.ok) {
+                        throw new Error(
+                            data.error || res.statusText || 'Could not start checkout.'
+                        );
+                    }
+                    if (!data.checkout_url) {
+                        throw new Error('Checkout URL missing from server response.');
+                    }
+                    try {
+                        sessionStorage.removeItem(PENDING_PRICE_KEY);
+                    } catch (_clearErr) {}
+                    setStatus('Redirecting to Stripe…');
+                    window.location.href = data.checkout_url;
+                } catch (err) {
+                    setStatus(String((err && err.message) || err), true);
+                    setBusy(false);
+                }
+            }
+
+            try {
+                var sessionRes = await supabase.auth.getSession();
+                var session = sessionRes.data && sessionRes.data.session;
+                if (session && freeCta) {
+                    freeCta.setAttribute('href', '/dashboard2');
+                    freeCta.textContent = 'Open Dashboard';
+                }
+                if (session) {
+                    var pendingPriceId = '';
+                    try {
+                        pendingPriceId = sessionStorage.getItem(PENDING_PRICE_KEY) || '';
+                    } catch (_pendingErr) {}
+                    if (pendingPriceId) {
+                        await startCheckout(pendingPriceId);
+                        return;
+                    }
+                }
+            } catch (_sessionErr) {}
+
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var priceId = (btn.getAttribute('data-stripe-price-id') || '').trim();
+                    void startCheckout(priceId);
+                });
             });
         })();
     </script>

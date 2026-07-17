@@ -2493,9 +2493,9 @@
                             <span class="dash2-quota-label">Pages remaining</span>
                             <span class="dash2-quota-value" id="dash2PagesRemaining">—</span>
                         </div>
-                        <button type="button" class="dash2-quota-more" id="dash2QuotaContactNav">
-                            Need more pages? Contact us.
-                        </button>
+                        <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing">
+                            Buy more credits →
+                        </a>
                     </div>
                     <div class="dash2-subnav-inner" id="dash2SubnavBrowse">
                         <button type="button" class="dash2-subnav-tab is-active" data-dash2-tab="upload" id="dash2TabUpload">
@@ -2524,9 +2524,9 @@
                                     </span>
                                 </p>
                                 <p class="dash2-upload-quota-more-wrap">
-                                    <button type="button" class="dash2-quota-more" id="dash2QuotaContactUpload">
-                                        Need more pages? Contact us here.
-                                    </button>
+                                    <a class="dash2-quota-more" id="dash2QuotaContactUpload" href="/pricing">
+                                        Buy more credits →
+                                    </a>
                                 </p>
                             </div>
                             <label class="dash2-upload-label" id="dash2UploadLabel">
@@ -2910,24 +2910,12 @@
     <script>
         (function () {
             var overlay = document.getElementById('dash2HigherLimitsModal');
-            var navBtn = document.getElementById('dash2QuotaContactNav');
-            var uploadBtn = document.getElementById('dash2QuotaContactUpload');
             if (!overlay) return;
             var closeBtn = overlay.querySelector('.modal-close');
-            function open() {
-                overlay.classList.add('is-open');
-                document.body.style.overflow = 'hidden';
-                if (closeBtn) closeBtn.focus();
-            }
             function close() {
                 overlay.classList.remove('is-open');
                 document.body.style.overflow = '';
             }
-            function wireOpen(btn) {
-                if (btn) btn.addEventListener('click', open);
-            }
-            wireOpen(navBtn);
-            wireOpen(uploadBtn);
             if (closeBtn) closeBtn.addEventListener('click', close);
             overlay.addEventListener('click', function (e) {
                 if (e.target === overlay) close();
@@ -3654,6 +3642,28 @@
                 }
                 refreshPagesRemainingDisplay();
             }
+
+            (function handleCheckoutReturn() {
+                var params = new URLSearchParams(window.location.search);
+                if (params.get('checkout') !== 'success') return;
+                var statusEl = document.getElementById('dash2UploadStatus');
+                if (statusEl) {
+                    statusEl.hidden = false;
+                    statusEl.classList.remove('dash2-upload-status--error');
+                    statusEl.textContent =
+                        'Payment received. Paid credits will appear on your balance shortly—refresh if needed.';
+                }
+                void refreshPagesRemainingDisplay();
+                setTimeout(function () {
+                    void refreshPagesRemainingDisplay();
+                }, 2500);
+                if (window.history && window.history.replaceState) {
+                    var clean =
+                        window.location.pathname +
+                        (window.location.hash || '');
+                    window.history.replaceState({}, '', clean);
+                }
+            })();
 
             async function refreshOcrFileBadges() {
                 if (filesListSource !== 'mine' || !root || !listShell) return;
@@ -6610,10 +6620,7 @@
                     var btn = ev.target.closest('[data-dash2-open-credits]');
                     if (!btn) return;
                     ev.preventDefault();
-                    var contactBtn =
-                        document.getElementById('dash2QuotaContactUpload') ||
-                        document.getElementById('dash2QuotaContactNav');
-                    if (contactBtn) contactBtn.click();
+                    window.location.href = '/pricing';
                 });
             }
             if (uploadConfirmBtn) {

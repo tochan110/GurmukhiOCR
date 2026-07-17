@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+import time
 from typing import Any
 
 from file_access import auth_user_display
@@ -93,7 +94,8 @@ def lookup_user_id_by_username(supabase_client, username: str) -> str | None:
 
 
 def _base_username_from_email(email: str, user_id: str) -> str:
-    local = (email or "").split("@")[0].lower()
+    """Derive username from the email local-part (before @)."""
+    local = (email or "").split("@")[0].lower().strip()
     cleaned = re.sub(r"[^a-z0-9_.]", "", local).strip(".")
     if len(cleaned) < 3:
         fallback = re.sub(r"[^a-z0-9_.]", "", str(user_id).replace("-", ""))[:20]
@@ -103,21 +105,49 @@ def _base_username_from_email(email: str, user_id: str) -> str:
     return cleaned[:30]
 
 
+def _resolve_email_for_username(user_id: str, email: str | None) -> str | None:
+    cleaned = (email or "").strip() or None
+    if cleaned and "@" in cleaned:
+        return cleaned
+    try:
+        return (auth_user_display(str(user_id)).get("email") or "").strip() or None
+    except Exception as e:
+        print(f"[user_profiles] resolve email failed: {e}", file=sys.stderr, flush=True)
+        return None
+
+
 def ensure_profile_username(
     supabase_client, user_id: str, email: str | None = None
 ) -> str | None:
-    """Set profiles.username when empty; return username or None."""
+    """Set profiles.username from email local-part when empty; return username or None.
+
+    Retries briefly if the profiles row is not visible yet (common right after signup,
+    while a DB trigger inserts the row).
+    """
     if not supabase_client or not user_id:
         return None
-    row = get_profile_row(supabase_client, user_id)
+
+    row = None
+    for attempt in range(8):
+        row = get_profile_row(supabase_client, user_id)
+        if row:
+            break
+        time.sleep(0.15 if attempt < 4 else 0.35)
+
     if not row:
+        print(
+            f"[user_profiles] ensure username: no profile row for user_id={user_id}",
+            file=sys.stderr,
+            flush=True,
+        )
         return None
+
     existing = (row.get("username") or "").strip().lower()
     if existing:
         return existing
-    if not email:
-        email = auth_user_display(str(user_id)).get("email")
-    base = _base_username_from_email(email or "", str(user_id))
+
+    resolved_email = _resolve_email_for_username(str(user_id), email)
+    base = _base_username_from_email(resolved_email or "", str(user_id))
     candidate = base
     n = 2
     while is_username_taken(supabase_client, candidate, exclude_user_id=str(user_id)):
@@ -133,6 +163,18 @@ def ensure_profile_username(
     except Exception as e:
         print(f"[user_profiles] ensure username failed: {e}", file=sys.stderr, flush=True)
         return None
+
+    # Confirm write; another request may have won a race.
+    refreshed = get_profile_row(supabase_client, user_id)
+    saved = (refreshed.get("username") or "").strip().lower() if refreshed else ""
+    if saved:
+        return saved
+    print(
+        f"[user_profiles] ensure username: update did not persist for user_id={user_id} "
+        f"candidate={candidate}",
+        file=sys.stderr,
+        flush=True,
+    )
     return candidate
 
 
@@ -166,5 +208,6 @@ def profile_user_display(
     row = get_profile_row(supabase_client, user_id) if supabase_client else None
     username = (row.get("username") or "").strip().lower() if row else None
     if not username and ensure_if_missing and supabase_client:
-        username = ensure_profile_username(supabase_client, uid)
+        email = _resolve_email_for_username(uid, None)
+        username = ensure_profile_username(supabase_client, uid, email)
     return {"user_id": uid, "username": username or None}

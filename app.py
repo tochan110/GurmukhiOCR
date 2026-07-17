@@ -49,9 +49,29 @@ supabase_client = (
     create_client(supabase_url, supabase_secret_key) if supabase_url and supabase_secret_key else None
 )
 
-# Monthly page quota reset (profiles.last_reset + profiles.pages_remaining)
+# Dual credit model: free_pages_remaining (monthly) + paid_pages_remaining (never expire).
+# API still exposes pages_remaining = free + paid for frontend compatibility.
+# Deprecated DB column profiles.pages_remaining is not used internally.
 PROFILE_PAGES_MONTHLY_ALLOWANCE = 20
 PROFILE_PAGES_RESET_INTERVAL_DAYS = 30
+_CREDIT_BALANCE_SELECT = (
+    "free_pages_remaining, paid_pages_remaining, monthly_free_credit_allowance, last_reset"
+)
+_CREDIT_UPDATE_MAX_ATTEMPTS = 5
+
+# Stripe one-time Checkout: map each Price ID → credits granted.
+# This is the ONLY place credit pack sizes are defined (landing + /pricing render from it).
+PRICE_ID_TO_CREDITS = {
+    "price_1TuGJHRtZiy12tM4DFpU5YWF": 250,
+    "price_1TuGJHRtZiy12tM4r9Odrwh5": 1000,
+    "price_1TuGJHRtZiy12tM4LzJjQhfA": 8000,
+    "price_1TuGJHRtZiy12tM4OgjkuP7P": 32000,
+    "price_1TuGJHRtZiy12tM4xdc2Sjtc": 128000,
+}
+
+STRIPE_SECRET_KEY = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+STRIPE_WEBHOOK_SECRET = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
+
 SUPABASE_STORAGE_BUCKET = "gbucket"
 SUPABASE_JSON_BUCKET = (os.environ.get("SUPABASE_JSON_BUCKET") or SUPABASE_STORAGE_BUCKET).strip()
 VISION_ASYNC_GCS_BUCKET = (
@@ -2478,33 +2498,19 @@ def _cleanup_ocr_job_gcs(job: dict | None) -> None:
         print(f"[ocr-job] GCS cleanup failed for prefix {run_prefix}: {e}", file=sys.stderr, flush=True)
 
 
-def _refund_profile_pages(user_id: str, delta: int) -> tuple[bool, str | None, int | None]:
-    """Add delta back to profiles.pages_remaining (e.g. when OCR fails after a charge)."""
-    if delta <= 0:
-        cur, err = _get_profile_pages_remaining(user_id)
-        return (True, err, cur) if cur is not None else (False, err or "No profile.", None)
-    cur, err = _get_profile_pages_remaining(user_id)
-    if cur is None:
-        return False, err or "No profile row found for this user.", None
-    new_v = cur + delta
-    try:
-        res = (
-            supabase_client.table("profiles")
-            .update({"pages_remaining": new_v})
-            .eq("id", user_id)
-            .eq("pages_remaining", cur)
-            .execute()
-        )
-        rows = getattr(res, "data", None) or []
-        if not rows:
-            latest, latest_err = _get_profile_pages_remaining(user_id)
-            if latest is not None:
-                return False, latest_err or "Credit balance changed while refunding. Try again.", latest
-            return False, latest_err or "Credit balance changed while refunding. Try again.", None
-    except Exception as e:
-        print(f"[profiles] refund pages_remaining: {e}", file=sys.stderr, flush=True)
-        return False, str(e), cur
-    return True, None, new_v
+def _refund_profile_pages(
+    user_id: str,
+    delta: int,
+    *,
+    free_used: int | None = None,
+    paid_used: int | None = None,
+) -> tuple[bool, str | None, int | None]:
+    """Refund OCR credits. Prefer exact free/paid split when known; else restore free-first."""
+    ok, err, balance = refund_ocr_credits(
+        user_id, delta, free_used=free_used, paid_used=paid_used
+    )
+    total = balance.get("pages_remaining") if isinstance(balance, dict) else None
+    return ok, err, total
 
 
 def _mark_ocr_job_failed(
@@ -2517,7 +2523,7 @@ def _mark_ocr_job_failed(
 ) -> int | None:
     """Mark files.status=failed, keep failure details in job_metadata, refund credits if charged.
 
-    Returns the user's new pages_remaining when a refund was applied, else None.
+    Returns the user's new pages_remaining (free+paid) when a refund was applied, else None.
     Pass refund_pages=0 to skip refunding (e.g. credits were never consumed).
     """
     job = dict(job or {})
@@ -2560,6 +2566,17 @@ def _mark_ocr_job_failed(
         except Exception as e:
             print(f"[ocr-job] could not read credits for refund {file_id}: {e}", file=sys.stderr, flush=True)
 
+    free_used = job.get("credits_free_used")
+    paid_used = job.get("credits_paid_used")
+    try:
+        free_used = int(free_used) if free_used is not None else None
+    except (TypeError, ValueError):
+        free_used = None
+    try:
+        paid_used = int(paid_used) if paid_used is not None else None
+    except (TypeError, ValueError):
+        paid_used = None
+
     try:
         fail_res = (
             supabase_client.table("files")
@@ -2571,7 +2588,9 @@ def _mark_ocr_job_failed(
         )
         failed_rows = getattr(fail_res, "data", None) or []
         if failed_rows and charge > 0:
-            ok, err, pages_remaining = _refund_profile_pages(user_id, charge)
+            ok, err, pages_remaining = _refund_profile_pages(
+                user_id, charge, free_used=free_used, paid_used=paid_used
+            )
             if not ok:
                 print(
                     f"[ocr-job] credit refund failed for {file_id} ({charge} pages): {err}",
@@ -2891,9 +2910,9 @@ def _ocr_status_payload(row: dict) -> dict:
     if status_out == "failed":
         owner_id = str(row.get("user_id") or "").strip()
         if owner_id:
-            pr, _pr_err = _get_profile_pages_remaining(owner_id)
-            if pr is not None:
-                payload["pages_remaining"] = pr
+            balance, _pr_err = get_credit_balance(owner_id)
+            if balance is not None:
+                payload.update(_credits_api_fields(balance))
     return payload
 
 
@@ -2941,6 +2960,7 @@ def require_google_ocr_key():
     exempt = {
         "api_auth_status",
         "landing",
+        "pricing_page",
         "login_page",
         "signup_page",
         "dashboard2_page",
@@ -2948,6 +2968,8 @@ def require_google_ocr_key():
         "process_supabase_preflight",
         "process_supabase_preflight_upload",
         "api_ocr_status",
+        "api_stripe_create_checkout_session",
+        "api_stripe_webhook",
     }
     if request.endpoint in exempt:
         return None
@@ -2987,9 +3009,34 @@ def setup_credentials_redirect():
     return redirect(url_for("dashboard2_page"))
 
 
+def _public_pricing_context() -> dict:
+    return {
+        "pricing_packages": [
+            {"price_id": price_id, "credits": credits}
+            for price_id, credits in PRICE_ID_TO_CREDITS.items()
+        ],
+        "monthly_free_credit_allowance": PROFILE_PAGES_MONTHLY_ALLOWANCE,
+    }
+
+
 @app.route("/", methods=["GET"])
 def landing():
-    return render_template("landing.html", **supabase_browser_config)
+    return render_template(
+        "landing.html",
+        pricing_page=False,
+        **_public_pricing_context(),
+        **supabase_browser_config,
+    )
+
+
+@app.route("/pricing", methods=["GET"])
+def pricing_page():
+    return render_template(
+        "landing.html",
+        pricing_page=True,
+        **_public_pricing_context(),
+        **supabase_browser_config,
+    )
 
 
 @app.route("/login", methods=["GET"])
@@ -3014,25 +3061,121 @@ def dashboard2_page():
 
 @app.route("/api/me/pages", methods=["GET"])
 def api_me_pages():
-    """Return profiles.pages_remaining and when the monthly quota window resets."""
+    """Return credit balances. pages_remaining is free+paid for frontend compatibility."""
     token = _bearer_token_from_request()
     if not token:
         return jsonify({"error": "Missing Authorization bearer token."}), 401
     user_id = supabase_access_token_to_user_id(token)
     if not user_id:
         return jsonify({"error": "Invalid or expired token."}), 401
-    cur, err, anchor = _profile_pages_remaining_state(user_id)
-    if cur is None or anchor is None:
+    balance, err, anchor = _load_credit_balance(user_id)
+    if balance is None or anchor is None:
         return jsonify({"error": err or "No profile.", "pages_remaining": None}), 404
     next_reset = anchor + timedelta(days=PROFILE_PAGES_RESET_INTERVAL_DAYS)
     next_iso = next_reset.isoformat().replace("+00:00", "Z")
-    return jsonify(
-        {
-            "pages_remaining": cur,
-            "next_reset_at": next_iso,
-            "reset_interval_days": PROFILE_PAGES_RESET_INTERVAL_DAYS,
-        }
-    )
+    payload = _credits_api_fields(balance)
+    payload["next_reset_at"] = next_iso
+    payload["reset_interval_days"] = PROFILE_PAGES_RESET_INTERVAL_DAYS
+    return jsonify(payload)
+
+
+@app.route("/api/stripe/create-checkout-session", methods=["POST"])
+def api_stripe_create_checkout_session():
+    """Create a one-time Stripe Checkout Session for buying OCR credits."""
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing Authorization bearer token."}), 401
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired token."}), 401
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 400
+    if not STRIPE_SECRET_KEY:
+        return jsonify({"error": "Stripe is not configured on the server."}), 503
+
+    body = request.get_json(silent=True) or {}
+    price_id = str(body.get("price_id") or "").strip()
+    if not price_id or price_id not in PRICE_ID_TO_CREDITS:
+        return jsonify({"error": "Invalid price_id.", "error_type": "invalid_price"}), 400
+
+    credits = int(PRICE_ID_TO_CREDITS[price_id])
+    try:
+        stripe = _stripe_client()
+        success_url = url_for("dashboard2_page", _external=True) + "?checkout=success"
+        cancel_url = url_for("pricing_page", _external=True) + "?checkout=cancelled"
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            client_reference_id=str(user_id),
+            metadata={
+                "user_id": str(user_id),
+                "price_id": price_id,
+                "credits_granted": str(credits),
+            },
+        )
+        checkout_url = getattr(session, "url", None)
+        if not checkout_url:
+            return jsonify({"error": "Stripe did not return a checkout URL."}), 502
+        print(
+            f"[stripe] checkout created session_id={getattr(session, 'id', None)} "
+            f"user_id={user_id} price_id={price_id} credits={credits}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return jsonify({"checkout_url": checkout_url})
+    except Exception as e:
+        print(f"[stripe] create-checkout-session failed: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Could not create Stripe Checkout session."}), 500
+
+
+@app.route("/api/stripe/webhook", methods=["POST"])
+def api_stripe_webhook():
+    """Stripe webhook: grant paid credits on checkout.session.completed (idempotent)."""
+    if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+        return jsonify({"error": "Stripe webhook is not configured."}), 503
+
+    payload = request.get_data(cache=False, as_text=False)
+    sig_header = request.headers.get("Stripe-Signature") or ""
+    try:
+        stripe = _stripe_client()
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except ValueError as e:
+        print(f"[stripe] webhook invalid payload: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Invalid payload."}), 400
+    except Exception as e:
+        # Includes stripe.error.SignatureVerificationError
+        print(f"[stripe] webhook signature verification failed: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Invalid signature."}), 400
+
+    event_type = event.get("type") if isinstance(event, dict) else getattr(event, "type", None)
+    if event_type != "checkout.session.completed":
+        return jsonify({"received": True, "ignored": True}), 200
+
+    try:
+        data_object = event["data"]["object"] if isinstance(event, dict) else event.data.object
+        session_id = (
+            data_object.get("id")
+            if isinstance(data_object, dict)
+            else getattr(data_object, "id", None)
+        )
+        if not session_id:
+            return jsonify({"error": "Missing checkout session id."}), 400
+
+        # Re-fetch with line_items so we can resolve price_id reliably.
+        session_obj = stripe.checkout.Session.retrieve(
+            session_id,
+            expand=["line_items.data.price"],
+        )
+        ok, message, status = _fulfill_checkout_session(session_obj)
+        if status == 200:
+            return jsonify({"received": True, "status": message}), 200
+        return jsonify({"error": message}), status
+    except Exception as e:
+        print(f"[stripe] webhook handler error: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"error": "Webhook handler failed."}), 500
 
 
 @app.route("/api/profile", methods=["GET"])
@@ -3167,21 +3310,23 @@ def process_supabase_ocr():
         page_charge = doc_pages if doc_kind == "pdf" else 1
 
         with profile.time_step("db_read_profile_quota"):
-            cur_pages, pr_err = _get_profile_pages_remaining(user_id)
-        if cur_pages is None:
+            balance, pr_err = get_credit_balance(user_id)
+        if balance is None:
             return jsonify(
                 {
                     "error": pr_err or "Could not load your page quota from profiles.",
                     "error_type": "profile",
+                    **_credits_api_fields(None),
                 }
             ), 400
+        cur_pages = int(balance["pages_remaining"])
         if cur_pages < page_charge:
             return jsonify(
                 {
                     "error": f"Not enough credits remaining ({cur_pages} left; this file needs {page_charge}).",
                     "error_type": "insufficient_pages",
-                    "pages_remaining": cur_pages,
                     "pages_required": page_charge,
+                    **_credits_api_fields(balance),
                 }
             ), 402
 
@@ -3225,27 +3370,37 @@ def process_supabase_ocr():
         if not inserted_id:
             return jsonify({"error": "Inserted row has no id.", "error_type": "db_error"}), 500
 
+        credit_free_used = None
+        credit_paid_used = None
+
         def mark_file_failed(message: str, *, refund_pages: int | None = None) -> int | None:
+            meta = get_job_metadata(str(inserted_id)) or {}
+            if credit_free_used is not None:
+                meta["credits_free_used"] = credit_free_used
+            if credit_paid_used is not None:
+                meta["credits_paid_used"] = credit_paid_used
             return _mark_ocr_job_failed(
                 str(inserted_id),
                 user_id,
-                get_job_metadata(str(inserted_id)),
+                meta,
                 message,
                 refund_pages=refund_pages,
             )
 
         with profile.time_step("db_consume_credits", pages=page_charge):
-            ok_q, err_q, new_remaining = _consume_profile_pages(user_id, page_charge)
+            ok_q, err_q, deduct_balance = deduct_ocr_credits(user_id, page_charge)
         if not ok_q:
             mark_file_failed(err_q or "Could not update credit balance.", refund_pages=0)
             return jsonify(
                 {
                     "error": err_q or "Could not update credit balance.",
                     "error_type": "quota_update_failed",
-                    "pages_remaining": cur_pages,
                     "file_id": str(inserted_id),
+                    **_credits_api_fields(deduct_balance or balance),
                 }
             ), 409
+        credit_free_used = int(deduct_balance.get("free_used") or 0)
+        credit_paid_used = int(deduct_balance.get("paid_used") or 0)
 
         inserted_id_str = str(inserted_id)
         ocr_result = None
@@ -3282,6 +3437,8 @@ def process_supabase_ocr():
                         "lease_expires": None,
                         "retry_count": 0,
                         "original_json_prefix": original_json_prefix,
+                        "credits_free_used": credit_free_used,
+                        "credits_paid_used": credit_paid_used,
                     },
                 )
 
@@ -3317,6 +3474,8 @@ def process_supabase_ocr():
                         "error": None,
                         "original_json_prefix": original_json_prefix,
                         "retry_count": int(job.get("retry_count") or 0),
+                        "credits_free_used": credit_free_used,
+                        "credits_paid_used": credit_paid_used,
                     },
                 )
                 _spawn_background_ocr_finish(inserted_id_str, user_id, job)
@@ -3340,7 +3499,6 @@ def process_supabase_ocr():
                         "status": "processing",
                         "stage": "waiting_vision",
                         "stage_label": _OCR_STAGE_LABELS["waiting_vision"],
-                        "pages_remaining": new_remaining,
                         "pages_charged": page_charge,
                         "credits_used": page_charge,
                         "json_storage": "per-page",
@@ -3351,6 +3509,7 @@ def process_supabase_ocr():
                             "file_name": file_name or os.path.basename(file_path),
                             "credits_used": page_charge,
                         },
+                        **_credits_api_fields(deduct_balance),
                     }
                 )
         except VisionConfigurationError as e:
@@ -3358,7 +3517,8 @@ def process_supabase_ocr():
             resp, code = jsonify_vision_configuration_error(e)
             if refunded is not None:
                 data = resp.get_json()
-                data["pages_remaining"] = refunded
+                bal, _ = get_credit_balance(user_id)
+                data.update(_credits_api_fields(bal) if bal else {"pages_remaining": refunded})
                 return jsonify(data), code
             return resp, code
         except EmptyPagesError as e:
@@ -3383,14 +3543,16 @@ def process_supabase_ocr():
                 "file_id": str(inserted_id),
             }
             if refunded is not None:
-                err_body["pages_remaining"] = refunded
+                bal, _ = get_credit_balance(user_id)
+                err_body.update(_credits_api_fields(bal) if bal else {"pages_remaining": refunded})
             return jsonify(err_body), 500
         except Exception as e:
             print(f"[process] OCR failed: {e}", file=sys.stderr, flush=True)
             refunded = mark_file_failed(str(e))
             err_body = {"error": str(e), "error_type": "ocr_error", "file_id": str(inserted_id)}
             if refunded is not None:
-                err_body["pages_remaining"] = refunded
+                bal, _ = get_credit_balance(user_id)
+                err_body.update(_credits_api_fields(bal) if bal else {"pages_remaining": refunded})
             return jsonify(err_body), 500
 
         # Temp files are removed in finally; OCR no longer needs the on-disk PDF here.
@@ -3453,11 +3615,11 @@ def process_supabase_ocr():
                 "row": row,
                 "file_id": str(inserted_id),
                 "status": "completed",
-                "pages_remaining": new_remaining,
                 "pages_charged": page_charge,
                 "credits_used": page_charge,
                 "json_storage": json_storage,
                 "profile_job_id": profile_job_id,
+                **_credits_api_fields(deduct_balance),
             }
         )
     finally:
@@ -3525,15 +3687,17 @@ def process_supabase_preflight():
         return jsonify({"error": str(e)}), 400
 
     credits_required = doc_pages if doc_kind == "pdf" else 1
-    cur_pages, pr_err = _get_profile_pages_remaining(user_id)
-    if cur_pages is None:
+    balance, pr_err = get_credit_balance(user_id)
+    if balance is None:
         return jsonify(
             {
                 "error": pr_err or "Could not load your page quota from profiles.",
                 "error_type": "profile",
+                **_credits_api_fields(None),
             }
         ), 400
 
+    cur_pages = int(balance["pages_remaining"])
     can_process = cur_pages >= credits_required
     return jsonify(
         {
@@ -3544,11 +3708,11 @@ def process_supabase_preflight():
             "page_count": doc_pages,
             "credits_required": credits_required,
             "pages_required": credits_required,
-            "pages_remaining": cur_pages,
             "error_type": None if can_process else "insufficient_pages",
             "error": None
             if can_process
             else f"Not enough credits remaining ({cur_pages} left; this file needs {credits_required}).",
+            **_credits_api_fields(balance),
         }
     )
 
@@ -3582,15 +3746,17 @@ def process_supabase_preflight_upload():
             return jsonify({"error": str(e)}), 400
 
     credits_required = doc_pages if doc_kind == "pdf" else 1
-    cur_pages, pr_err = _get_profile_pages_remaining(user_id)
-    if cur_pages is None:
+    balance, pr_err = get_credit_balance(user_id)
+    if balance is None:
         return jsonify(
             {
                 "error": pr_err or "Could not load your page quota from profiles.",
                 "error_type": "profile",
+                **_credits_api_fields(None),
             }
         ), 400
 
+    cur_pages = int(balance["pages_remaining"])
     can_process = cur_pages >= credits_required
     profile.finish(kind=doc_kind, page_count=doc_pages, can_process=can_process)
     return jsonify(
@@ -3601,11 +3767,11 @@ def process_supabase_preflight_upload():
             "page_count": doc_pages,
             "credits_required": credits_required,
             "pages_required": credits_required,
-            "pages_remaining": cur_pages,
             "error_type": None if can_process else "insufficient_pages",
             "error": None
             if can_process
             else f"Not enough credits remaining ({cur_pages} left; this file needs {credits_required}).",
+            **_credits_api_fields(balance),
         }
     )
 
@@ -3851,24 +4017,62 @@ def _parse_profile_timestamp(val) -> datetime | None:
     return None
 
 
-def _profile_pages_remaining_state(
-    user_id: str,
-) -> tuple[int | None, str | None, datetime | None]:
-    """
-    Read profiles.pages_remaining for auth user id.
-    If last_reset is more than PROFILE_PAGES_RESET_INTERVAL_DAYS ago, sets pages_remaining
-    to PROFILE_PAGES_MONTHLY_ALLOWANCE and last_reset to now (UTC).
-    If last_reset is null, sets last_reset to now only (keeps existing pages_remaining).
-    Returns (pages_remaining, error, last_reset_anchor_utc). Anchor is the cycle start in UTC;
-    the next automatic reset is anchor + PROFILE_PAGES_RESET_INTERVAL_DAYS.
-    (None, msg, None) if missing profile or error.
-    """
+def _credit_int(val, default: int = 0) -> int:
+    try:
+        if val is None:
+            return default
+        return max(0, int(val))
+    except (TypeError, ValueError):
+        return default
+
+
+def _credit_balance_dict(
+    *,
+    free: int,
+    paid: int,
+    allowance: int,
+    free_used: int = 0,
+    paid_used: int = 0,
+) -> dict:
+    free = max(0, int(free))
+    paid = max(0, int(paid))
+    allowance = max(0, int(allowance))
+    return {
+        "free_pages_remaining": free,
+        "paid_pages_remaining": paid,
+        "pages_remaining": free + paid,
+        "monthly_free_credit_allowance": allowance,
+        "free_used": max(0, int(free_used)),
+        "paid_used": max(0, int(paid_used)),
+    }
+
+
+def _credits_api_fields(balance: dict | None) -> dict:
+    """API-compatible credit fields. pages_remaining is free+paid for frontend compat."""
+    if not isinstance(balance, dict):
+        return {
+            "pages_remaining": None,
+            "free_pages_remaining": None,
+            "paid_pages_remaining": None,
+            "monthly_free_credit_allowance": None,
+        }
+    return {
+        "pages_remaining": int(balance.get("pages_remaining") or 0),
+        "free_pages_remaining": int(balance.get("free_pages_remaining") or 0),
+        "paid_pages_remaining": int(balance.get("paid_pages_remaining") or 0),
+        "monthly_free_credit_allowance": int(
+            balance.get("monthly_free_credit_allowance") or PROFILE_PAGES_MONTHLY_ALLOWANCE
+        ),
+    }
+
+
+def _fetch_profile_credit_row(user_id: str) -> tuple[dict | None, str | None]:
     if not supabase_client:
-        return None, "Supabase not configured", None
+        return None, "Supabase not configured"
     try:
         res = (
             supabase_client.table("profiles")
-            .select("pages_remaining, last_reset")
+            .select(_CREDIT_BALANCE_SELECT)
             .eq("id", user_id)
             .limit(1)
             .execute()
@@ -3878,78 +4082,434 @@ def _profile_pages_remaining_state(
             return (
                 None,
                 "No profile row found for this user (create a profiles row with the same id as auth.users).",
-                None,
             )
-        row = rows[0]
-        pr = row.get("pages_remaining")
-        last_reset = _parse_profile_timestamp(row.get("last_reset"))
-        now = datetime.now(timezone.utc)
-        if last_reset is None:
-            try:
-                supabase_client.table("profiles").update({"last_reset": now.isoformat()}).eq("id", user_id).execute()
-            except Exception as e:
-                print(f"[profiles] set last_reset failed: {e}", file=sys.stderr, flush=True)
-                return None, str(e), None
-            if pr is None:
-                return 0, None, now
-            return int(pr), None, now
-        if (now - last_reset) > timedelta(days=PROFILE_PAGES_RESET_INTERVAL_DAYS):
-            try:
-                supabase_client.table("profiles").update(
-                    {
-                        "pages_remaining": PROFILE_PAGES_MONTHLY_ALLOWANCE,
-                        "last_reset": now.isoformat(),
-                    }
-                ).eq("id", user_id).execute()
-            except Exception as e:
-                print(f"[profiles] monthly quota reset failed: {e}", file=sys.stderr, flush=True)
-                return None, str(e), None
-            return PROFILE_PAGES_MONTHLY_ALLOWANCE, None, now
-        if pr is None:
-            return 0, None, last_reset
-        return int(pr), None, last_reset
+        return rows[0], None
     except Exception as e:
-        print(f"[profiles] read pages_remaining: {e}", file=sys.stderr, flush=True)
-        return None, str(e), None
+        print(f"[profiles] read credit balance failed: {e}", file=sys.stderr, flush=True)
+        return None, str(e)
 
 
-def _get_profile_pages_remaining(user_id: str) -> tuple[int | None, str | None]:
-    pr, err, _anchor = _profile_pages_remaining_state(user_id)
-    return pr, err
+def reset_monthly_free_credits(user_id: str) -> tuple[bool, str | None, dict | None]:
+    """Set free_pages_remaining = monthly_free_credit_allowance. Does not modify paid credits.
 
-
-def _consume_profile_pages(user_id: str, delta: int) -> tuple[bool, str | None, int | None]:
+    TODO: Call this helper on a monthly schedule (cron / background job). Lazy reset on
+    credit reads also invokes this when last_reset is older than PROFILE_PAGES_RESET_INTERVAL_DAYS.
     """
-    Subtract delta from profiles.pages_remaining.
-    Returns (success, error_message, new_remaining on success else current or None).
-    """
-    if delta <= 0:
-        cur, err = _get_profile_pages_remaining(user_id)
-        return (True, err, cur) if cur is not None else (False, err or "No profile.", None)
-    cur, err = _get_profile_pages_remaining(user_id)
-    if cur is None:
-        return False, err or "No profile row found for this user.", None
-    if cur < delta:
-        return False, f"Not enough credits remaining ({cur} left, this file needs {delta}).", cur
-    new_v = cur - delta
+    row, err = _fetch_profile_credit_row(user_id)
+    if row is None:
+        return False, err or "No profile.", None
+    allowance = _credit_int(row.get("monthly_free_credit_allowance"), PROFILE_PAGES_MONTHLY_ALLOWANCE)
+    if allowance <= 0:
+        allowance = PROFILE_PAGES_MONTHLY_ALLOWANCE
+    paid = _credit_int(row.get("paid_pages_remaining"), 0)
+    now = datetime.now(timezone.utc)
     try:
         res = (
             supabase_client.table("profiles")
-            .update({"pages_remaining": new_v})
+            .update(
+                {
+                    "free_pages_remaining": allowance,
+                    "last_reset": now.isoformat(),
+                }
+            )
             .eq("id", user_id)
-            .eq("pages_remaining", cur)
             .execute()
         )
         rows = getattr(res, "data", None) or []
         if not rows:
-            latest, latest_err = _get_profile_pages_remaining(user_id)
-            if latest is not None and latest < delta:
-                return False, f"Not enough credits remaining ({latest} left, this file needs {delta}).", latest
-            return False, latest_err or "Credit balance changed while starting this job. Try again.", latest
+            return False, "Monthly free-credit reset did not update any profile row.", None
     except Exception as e:
-        print(f"[profiles] update pages_remaining: {e}", file=sys.stderr, flush=True)
-        return False, str(e), cur
-    return True, None, new_v
+        print(f"[profiles] reset_monthly_free_credits failed: {e}", file=sys.stderr, flush=True)
+        return False, str(e), None
+    return True, None, _credit_balance_dict(free=allowance, paid=paid, allowance=allowance)
+
+
+def _load_credit_balance(
+    user_id: str, *, apply_monthly_reset: bool = True
+) -> tuple[dict | None, str | None, datetime | None]:
+    """Load free/paid balances. Optionally lazy-reset free credits when the monthly window elapsed."""
+    row, err = _fetch_profile_credit_row(user_id)
+    if row is None:
+        return None, err, None
+
+    allowance = _credit_int(row.get("monthly_free_credit_allowance"), PROFILE_PAGES_MONTHLY_ALLOWANCE)
+    if allowance <= 0:
+        allowance = PROFILE_PAGES_MONTHLY_ALLOWANCE
+    free = _credit_int(row.get("free_pages_remaining"), 0)
+    paid = _credit_int(row.get("paid_pages_remaining"), 0)
+    last_reset = _parse_profile_timestamp(row.get("last_reset"))
+    now = datetime.now(timezone.utc)
+
+    if last_reset is None:
+        try:
+            supabase_client.table("profiles").update({"last_reset": now.isoformat()}).eq(
+                "id", user_id
+            ).execute()
+        except Exception as e:
+            print(f"[profiles] set last_reset failed: {e}", file=sys.stderr, flush=True)
+            return None, str(e), None
+        return _credit_balance_dict(free=free, paid=paid, allowance=allowance), None, now
+
+    if apply_monthly_reset and (now - last_reset) > timedelta(days=PROFILE_PAGES_RESET_INTERVAL_DAYS):
+        ok, reset_err, balance = reset_monthly_free_credits(user_id)
+        if not ok or balance is None:
+            return None, reset_err or "Monthly free-credit reset failed.", None
+        return balance, None, now
+
+    return _credit_balance_dict(free=free, paid=paid, allowance=allowance), None, last_reset
+
+
+def get_total_available_credits(user_id: str) -> tuple[int | None, str | None]:
+    """Return free_pages_remaining + paid_pages_remaining (after lazy monthly free reset)."""
+    balance, err, _anchor = _load_credit_balance(user_id)
+    if balance is None:
+        return None, err
+    return int(balance["pages_remaining"]), None
+
+
+def get_credit_balance(user_id: str) -> tuple[dict | None, str | None]:
+    """Return full credit balance dict (free, paid, total, allowance)."""
+    balance, err, _anchor = _load_credit_balance(user_id)
+    return balance, err
+
+
+def deduct_ocr_credits(user_id: str, pages: int) -> tuple[bool, str | None, dict | None]:
+    """Atomically consume OCR credits: free first, then paid. Never goes negative.
+
+    Returns (ok, error, balance_dict). On success balance_dict includes free_used/paid_used.
+    """
+    pages = int(pages or 0)
+    if pages < 0:
+        return False, "Credit charge cannot be negative.", None
+    if pages == 0:
+        balance, err = get_credit_balance(user_id)
+        return (True, err, balance) if balance is not None else (False, err or "No profile.", None)
+
+    last_err = "Could not update credit balance."
+    for _attempt in range(_CREDIT_UPDATE_MAX_ATTEMPTS):
+        balance, err, _anchor = _load_credit_balance(user_id)
+        if balance is None:
+            return False, err or "No profile row found for this user.", None
+        free = int(balance["free_pages_remaining"])
+        paid = int(balance["paid_pages_remaining"])
+        allowance = int(balance["monthly_free_credit_allowance"])
+        total = free + paid
+        if total < pages:
+            return (
+                False,
+                f"Not enough credits remaining ({total} left, this file needs {pages}).",
+                balance,
+            )
+        free_used = min(free, pages)
+        paid_used = pages - free_used
+        new_free = free - free_used
+        new_paid = paid - paid_used
+        if new_free < 0 or new_paid < 0:
+            return False, "Credit calculation error (negative balance prevented).", balance
+        try:
+            res = (
+                supabase_client.table("profiles")
+                .update(
+                    {
+                        "free_pages_remaining": new_free,
+                        "paid_pages_remaining": new_paid,
+                    }
+                )
+                .eq("id", user_id)
+                .eq("free_pages_remaining", free)
+                .eq("paid_pages_remaining", paid)
+                .execute()
+            )
+            rows = getattr(res, "data", None) or []
+            if rows:
+                return (
+                    True,
+                    None,
+                    _credit_balance_dict(
+                        free=new_free,
+                        paid=new_paid,
+                        allowance=allowance,
+                        free_used=free_used,
+                        paid_used=paid_used,
+                    ),
+                )
+            last_err = "Credit balance changed while starting this job. Try again."
+        except Exception as e:
+            print(f"[profiles] deduct_ocr_credits failed: {e}", file=sys.stderr, flush=True)
+            return False, str(e), balance
+    balance, _err = get_credit_balance(user_id)
+    return False, last_err, balance
+
+
+def refund_ocr_credits(
+    user_id: str,
+    pages: int,
+    *,
+    free_used: int | None = None,
+    paid_used: int | None = None,
+) -> tuple[bool, str | None, dict | None]:
+    """Restore OCR credits after a failed charge. Prefer exact free/paid split when known."""
+    pages = int(pages or 0)
+    if pages <= 0:
+        balance, err = get_credit_balance(user_id)
+        return (True, err, balance) if balance is not None else (False, err or "No profile.", None)
+
+    if free_used is not None and paid_used is not None:
+        free_used = max(0, int(free_used))
+        paid_used = max(0, int(paid_used))
+        if free_used + paid_used != pages:
+            # Fall back to free-first restore when split is inconsistent.
+            free_used = None
+            paid_used = None
+
+    last_err = "Could not refund credit balance."
+    for _attempt in range(_CREDIT_UPDATE_MAX_ATTEMPTS):
+        balance, err, _anchor = _load_credit_balance(user_id, apply_monthly_reset=False)
+        if balance is None:
+            return False, err or "No profile row found for this user.", None
+        free = int(balance["free_pages_remaining"])
+        paid = int(balance["paid_pages_remaining"])
+        allowance = int(balance["monthly_free_credit_allowance"])
+
+        if free_used is not None and paid_used is not None:
+            add_free, add_paid = free_used, paid_used
+        else:
+            # Best-effort reverse of free-first consumption without a recorded split:
+            # restore free up to monthly allowance, remainder to paid.
+            room_in_free = max(0, allowance - free)
+            add_free = min(pages, room_in_free)
+            add_paid = pages - add_free
+
+        new_free = free + add_free
+        new_paid = paid + add_paid
+        try:
+            res = (
+                supabase_client.table("profiles")
+                .update(
+                    {
+                        "free_pages_remaining": new_free,
+                        "paid_pages_remaining": new_paid,
+                    }
+                )
+                .eq("id", user_id)
+                .eq("free_pages_remaining", free)
+                .eq("paid_pages_remaining", paid)
+                .execute()
+            )
+            rows = getattr(res, "data", None) or []
+            if rows:
+                return True, None, _credit_balance_dict(free=new_free, paid=new_paid, allowance=allowance)
+            last_err = "Credit balance changed while refunding. Try again."
+        except Exception as e:
+            print(f"[profiles] refund_ocr_credits failed: {e}", file=sys.stderr, flush=True)
+            return False, str(e), balance
+    balance, _err = get_credit_balance(user_id)
+    return False, last_err, balance
+
+
+def add_paid_credits(user_id: str, credits: int) -> tuple[bool, str | None, dict | None]:
+    """Increment ONLY paid_pages_remaining (Stripe purchases). Never touches free credits."""
+    credits = int(credits or 0)
+    if credits <= 0:
+        balance, err = get_credit_balance(user_id)
+        return (True, err, balance) if balance is not None else (False, err or "No profile.", None)
+
+    last_err = "Could not add paid credits."
+    for _attempt in range(_CREDIT_UPDATE_MAX_ATTEMPTS):
+        balance, err, _anchor = _load_credit_balance(user_id, apply_monthly_reset=False)
+        if balance is None:
+            return False, err or "No profile row found for this user.", None
+        free = int(balance["free_pages_remaining"])
+        paid = int(balance["paid_pages_remaining"])
+        allowance = int(balance["monthly_free_credit_allowance"])
+        new_paid = paid + credits
+        try:
+            res = (
+                supabase_client.table("profiles")
+                .update({"paid_pages_remaining": new_paid})
+                .eq("id", user_id)
+                .eq("paid_pages_remaining", paid)
+                .execute()
+            )
+            rows = getattr(res, "data", None) or []
+            if rows:
+                return True, None, _credit_balance_dict(free=free, paid=new_paid, allowance=allowance)
+            last_err = "Paid credit balance changed while applying payment. Try again."
+        except Exception as e:
+            print(f"[profiles] add_paid_credits failed: {e}", file=sys.stderr, flush=True)
+            return False, str(e), balance
+    balance, _err = get_credit_balance(user_id)
+    return False, last_err, balance
+
+
+def _stripe_client():
+    if not STRIPE_SECRET_KEY:
+        raise RuntimeError("STRIPE_SECRET_KEY is not configured.")
+    import stripe
+
+    stripe.api_key = STRIPE_SECRET_KEY
+    return stripe
+
+
+def _payment_row_for_checkout_session(checkout_session_id: str) -> dict | None:
+    if not supabase_client or not checkout_session_id:
+        return None
+    try:
+        res = (
+            supabase_client.table("payments")
+            .select("id,stripe_checkout_session_id,status,credits_granted")
+            .eq("stripe_checkout_session_id", checkout_session_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return rows[0] if rows else None
+    except Exception as e:
+        print(f"[stripe] payment lookup failed: {e}", file=sys.stderr, flush=True)
+        return None
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return (
+        "duplicate" in text
+        or "unique" in text
+        or "23505" in text
+        or "already exists" in text
+    )
+
+
+def _delete_payment_by_checkout_session(checkout_session_id: str) -> None:
+    """Best-effort compensate if credits could not be granted after insert."""
+    if not supabase_client or not checkout_session_id:
+        return
+    try:
+        supabase_client.table("payments").delete().eq(
+            "stripe_checkout_session_id", checkout_session_id
+        ).execute()
+    except Exception as e:
+        print(
+            f"[stripe] compensate delete failed for session {checkout_session_id}: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
+def _extract_checkout_price_id(session_obj) -> str | None:
+    """Resolve the purchased Stripe price id from a Checkout Session."""
+    meta = getattr(session_obj, "metadata", None) or {}
+    if isinstance(meta, dict):
+        from_meta = (meta.get("price_id") or "").strip()
+        if from_meta:
+            return from_meta
+    try:
+        line_items = getattr(session_obj, "line_items", None)
+        data = getattr(line_items, "data", None) if line_items is not None else None
+        if data:
+            price = getattr(data[0], "price", None)
+            pid = getattr(price, "id", None) if price is not None else None
+            if pid:
+                return str(pid)
+    except Exception:
+        pass
+    return None
+
+
+def _fulfill_checkout_session(session_obj) -> tuple[bool, str, int]:
+    """Insert payment + grant paid credits exactly once. Returns (ok, message, http_status)."""
+    if not supabase_client:
+        return False, "Supabase is not configured.", 500
+
+    checkout_session_id = (getattr(session_obj, "id", None) or "").strip()
+    if not checkout_session_id:
+        return False, "Checkout session missing id.", 400
+
+    existing = _payment_row_for_checkout_session(checkout_session_id)
+    if existing:
+        print(
+            f"[stripe] duplicate webhook ignored session_id={checkout_session_id}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return True, "already_processed", 200
+
+    meta = getattr(session_obj, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    user_id = (meta.get("user_id") or "").strip()
+    if not user_id:
+        return False, "Checkout session missing metadata.user_id.", 400
+
+    price_id = _extract_checkout_price_id(session_obj)
+    if not price_id or price_id not in PRICE_ID_TO_CREDITS:
+        return False, f"Unknown or missing price_id on checkout session: {price_id!r}", 400
+    credits_granted = int(PRICE_ID_TO_CREDITS[price_id])
+
+    payment_intent = getattr(session_obj, "payment_intent", None)
+    if payment_intent is not None and not isinstance(payment_intent, str):
+        payment_intent = getattr(payment_intent, "id", None)
+    payment_intent_id = (str(payment_intent).strip() if payment_intent else None) or None
+
+    amount_total = getattr(session_obj, "amount_total", None)
+    try:
+        amount_paid_cents = int(amount_total) if amount_total is not None else None
+    except (TypeError, ValueError):
+        amount_paid_cents = None
+    currency = (getattr(session_obj, "currency", None) or "usd").strip().lower()
+
+    payment_row = {
+        "user_id": user_id,
+        "stripe_checkout_session_id": checkout_session_id,
+        "stripe_payment_intent_id": payment_intent_id,
+        "stripe_price_id": price_id,
+        "credits_granted": credits_granted,
+        "amount_paid_cents": amount_paid_cents,
+        "currency": currency,
+        "status": "completed",
+    }
+
+    try:
+        supabase_client.table("payments").insert(payment_row).execute()
+        print(
+            f"[stripe] payment inserted session_id={checkout_session_id} "
+            f"user_id={user_id} credits={credits_granted}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except Exception as e:
+        if _is_unique_violation(e) or _payment_row_for_checkout_session(checkout_session_id):
+            print(
+                f"[stripe] duplicate webhook ignored session_id={checkout_session_id}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return True, "already_processed", 200
+        print(f"[stripe] payment insert failed: {e}", file=sys.stderr, flush=True)
+        return False, "Could not record payment.", 500
+
+    ok, err, _balance = add_paid_credits(user_id, credits_granted)
+    if not ok:
+        print(
+            f"[stripe] credits grant failed session_id={checkout_session_id} "
+            f"user_id={user_id} credits={credits_granted}: {err}",
+            file=sys.stderr,
+            flush=True,
+        )
+        _delete_payment_by_checkout_session(checkout_session_id)
+        return False, err or "Could not grant credits.", 500
+
+    print(
+        f"[stripe] credits granted session_id={checkout_session_id} "
+        f"user_id={user_id} credits={credits_granted}",
+        file=sys.stderr,
+        flush=True,
+    )
+    print(
+        f"[stripe] checkout completed session_id={checkout_session_id} user_id={user_id}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return True, "ok", 200
 
 
 _QPDF_BIN = shutil.which("qpdf")

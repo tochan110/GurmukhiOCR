@@ -147,7 +147,7 @@
                 <p id="authFeedback" class="auth-feedback" role="alert" hidden></p>
                 <button type="submit" class="btn-primary" id="signupSubmit" disabled>Create account</button>
             </form>
-            <p class="auth-footer">Already have an account? <a href="/login">Log in</a></p>
+            <p class="auth-footer">Already have an account? <a href="/login" id="loginLink">Log in</a></p>
         </div>
 {% endblock %}
 {% block scripts_extra %}
@@ -208,6 +208,18 @@
 
         function allRulesMet(r) {
             return r.len && r.upper && r.lower && r.digit && r.symbol && r.match;
+        }
+
+        function safeNextPath(raw) {
+            if (!raw || typeof raw !== 'string') return '/dashboard2';
+            var value = raw.trim();
+            if (!value.startsWith('/') || value.startsWith('//')) return '/dashboard2';
+            return value;
+        }
+        const nextPath = safeNextPath(new URLSearchParams(window.location.search).get('next'));
+        const loginLink = document.getElementById('loginLink');
+        if (loginLink && nextPath !== '/dashboard2') {
+            loginLink.href = '/login?next=' + encodeURIComponent(nextPath);
         }
 
         let signupSubmitting = false;
@@ -291,7 +303,18 @@
                     }
                     if (data.session) {
                         showAuthFeedback(feedback, 'Account ready. Redirecting…', 'success');
-                        window.location.href = '/dashboard2';
+                        try {
+                            const token = data.session.access_token;
+                            if (token) {
+                                await fetch('/api/profile', {
+                                    headers: { Authorization: 'Bearer ' + token },
+                                    credentials: 'same-origin',
+                                });
+                            }
+                        } catch (_profileErr) {
+                            /* non-fatal; dashboard will retry */
+                        }
+                        window.location.href = nextPath;
                     } else {
                         showAuthFeedback(
                             feedback,
