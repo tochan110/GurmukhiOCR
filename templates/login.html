@@ -15,24 +15,12 @@
                     <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
                 </div>
                 <div class="field-row">
-                    <a href="#" id="openForgotPasswordModal">Forgot password?</a>
+                    <a href="/forgot-password">Forgot password?</a>
                 </div>
                 <p id="authFeedback" class="auth-feedback" role="alert" hidden></p>
                 <button type="submit" class="btn-primary" id="loginSubmit">Log in</button>
             </form>
             <p class="auth-footer">No account yet? <a href="/signup" id="signupLink">Sign up</a></p>
-        </div>
-
-        <div class="modal-overlay" id="forgotPasswordEmailModal" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordModalTitle">
-            <div class="modal-dialog">
-                <button type="button" class="modal-close" aria-label="Close">&times;</button>
-                <h2 id="forgotPasswordModalTitle">Password reset</h2>
-                <p class="modal-body">
-                    To request a password reset, email us at
-                    <a class="modal-email-slot" href="mailto:team@gurmukhiocr.com">team@gurmukhiocr.com</a>
-                    from the address tied to your account, and we will send you next steps.
-                </p>
-            </div>
         </div>
 {% endblock %}
 {% block scripts_extra %}
@@ -65,30 +53,6 @@
             el.textContent = message;
             if (kind === 'error') el.classList.add('is-error');
             if (kind === 'success') el.classList.add('is-success');
-        }
-
-        const overlay = document.getElementById('forgotPasswordEmailModal');
-        const trigger = document.getElementById('openForgotPasswordModal');
-        if (overlay && trigger) {
-            const closeBtn = overlay.querySelector('.modal-close');
-            function openModal(e) {
-                if (e) e.preventDefault();
-                overlay.classList.add('is-open');
-                document.body.style.overflow = 'hidden';
-                closeBtn.focus();
-            }
-            function closeModal() {
-                overlay.classList.remove('is-open');
-                document.body.style.overflow = '';
-            }
-            trigger.addEventListener('click', openModal);
-            closeBtn.addEventListener('click', closeModal);
-            overlay.addEventListener('click', function (e) {
-                if (e.target === overlay) closeModal();
-            });
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeModal();
-            });
         }
 
         function safeNextPath(raw) {

@@ -447,7 +447,9 @@
             });
         })();
     </script>
-    {% include "_supabase_nav_session.html" %}
+    {% if not password_recovery_page|default(false) %}
+        {% include "_supabase_nav_session.html" %}
+    {% endif %}
     {% block scripts_extra %}{% endblock %}
 </body>
 </html>

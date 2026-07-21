@@ -2963,6 +2963,8 @@ def require_google_ocr_key():
         "pricing_page",
         "login_page",
         "signup_page",
+        "forgot_password_page",
+        "reset_password_page",
         "dashboard2_page",
         "dashboard_legacy_redirect",
         "process_supabase_preflight",
@@ -3047,6 +3049,20 @@ def login_page():
 @app.route("/signup", methods=["GET"])
 def signup_page():
     return render_template("signup.html", active_page="signup", **supabase_browser_config)
+
+
+@app.route("/forgot-password", methods=["GET"])
+def forgot_password_page():
+    return render_template("forgot_password.html", **supabase_browser_config)
+
+
+@app.route("/reset-password", methods=["GET"])
+def reset_password_page():
+    return render_template(
+        "reset_password.html",
+        password_recovery_page=True,
+        **supabase_browser_config,
+    )
 
 
 @app.route("/dashboard", methods=["GET"])
