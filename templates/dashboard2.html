@@ -2493,7 +2493,7 @@
                             <span class="dash2-quota-label">Pages remaining</span>
                             <span class="dash2-quota-value" id="dash2PagesRemaining">—</span>
                         </div>
-                        <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing">
+                        <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing" hidden>
                             Buy more credits →
                         </a>
                     </div>
@@ -2524,7 +2524,7 @@
                                     </span>
                                 </p>
                                 <p class="dash2-upload-quota-more-wrap">
-                                    <a class="dash2-quota-more" id="dash2QuotaContactUpload" href="/pricing">
+                                    <a class="dash2-quota-more" id="dash2QuotaContactUpload" href="/pricing" hidden>
                                         Buy more credits →
                                     </a>
                                 </p>
@@ -6499,7 +6499,7 @@
                                     ' credits, but you have ' +
                                     escapeHtml(have == null ? '0' : String(have)) +
                                     '. ' +
-                                    '<button type="button" class="dash2-quota-more dash2-upload-status-action" data-dash2-open-credits>Need more credits?</button>'
+                                    '<button type="button" class="dash2-quota-more dash2-upload-status-action" data-dash2-open-credits hidden>Need more credits?</button>'
                             );
                         } else {
                             errors.push(

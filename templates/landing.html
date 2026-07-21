@@ -625,6 +625,9 @@
         .pricing-tier--hidden {
             display: none !important;
         }
+        .payments-hidden {
+            display: none !important;
+        }
         @media (max-width: 1020px) {
             .pricing-grid {
                 grid-template-columns: 1fr;
@@ -1112,8 +1115,8 @@
                 <p class="pricing-section-kicker">Plans</p>
                 <h2 class="pricing-section-title" id="pricing-heading">{% if pricing_page %}Pricing{% else %}Simple OCR credits{% endif %}</h2>
                 <p class="pricing-section-sub">
-                    Get <strong>{{ monthly_free_credit_allowance }} free credits every month</strong>,
-                    or buy a one-time credit pack. Paid credits never expire.
+                    Get <strong>{{ monthly_free_credit_allowance }} free credits every month</strong><span class="payments-hidden">,
+                    or buy a one-time credit pack. Paid credits never expire.</span>
                 </p>
             </div>
             <div class="pricing-grid">
@@ -1130,7 +1133,7 @@
                     </ul>
                 </article>
 
-                <article class="pricing-tier pricing-tier--paid" aria-label="Lifetime page packs">
+                <article class="pricing-tier pricing-tier--paid payments-hidden" aria-label="Lifetime page packs">
                     <p class="pricing-tier-label">Buy once</p>
                     <p class="pricing-tier-price"><span class="amt">Credit packs</span><span class="per">paid credits never expire</span></p>
                     <p class="pricing-tier-note">No subscription. No expiration.</p>
@@ -1167,7 +1170,7 @@
             </div>
             <p class="pricing-credit-note">
                 * Pages / images: 1 image = 1 credit. 1 page from a PDF = 1 image = 1 credit.
-                Paid credits stay on your account forever.
+                <span class="payments-hidden">Paid credits stay on your account forever.</span>
             </p>
             <div class="pricing-cta">
                 <a class="btn btn-primary" id="pricingFreeCta" href="/signup">Use for Free</a>
