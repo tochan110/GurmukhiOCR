@@ -43,8 +43,10 @@
             top: calc(100% + 0.45rem);
             right: 0;
             z-index: 200;
-            min-width: 14rem;
-            max-width: 20rem;
+            min-width: 16rem;
+            max-width: 22rem;
+            max-height: min(78vh, 36rem);
+            overflow-y: auto;
             padding: 0.75rem 0.9rem;
             border-radius: 12px;
             border: 1px solid var(--stroke);
@@ -82,6 +84,53 @@
             margin-top: 0.85rem;
             padding-top: 0.75rem;
             border-top: 1px solid var(--stroke);
+        }
+        .nav-profile-accordion {
+            margin-top: 0.45rem;
+        }
+        .nav-profile-accordion + .nav-profile-accordion {
+            margin-top: 0.35rem;
+            padding-top: 0.35rem;
+            border-top: 1px solid var(--stroke);
+        }
+        .nav-profile-accordion-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 0.45rem 0.15rem;
+            border: none;
+            background: none;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.84rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+        }
+        .nav-profile-accordion-toggle:hover {
+            color: var(--accent);
+        }
+        .nav-profile-accordion-chevron {
+            flex-shrink: 0;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            transform: rotate(45deg);
+            transition: transform 0.18s ease;
+            opacity: 0.7;
+        }
+        .nav-profile-accordion-toggle[aria-expanded="true"] .nav-profile-accordion-chevron {
+            transform: rotate(-135deg);
+            margin-top: 0.2rem;
+        }
+        .nav-profile-accordion-panel {
+            padding: 0.15rem 0 0.35rem;
+        }
+        .nav-profile-accordion-panel[hidden] {
+            display: none !important;
         }
         .nav-profile-username-form {
             margin: 0;
@@ -166,5 +215,90 @@
         .nav-profile-save-btn:disabled {
             opacity: 0.55;
             cursor: not-allowed;
+        }
+        .nav-profile-password-form {
+            margin: 0;
+        }
+        .nav-profile-password-input {
+            display: block;
+            width: 100%;
+            margin: 0 0 0.55rem;
+            padding: 0.4rem 0.55rem;
+            border: 1px solid var(--stroke);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.12);
+            color: var(--text);
+            font-size: 0.86rem;
+            font-family: inherit;
+            outline: none;
+        }
+        body.light-mode .nav-profile-password-input {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .nav-profile-password-input:focus {
+            border-color: rgba(107, 140, 255, 0.45);
+        }
+        .nav-profile-password-form .nav-profile-username-label {
+            margin-top: 0.15rem;
+        }
+        .nav-profile-pw-requirements {
+            margin: 0.15rem 0 0.35rem;
+            padding: 0.55rem 0.65rem;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: rgba(0, 0, 0, 0.12);
+        }
+        body.light-mode .nav-profile-pw-requirements {
+            background: rgba(0, 0, 0, 0.03);
+        }
+        .nav-profile-pw-requirements-title {
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--faint);
+            margin: 0 0 0.4rem;
+        }
+        .nav-profile-pw-rule-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .nav-profile-pw-rule {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.4rem;
+            font-size: 0.74rem;
+            line-height: 1.35;
+            color: var(--muted);
+            transition: color 0.15s ease;
+        }
+        .nav-profile-pw-rule.is-met {
+            color: var(--text);
+        }
+        .nav-profile-pw-rule-mark {
+            flex-shrink: 0;
+            width: 1rem;
+            text-align: center;
+            font-size: 0.68rem;
+            line-height: 1.35;
+            color: var(--faint);
+            transition: color 0.15s ease;
+        }
+        .nav-profile-pw-rule.is-met .nav-profile-pw-rule-mark {
+            color: #4ade80;
+            font-weight: 800;
+        }
+        .nav-profile-pw-rule.is-met .nav-profile-pw-rule-mark::before {
+            content: '✓';
+        }
+        .nav-profile-pw-rule:not(.is-met) .nav-profile-pw-rule-mark::before {
+            content: '○';
+        }
+        body.light-mode .nav-profile-pw-rule.is-met .nav-profile-pw-rule-mark {
+            color: #16a34a;
         }
     </style>

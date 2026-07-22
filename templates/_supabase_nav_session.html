@@ -13,13 +13,34 @@
         var profileUsernameInput = document.getElementById('navProfileUsernameInput');
         var profileUsernameStatus = document.getElementById('navProfileUsernameStatus');
         var profileUsernameSave = document.getElementById('navProfileUsernameSave');
+        var profileUsernameToggle = document.getElementById('navProfileUsernameToggle');
+        var profileUsernamePanel = document.getElementById('navProfileUsernamePanel');
+        var profilePasswordForm = document.getElementById('navProfilePasswordForm');
+        var profileCurrentPassword = document.getElementById('navProfileCurrentPassword');
+        var profileNewPassword = document.getElementById('navProfileNewPassword');
+        var profileConfirmPassword = document.getElementById('navProfileConfirmPassword');
+        var profilePasswordStatus = document.getElementById('navProfilePasswordStatus');
+        var profilePasswordSave = document.getElementById('navProfilePasswordSave');
+        var profilePasswordToggle = document.getElementById('navProfilePasswordToggle');
+        var profilePasswordPanel = document.getElementById('navProfilePasswordPanel');
         var heroOpenDashboardCta = document.getElementById('heroOpenDashboardCta');
+        var passwordSubmitting = false;
         if (!cfgEl || !guest) return;
 
         function setProfileOpen(open) {
             if (!profileBtn || !profileMenu) return;
             profileBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
             profileMenu.hidden = !open;
+            if (!open) {
+                setAccordionOpen(profileUsernameToggle, profileUsernamePanel, false);
+                setAccordionOpen(profilePasswordToggle, profilePasswordPanel, false);
+            }
+        }
+
+        function setAccordionOpen(toggle, panel, open) {
+            if (!toggle || !panel) return;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            panel.hidden = !open;
         }
 
         function setProfileUsernameStatus(msg, kind) {
@@ -31,6 +52,56 @@
             );
             if (kind === 'error') profileUsernameStatus.classList.add('nav-profile-username-status--error');
             if (kind === 'ok') profileUsernameStatus.classList.add('nav-profile-username-status--ok');
+        }
+
+        function setProfilePasswordStatus(msg, kind) {
+            if (!profilePasswordStatus) return;
+            profilePasswordStatus.textContent = msg || '';
+            profilePasswordStatus.classList.remove(
+                'nav-profile-username-status--error',
+                'nav-profile-username-status--ok'
+            );
+            if (kind === 'error') profilePasswordStatus.classList.add('nav-profile-username-status--error');
+            if (kind === 'ok') profilePasswordStatus.classList.add('nav-profile-username-status--ok');
+        }
+
+        function evaluatePasswordRules(password, password2) {
+            var p = password || '';
+            var p2 = password2 || '';
+            return {
+                len: p.length >= 8,
+                upper: /[A-Z]/.test(p),
+                lower: /[a-z]/.test(p),
+                digit: /[0-9]/.test(p),
+                symbol: /[^A-Za-z0-9]/.test(p),
+                match: p.length > 0 && p === p2,
+            };
+        }
+
+        function allPasswordRulesMet(r) {
+            return !!(r.len && r.upper && r.lower && r.digit && r.symbol && r.match);
+        }
+
+        function updateProfilePasswordUI() {
+            if (!profilePasswordForm || !profilePasswordSave) return;
+            var newPassword = profileNewPassword ? profileNewPassword.value : '';
+            var confirmPassword = profileConfirmPassword ? profileConfirmPassword.value : '';
+            var currentPassword = profileCurrentPassword ? profileCurrentPassword.value : '';
+            var rules = evaluatePasswordRules(newPassword, confirmPassword);
+            var ids = {
+                len: 'navPwRuleLen',
+                upper: 'navPwRuleUpper',
+                lower: 'navPwRuleLower',
+                digit: 'navPwRuleDigit',
+                symbol: 'navPwRuleSymbol',
+                match: 'navPwRuleMatch',
+            };
+            Object.keys(ids).forEach(function (key) {
+                var el = document.getElementById(ids[key]);
+                if (el) el.classList.toggle('is-met', !!rules[key]);
+            });
+            profilePasswordSave.disabled =
+                passwordSubmitting || !currentPassword || !allPasswordRulesMet(rules);
         }
 
         async function loadProfileUsername(supabase) {
@@ -116,6 +187,27 @@
                     if (e.key === 'Escape') setProfileOpen(false);
                 });
             }
+            if (profileUsernameToggle && profileUsernamePanel) {
+                profileUsernameToggle.addEventListener('click', function () {
+                    var open = profileUsernameToggle.getAttribute('aria-expanded') === 'true';
+                    setAccordionOpen(profileUsernameToggle, profileUsernamePanel, !open);
+                    if (!open) {
+                        setAccordionOpen(profilePasswordToggle, profilePasswordPanel, false);
+                        if (profileUsernameInput) profileUsernameInput.focus();
+                    }
+                });
+            }
+            if (profilePasswordToggle && profilePasswordPanel) {
+                profilePasswordToggle.addEventListener('click', function () {
+                    var open = profilePasswordToggle.getAttribute('aria-expanded') === 'true';
+                    setAccordionOpen(profilePasswordToggle, profilePasswordPanel, !open);
+                    if (!open) {
+                        setAccordionOpen(profileUsernameToggle, profileUsernamePanel, false);
+                        updateProfilePasswordUI();
+                        if (profileCurrentPassword) profileCurrentPassword.focus();
+                    }
+                });
+            }
             if (profileUsernameForm && profileUsernameInput) {
                 profileUsernameForm.addEventListener('submit', function (e) {
                     e.preventDefault();
@@ -150,6 +242,87 @@
                             setProfileUsernameStatus(String(err.message || err), 'error');
                         } finally {
                             if (profileUsernameSave) profileUsernameSave.disabled = false;
+                        }
+                    })();
+                });
+            }
+            if (profilePasswordForm) {
+                ['input', 'blur', 'paste'].forEach(function (evt) {
+                    if (profileCurrentPassword) {
+                        profileCurrentPassword.addEventListener(evt, function () {
+                            setTimeout(updateProfilePasswordUI, 0);
+                        });
+                    }
+                    if (profileNewPassword) {
+                        profileNewPassword.addEventListener(evt, function () {
+                            setTimeout(updateProfilePasswordUI, 0);
+                        });
+                    }
+                    if (profileConfirmPassword) {
+                        profileConfirmPassword.addEventListener(evt, function () {
+                            setTimeout(updateProfilePasswordUI, 0);
+                        });
+                    }
+                });
+                updateProfilePasswordUI();
+
+                profilePasswordForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    void (async function () {
+                        passwordSubmitting = true;
+                        updateProfilePasswordUI();
+                        setProfilePasswordStatus('Updating password…', null);
+                        try {
+                            var sessionRes = await supabase.auth.getSession();
+                            var session = sessionRes.data && sessionRes.data.session;
+                            var email =
+                                session &&
+                                session.user &&
+                                session.user.email;
+                            if (!session || !email) throw new Error('Not signed in.');
+
+                            var currentPassword = profileCurrentPassword
+                                ? profileCurrentPassword.value
+                                : '';
+                            var newPassword = profileNewPassword ? profileNewPassword.value : '';
+                            var confirmPassword = profileConfirmPassword
+                                ? profileConfirmPassword.value
+                                : '';
+                            var rules = evaluatePasswordRules(newPassword, confirmPassword);
+
+                            if (!currentPassword) {
+                                throw new Error('Enter your current password.');
+                            }
+                            if (!allPasswordRulesMet(rules)) {
+                                throw new Error(
+                                    'Use at least 8 characters with uppercase, lowercase, a number, and a symbol, and make sure both fields match.'
+                                );
+                            }
+                            if (newPassword === currentPassword) {
+                                throw new Error('Choose a password different from your current one.');
+                            }
+
+                            var reauth = await supabase.auth.signInWithPassword({
+                                email: email,
+                                password: currentPassword,
+                            });
+                            if (reauth.error) {
+                                throw new Error('Current password is incorrect.');
+                            }
+
+                            var updateRes = await supabase.auth.updateUser({
+                                password: newPassword,
+                            });
+                            if (updateRes.error) throw updateRes.error;
+
+                            if (profilePasswordForm) profilePasswordForm.reset();
+                            updateProfilePasswordUI();
+                            setProfilePasswordStatus('Password updated.', 'ok');
+                        } catch (err) {
+                            setProfilePasswordStatus(String(err.message || err), 'error');
+                        } finally {
+                            passwordSubmitting = false;
+                            updateProfilePasswordUI();
                         }
                     })();
                 });

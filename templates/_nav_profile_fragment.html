@@ -18,25 +18,119 @@
                         <p class="nav-profile-email" id="navProfileEmail">—</p>
                         <div class="nav-profile-settings">
                             <p class="nav-profile-menu-kicker">Profile settings</p>
-                            <form class="nav-profile-username-form" id="navProfileUsernameForm">
-                                <label class="nav-profile-username-label" for="navProfileUsernameInput">Username</label>
-                                <div class="nav-profile-username-row">
-                                    <span class="nav-profile-username-at" aria-hidden="true">@</span>
-                                    <input
-                                        type="text"
-                                        id="navProfileUsernameInput"
-                                        name="username"
-                                        autocomplete="off"
-                                        autocapitalize="off"
-                                        spellcheck="false"
-                                        maxlength="30"
-                                        placeholder="username"
-                                    />
+
+                            <div class="nav-profile-accordion" id="navProfileUsernameSection">
+                                <button
+                                    type="button"
+                                    class="nav-profile-accordion-toggle"
+                                    id="navProfileUsernameToggle"
+                                    aria-expanded="false"
+                                    aria-controls="navProfileUsernamePanel"
+                                >
+                                    <span>Update username</span>
+                                    <span class="nav-profile-accordion-chevron" aria-hidden="true"></span>
+                                </button>
+                                <div class="nav-profile-accordion-panel" id="navProfileUsernamePanel" hidden>
+                                    <form class="nav-profile-username-form" id="navProfileUsernameForm">
+                                        <label class="nav-profile-username-label" for="navProfileUsernameInput">Username</label>
+                                        <div class="nav-profile-username-row">
+                                            <span class="nav-profile-username-at" aria-hidden="true">@</span>
+                                            <input
+                                                type="text"
+                                                id="navProfileUsernameInput"
+                                                name="username"
+                                                autocomplete="off"
+                                                autocapitalize="off"
+                                                spellcheck="false"
+                                                maxlength="30"
+                                                placeholder="username"
+                                            />
+                                        </div>
+                                        <p class="nav-profile-username-hint">3–30 characters. Letters, numbers, underscores, and periods.</p>
+                                        <p class="nav-profile-username-status" id="navProfileUsernameStatus" aria-live="polite"></p>
+                                        <button type="submit" class="nav-profile-save-btn" id="navProfileUsernameSave">Save username</button>
+                                    </form>
                                 </div>
-                                <p class="nav-profile-username-hint">3–30 characters. Letters, numbers, underscores, and periods.</p>
-                                <p class="nav-profile-username-status" id="navProfileUsernameStatus" aria-live="polite"></p>
-                                <button type="submit" class="nav-profile-save-btn" id="navProfileUsernameSave">Save username</button>
-                            </form>
+                            </div>
+
+                            <div class="nav-profile-accordion" id="navProfilePasswordSection">
+                                <button
+                                    type="button"
+                                    class="nav-profile-accordion-toggle"
+                                    id="navProfilePasswordToggle"
+                                    aria-expanded="false"
+                                    aria-controls="navProfilePasswordPanel"
+                                >
+                                    <span>Change password</span>
+                                    <span class="nav-profile-accordion-chevron" aria-hidden="true"></span>
+                                </button>
+                                <div class="nav-profile-accordion-panel" id="navProfilePasswordPanel" hidden>
+                                    <form class="nav-profile-password-form" id="navProfilePasswordForm">
+                                        <label class="nav-profile-username-label" for="navProfileCurrentPassword">Current password</label>
+                                        <input
+                                            class="nav-profile-password-input"
+                                            type="password"
+                                            id="navProfileCurrentPassword"
+                                            name="current_password"
+                                            autocomplete="current-password"
+                                            required
+                                        />
+                                        <label class="nav-profile-username-label" for="navProfileNewPassword">New password</label>
+                                        <input
+                                            class="nav-profile-password-input"
+                                            type="password"
+                                            id="navProfileNewPassword"
+                                            name="new_password"
+                                            autocomplete="new-password"
+                                            minlength="8"
+                                            maxlength="128"
+                                            required
+                                        />
+                                        <label class="nav-profile-username-label" for="navProfileConfirmPassword">Confirm new password</label>
+                                        <input
+                                            class="nav-profile-password-input"
+                                            type="password"
+                                            id="navProfileConfirmPassword"
+                                            name="confirm_password"
+                                            autocomplete="new-password"
+                                            minlength="8"
+                                            maxlength="128"
+                                            required
+                                        />
+                                        <div class="nav-profile-pw-requirements" id="navProfilePwRequirements" aria-live="polite">
+                                            <p class="nav-profile-pw-requirements-title">Password strength</p>
+                                            <ul class="nav-profile-pw-rule-list">
+                                                <li class="nav-profile-pw-rule" id="navPwRuleLen" data-rule="len">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>At least 8 characters</span>
+                                                </li>
+                                                <li class="nav-profile-pw-rule" id="navPwRuleUpper" data-rule="upper">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>One uppercase letter (A–Z)</span>
+                                                </li>
+                                                <li class="nav-profile-pw-rule" id="navPwRuleLower" data-rule="lower">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>One lowercase letter (a–z)</span>
+                                                </li>
+                                                <li class="nav-profile-pw-rule" id="navPwRuleDigit" data-rule="digit">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>One number (0–9)</span>
+                                                </li>
+                                                <li class="nav-profile-pw-rule" id="navPwRuleSymbol" data-rule="symbol">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>One symbol (e.g. !@#$%)</span>
+                                                </li>
+                                                <li class="nav-profile-pw-rule" id="navPwRuleMatch" data-rule="match">
+                                                    <span class="nav-profile-pw-rule-mark" aria-hidden="true"></span>
+                                                    <span>Both password fields match</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <p class="nav-profile-username-status" id="navProfilePasswordStatus" aria-live="polite"></p>
+                                        <button type="submit" class="nav-profile-save-btn" id="navProfilePasswordSave" disabled>Update password</button>
+                                    </form>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

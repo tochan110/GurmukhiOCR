@@ -498,6 +498,22 @@
             gap: 0.45rem;
             white-space: nowrap;
         }
+        .dash2-quota-breakdown {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.12rem;
+        }
+        .dash2-quota-split {
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.3;
+        }
+        body.light-mode .dash2-quota-split {
+            color: rgba(50, 55, 70, 0.72);
+        }
         .dash2-quota-more {
             border: none;
             background: none;
@@ -2489,9 +2505,15 @@
                 </div>
                 <div class="dash2-subnav-actions">
                     <div class="dash2-quota-row dash2-quota-row--stack" id="dash2QuotaRow" hidden>
-                        <div class="dash2-quota-line">
-                            <span class="dash2-quota-label">Pages remaining</span>
-                            <span class="dash2-quota-value" id="dash2PagesRemaining">—</span>
+                        <div class="dash2-quota-breakdown">
+                            <div class="dash2-quota-line">
+                                <span class="dash2-quota-label">Credits</span>
+                                <span class="dash2-quota-value" id="dash2PagesRemaining">—</span>
+                            </div>
+                            <div class="dash2-quota-split" id="dash2QuotaSplit" hidden>
+                                <span id="dash2FreeCredits">—</span> free ·
+                                <span id="dash2PaidCredits">—</span> paid
+                            </div>
                         </div>
                         <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing" hidden>
                             Buy more credits →
@@ -2517,10 +2539,14 @@
                             <div class="dash2-upload-quota-summary" id="dash2UploadQuotaSummary" hidden>
                                 <p class="dash2-upload-quota-row">
                                     <span>
-                                        <strong id="dash2UploadQuotaNum">—</strong> pages remaining this month:
+                                        <strong id="dash2UploadQuotaNum">—</strong> credits total
+                                        (<span class="dash2-upload-quota-line--secondary">
+                                            (<span id="dash2UploadFreeCredits">—</span> free ·
+                                            <span id="dash2UploadPaidCredits">—</span> paid
+                                        </span>
                                     </span>
                                     <span class="dash2-upload-quota-line--secondary" id="dash2UploadQuotaResetLine">
-                                        Resets in <span id="dash2UploadQuotaReset">—</span>.
+                                        Free credits reset in <span id="dash2UploadQuotaReset">—</span>.
                                     </span>
                                 </p>
                                 <p class="dash2-upload-quota-more-wrap">
@@ -3215,7 +3241,11 @@
                                 if (stJson) {
                                     ocrStatusById[fid] = stJson;
                                     if (stJson.pages_remaining != null) {
-                                        setDash2PagesRemaining(stJson.pages_remaining);
+                                        setDash2PagesRemaining(
+                                            stJson.pages_remaining,
+                                            stJson.free_pages_remaining,
+                                            stJson.paid_pages_remaining
+                                        );
                                     }
                                 }
                             } catch (_stErr) {
@@ -3440,16 +3470,70 @@
 
             var quotaRow = document.getElementById('dash2QuotaRow');
             var quotaVal = document.getElementById('dash2PagesRemaining');
+            var quotaSplit = document.getElementById('dash2QuotaSplit');
+            var freeCreditsEl = document.getElementById('dash2FreeCredits');
+            var paidCreditsEl = document.getElementById('dash2PaidCredits');
             var uploadQuotaSummary = document.getElementById('dash2UploadQuotaSummary');
             var uploadQuotaNum = document.getElementById('dash2UploadQuotaNum');
+            var uploadFreeCreditsEl = document.getElementById('dash2UploadFreeCredits');
+            var uploadPaidCreditsEl = document.getElementById('dash2UploadPaidCredits');
             var uploadQuotaReset = document.getElementById('dash2UploadQuotaReset');
             var dash2NextResetAtIso = null;
             var dash2QuotaRefetching = false;
+            var dash2LastFreeCredits = null;
+            var dash2LastPaidCredits = null;
 
-            function setDash2PagesRemaining(n) {
+            function formatCreditCount(n) {
+                if (n == null || Number.isNaN(Number(n))) return '—';
+                return String(Math.max(0, Math.floor(Number(n))));
+            }
+
+            function setDash2CreditBreakdown(free, paid) {
+                dash2LastFreeCredits = free != null ? Number(free) : null;
+                dash2LastPaidCredits = paid != null ? Number(paid) : null;
+                var hasSplit =
+                    dash2LastFreeCredits != null &&
+                    !Number.isNaN(dash2LastFreeCredits) &&
+                    dash2LastPaidCredits != null &&
+                    !Number.isNaN(dash2LastPaidCredits);
+                if (quotaSplit) quotaSplit.hidden = !hasSplit;
+                if (freeCreditsEl) {
+                    freeCreditsEl.textContent = hasSplit
+                        ? formatCreditCount(dash2LastFreeCredits)
+                        : '—';
+                }
+                if (paidCreditsEl) {
+                    paidCreditsEl.textContent = hasSplit
+                        ? formatCreditCount(dash2LastPaidCredits)
+                        : '—';
+                }
+                if (uploadFreeCreditsEl) {
+                    uploadFreeCreditsEl.textContent = hasSplit
+                        ? formatCreditCount(dash2LastFreeCredits)
+                        : '—';
+                }
+                if (uploadPaidCreditsEl) {
+                    uploadPaidCreditsEl.textContent = hasSplit
+                        ? formatCreditCount(dash2LastPaidCredits)
+                        : '—';
+                }
+            }
+
+            function setDash2PagesRemaining(n, free, paid) {
                 if (!quotaVal || !quotaRow) return;
                 quotaRow.hidden = false;
                 quotaVal.textContent = n == null ? '—' : String(n);
+                if (free != null || paid != null) {
+                    setDash2CreditBreakdown(free, paid);
+                } else if (
+                    n != null &&
+                    dash2LastFreeCredits != null &&
+                    dash2LastPaidCredits != null
+                ) {
+                    setDash2CreditBreakdown(dash2LastFreeCredits, dash2LastPaidCredits);
+                } else {
+                    setDash2CreditBreakdown(null, null);
+                }
                 if (uploadQuotaNum && uploadQuotaSummary && !uploadQuotaSummary.hidden && n != null) {
                     uploadQuotaNum.textContent = String(n);
                 }
@@ -3505,11 +3589,16 @@
 
             function applyDash2QuotaFromApi(d) {
                 var n = d && d.pages_remaining != null ? d.pages_remaining : null;
+                var free =
+                    d && d.free_pages_remaining != null ? d.free_pages_remaining : null;
+                var paid =
+                    d && d.paid_pages_remaining != null ? d.paid_pages_remaining : null;
                 var iso = d && d.next_reset_at ? String(d.next_reset_at) : null;
                 if (!quotaVal || !quotaRow) return;
                 if (n == null || !iso) {
                     quotaRow.hidden = false;
                     quotaVal.textContent = n != null ? String(n) : '—';
+                    setDash2CreditBreakdown(free, paid);
                     dash2NextResetAtIso = null;
                     if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
                     if (uploadQuotaReset) uploadQuotaReset.textContent = '—';
@@ -3517,6 +3606,7 @@
                 }
                 quotaRow.hidden = false;
                 quotaVal.textContent = String(n);
+                setDash2CreditBreakdown(free, paid);
                 dash2NextResetAtIso = iso;
                 if (uploadQuotaSummary && uploadQuotaNum) {
                     uploadQuotaSummary.hidden = false;
@@ -3550,11 +3640,16 @@
                         applyDash2QuotaFromApi(d);
                     } else {
                         quotaVal.textContent = d.pages_remaining != null ? String(d.pages_remaining) : '—';
+                        setDash2CreditBreakdown(
+                            d.free_pages_remaining,
+                            d.paid_pages_remaining
+                        );
                         dash2NextResetAtIso = null;
                         if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
                     }
                 } catch (e) {
                     quotaVal.textContent = '—';
+                    setDash2CreditBreakdown(null, null);
                     dash2NextResetAtIso = null;
                     if (uploadQuotaSummary) uploadQuotaSummary.hidden = true;
                 }
@@ -3699,7 +3794,11 @@
                                 });
                                 if (!stJson) return;
                                 if (stJson.pages_remaining != null) {
-                                    setDash2PagesRemaining(stJson.pages_remaining);
+                                    setDash2PagesRemaining(
+                                        stJson.pages_remaining,
+                                        stJson.free_pages_remaining,
+                                        stJson.paid_pages_remaining
+                                    );
                                 }
                                 var apiStatus = String(stJson.status || '').toLowerCase();
                                 if (
@@ -6486,7 +6585,11 @@
                     }
                     if (!preflightRes.ok || preflightJson.can_process === false) {
                         if (preflightJson.pages_remaining != null) {
-                            setDash2PagesRemaining(preflightJson.pages_remaining);
+                            setDash2PagesRemaining(
+                                preflightJson.pages_remaining,
+                                preflightJson.free_pages_remaining,
+                                preflightJson.paid_pages_remaining
+                            );
                         }
                         if (preflightJson.error_type === 'insufficient_pages') {
                             var have = preflightJson.pages_remaining;
@@ -6512,7 +6615,11 @@
                         }
                     } else {
                         if (preflightJson.pages_remaining != null) {
-                            setDash2PagesRemaining(preflightJson.pages_remaining);
+                            setDash2PagesRemaining(
+                                preflightJson.pages_remaining,
+                                preflightJson.free_pages_remaining,
+                                preflightJson.paid_pages_remaining
+                            );
                         }
                         setUploadProgress(false);
                         showUploadConfirm(preflightJson, file);
@@ -6584,7 +6691,11 @@
                     });
                     if (!procRes.ok) {
                         if (procJson.pages_remaining != null) {
-                            setDash2PagesRemaining(procJson.pages_remaining);
+                            setDash2PagesRemaining(
+                                procJson.pages_remaining,
+                                procJson.free_pages_remaining,
+                                procJson.paid_pages_remaining
+                            );
                         }
                         if (procJson.error_type === 'insufficient_pages') {
                             await cleanupPendingUpload();
@@ -6594,7 +6705,11 @@
                         throw new Error(procJson.error || procRes.statusText || String(procRes.status));
                     }
                     if (procJson.pages_remaining != null) {
-                        setDash2PagesRemaining(procJson.pages_remaining);
+                        setDash2PagesRemaining(
+                            procJson.pages_remaining,
+                            procJson.free_pages_remaining,
+                            procJson.paid_pages_remaining
+                        );
                     }
                     hideUploadConfirm();
                     setUploadProgress(false);
