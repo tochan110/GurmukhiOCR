@@ -24,6 +24,27 @@
         };
         var openId = null;
 
+        function revealContactEmails(root) {
+            if (!root || !root.querySelectorAll) return;
+            root.querySelectorAll('.js-contact-email').forEach(function (el) {
+                if (el.getAttribute('data-revealed') === '1') return;
+                try {
+                    var user = atob(el.getAttribute('data-u') || '');
+                    var domain = atob(el.getAttribute('data-d') || '');
+                    if (!user || !domain) return;
+                    var email = user + '@' + domain;
+                    el.setAttribute('href', 'mailto:' + email);
+                    el.textContent = email;
+                    el.setAttribute('data-revealed', '1');
+                } catch (_err) {
+                    /* leave placeholder */
+                }
+            });
+        }
+
+        // Expose for other contact modals on the same page.
+        window.revealContactEmails = revealContactEmails;
+
         function openLegal(which) {
             var el = modals[which];
             if (!el) return;
@@ -31,6 +52,7 @@
                 closeLegal(openId);
             }
             openId = which;
+            revealContactEmails(el);
             el.hidden = false;
             el.classList.add('is-open');
             document.body.style.overflow = 'hidden';

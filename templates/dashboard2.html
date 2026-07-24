@@ -2804,7 +2804,12 @@
             <h2 id="dash2HigherLimitsModalTitle">Larger-volume OCR</h2>
             <p class="modal-body">
                 To discuss high-volume OCR, schedule a meeting, or request a custom quote, email us at
-                <a class="modal-email-slot" href="mailto:team@gurmukhiocr.com">team@gurmukhiocr.com</a>
+                <a
+                    class="modal-email-slot js-contact-email"
+                    href="#"
+                    data-u="dGVhbQ=="
+                    data-d="Z3VybXVraGlvY3IuY29t"
+                >contact email</a>
                 from the address you use with GurmukhiOCR, and we will follow up.
             </p>
         </div>
@@ -2949,6 +2954,16 @@
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && overlay.classList.contains('is-open')) close();
             });
+            // Reveal obfuscated contact email if this modal is opened.
+            var mo = new MutationObserver(function () {
+                if (
+                    overlay.classList.contains('is-open') &&
+                    typeof window.revealContactEmails === 'function'
+                ) {
+                    window.revealContactEmails(overlay);
+                }
+            });
+            mo.observe(overlay, { attributes: true, attributeFilter: ['class'] });
         })();
     </script>
     <script>

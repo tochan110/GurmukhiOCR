@@ -1187,7 +1187,12 @@
             <h2 id="volumeEmailModalTitle">Larger-volume OCR</h2>
             <p class="modal-body">
                 To discuss high-volume OCR, schedule a meeting, or request a custom quote, email us at
-                <a class="modal-email-slot" href="mailto:team@gurmukhiocr.com">team@gurmukhiocr.com</a>
+                <a
+                    class="modal-email-slot js-contact-email"
+                    href="#"
+                    data-u="dGVhbQ=="
+                    data-d="Z3VybXVraGlvY3IuY29t"
+                >contact email</a>
                 from the address you use with GurmukhiOCR, and we will follow up.
             </p>
         </div>
@@ -1229,6 +1234,9 @@
             if (!overlay || !openBtn) return;
             var closeBtn = overlay.querySelector('.modal-close');
             function open() {
+                if (typeof window.revealContactEmails === 'function') {
+                    window.revealContactEmails(overlay);
+                }
                 overlay.classList.add('is-open');
                 document.body.style.overflow = 'hidden';
                 closeBtn.focus();
