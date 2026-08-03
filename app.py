@@ -3448,7 +3448,6 @@ def login_page():
     )
     return render_template(
         "login.html",
-        active_page="login",
         **supabase_browser_config,
         **seo,
     )
@@ -3467,7 +3466,6 @@ def signup_page():
     )
     return render_template(
         "signup.html",
-        active_page="signup",
         **supabase_browser_config,
         **seo,
     )
