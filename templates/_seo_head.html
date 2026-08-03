@@ -1,0 +1,40 @@
+{# Shared SEO / social / favicon head tags.
+   Required context: page_title, meta_description, canonical_url, app_base_url
+   Optional: og_type, og_image, robots_content, twitter_card, json_ld (list of dicts)
+#}
+<title>{{ page_title|default('GurmukhiOCR') }}</title>
+<meta name="description" content="{{ meta_description|default('Online Punjabi OCR and Gurmukhi OCR for scanned PDFs and images.') }}">
+<link rel="canonical" href="{{ canonical_url }}">
+{% if robots_content %}
+<meta name="robots" content="{{ robots_content }}">
+{% else %}
+<meta name="robots" content="index, follow">
+{% endif %}
+<meta name="theme-color" content="#0e1018">
+<meta name="application-name" content="GurmukhiOCR">
+<meta name="author" content="GurmukhiOCR">
+
+<meta property="og:type" content="{{ og_type|default('website') }}">
+<meta property="og:site_name" content="GurmukhiOCR">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="{{ page_title }}">
+<meta property="og:description" content="{{ meta_description }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:image" content="{{ og_image|default(app_base_url ~ '/static/dashboard_dark.png') }}">
+<meta property="og:image:alt" content="{{ og_image_alt|default('GurmukhiOCR Punjabi and Gurmukhi OCR dashboard preview') }}">
+
+<meta name="twitter:card" content="{{ twitter_card|default('summary_large_image') }}">
+<meta name="twitter:title" content="{{ page_title }}">
+<meta name="twitter:description" content="{{ meta_description }}">
+<meta name="twitter:image" content="{{ og_image|default(app_base_url ~ '/static/dashboard_dark.png') }}">
+<meta name="twitter:image:alt" content="{{ og_image_alt|default('GurmukhiOCR Punjabi and Gurmukhi OCR dashboard preview') }}">
+
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+
+{% if json_ld %}
+{% for block in json_ld %}
+<script type="application/ld+json">{{ block | tojson }}</script>
+{% endfor %}
+{% endif %}

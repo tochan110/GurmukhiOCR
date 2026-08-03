@@ -1,0 +1,24 @@
+{# Shared reveal for obfuscated contact mailto links (.js-contact-email). #}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        function reveal(root) {
+            (root || document).querySelectorAll('.js-contact-email').forEach(function (el) {
+                if (el.getAttribute('data-revealed') === '1') return;
+                try {
+                    var user = atob(el.getAttribute('data-u') || '');
+                    var domain = atob(el.getAttribute('data-d') || '');
+                    if (!user || !domain) return;
+                    var email = user + '@' + domain;
+                    el.setAttribute('href', 'mailto:' + email);
+                    el.textContent = email;
+                    el.setAttribute('data-revealed', '1');
+                } catch (_e) {}
+            });
+        }
+        if (typeof window.revealContactEmails === 'function') {
+            window.revealContactEmails(document);
+        } else {
+            reveal(document);
+        }
+    });
+</script>

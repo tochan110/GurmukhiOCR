@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}GurmukhiOCR{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
+    {% include "_seo_head.html" %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
@@ -398,10 +396,14 @@
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
         <a href="/" class="nav-brand">
-            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="" aria-hidden="true">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="GurmukhiOCR logo">
             <span>GurmukhiOCR</span>
         </a>
         <nav class="top-nav" aria-label="Main">
+            <a href="/pricing">Pricing</a>
+            <a href="/about">About</a>
+            <a href="/faq">FAQ</a>
+            <a href="/contact">Contact</a>
             <span class="nav-auth-guest" id="navAuthGuest">
                 <a href="/login" class="{% if active_page|default('') == 'login' %}nav-active{% endif %}">Log in</a>
                 <a href="/signup" class="{% if active_page|default('') == 'signup' %}nav-active{% endif %}">Sign up</a>

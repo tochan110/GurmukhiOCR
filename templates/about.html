@@ -1,0 +1,56 @@
+{% extends "public_base.html" %}
+{% block content %}
+<p>
+    <strong>GurmukhiOCR</strong> is an online <strong>Punjabi OCR</strong> and
+    <strong>Gurmukhi OCR</strong> product for turning scanned documents into editable Unicode text.
+</p>
+<p>
+    {{ business.product_summary }}
+</p>
+
+<h2>Contact</h2>
+<ul>
+    <li><strong>Brand:</strong> GurmukhiOCR</li>
+    <li>
+        <strong>Support:</strong>
+        <a class="legal-inline-link js-contact-email" href="#" data-u="dGVhbQ==" data-d="Z3VybXVraGlvY3IuY29t">contact email</a>
+        (<a href="/contact">Contact page</a>)
+    </li>
+</ul>
+
+<h2>What customers get</h2>
+<ul>
+    <li>Upload a PDF or image and run OCR with Google Cloud Vision</li>
+    <li>Review and edit Unicode text in a side-by-side editor</li>
+    <li>Export full text as a .txt file</li>
+    <li>Start with free monthly OCR credits; optional one-time paid credit packs</li>
+    <li>See what you are buying on the <a href="/pricing">pricing page</a> before checkout</li>
+</ul>
+
+<h2>Screenshots / demo</h2>
+<p>
+    The homepage shows the live product UI (dark and light dashboard previews). You can also
+    <a href="/signup">create a free account</a> and run OCR on a sample file using free credits—no purchase required.
+</p>
+<figure style="margin:1rem 0 1.5rem">
+    <img
+        src="{{ url_for('static', filename='dashboard_dark.png') }}"
+        alt="GurmukhiOCR dashboard screenshot showing OCR text beside a document page"
+        width="960"
+        height="720"
+        loading="lazy"
+        decoding="async"
+        style="width:100%;height:auto;border-radius:12px;border:1px solid var(--stroke)"
+    >
+</figure>
+
+<h2>Policies</h2>
+<p>
+    <a href="/privacy">Privacy Policy</a> ·
+    <a href="/terms">Terms of Service</a> ·
+    <a href="/refund">Refund Policy</a> ·
+    <a href="/faq">FAQ</a>
+</p>
+
+{% include "_contact_email_script.html" %}
+{% endblock %}

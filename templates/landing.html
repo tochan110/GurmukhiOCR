@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if pricing_page %}Pricing — {% endif %}GurmukhiOCR</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
+    {% include "_seo_head.html" %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+Gurmukhi:wght@500;600&display=swap" rel="stylesheet">
@@ -987,12 +985,15 @@
 <body>
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
-        <a href="/" class="nav-brand">
-            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="" aria-hidden="true">
+            <a href="/" class="nav-brand">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="GurmukhiOCR logo">
             <span>GurmukhiOCR</span>
         </a>
         <nav class="top-nav" aria-label="Main">
             <a href="/pricing"{% if pricing_page %} class="nav-active"{% endif %}>Pricing</a>
+            <a href="/about">About</a>
+            <a href="/faq">FAQ</a>
+            <a href="/contact">Contact</a>
             <span class="nav-auth-guest" id="navAuthGuest">
                 <a href="/login">Log in</a>
                 <a href="/signup">Sign up</a>
@@ -1001,7 +1002,7 @@
                 <a href="/dashboard2">Dashboard</a>
                 <button type="button" class="nav-logout-btn" id="navLogoutBtn">Log out</button>
             </span>
-            <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">
+            <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark" aria-label="Toggle light and dark theme">
                 <span id="themeIcon">🌙</span>
                 <span id="themeLabel">Dark</span>
             </button>
@@ -1013,15 +1014,13 @@
         <section class="hero-layout" aria-labelledby="hero-heading">
             <div class="hero-copy">
                 <h1 class="gurmukhi" id="hero-heading">
-                    OCR for
-                    <span class="hero-language-wrap">
-                        <span class="hero-language-word">Punjabi</span>
-                    </span>
-                    PDFs and Images
+                    Punjabi &amp; Gurmukhi OCR
                 </h1>
-                <h2 class="hero-subtitle">Turn scanned documents into editable text.</h2>
+                <h2 class="hero-subtitle">Convert scanned Punjabi PDFs and images into editable Unicode text.</h2>
                 <p class="desc">
-                    Works automatically with English and all languages supported by Google Cloud Vision.
+                    Online <strong>Punjabi PDF OCR</strong> and <strong>Punjabi image OCR</strong> powered by
+                    Google Cloud Vision—built for Gurmukhi scans, books, and everyday documents.
+                    English and other Vision-supported languages are detected automatically when present.
                 </p>
                 <div class="language-coverage" aria-label="Supported language examples">
                     <p class="language-coverage-label">Covers languages including</p>
@@ -1041,23 +1040,22 @@
 
                 <div class="hero-cta-block">
                     <div class="cta-row">
-                        <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">Open Dashboard</a>
+                        <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">Start free Punjabi OCR</a>
                     </div>
-                    <p class="cta-microcopy">Free to use. No credit card required.</p>
+                    <p class="cta-microcopy">Free monthly credits. No credit card required.</p>
                 </div>
             </div>
-            <figure class="hero-preview" aria-label="GurmukhiOCR side-by-side dashboard preview">
-                <img class="hero-preview-dark" src="{{ url_for('static', filename='dashboard_dark.png') }}" alt="GurmukhiOCR dashboard in dark mode">
-                <img class="hero-preview-light" src="{{ url_for('static', filename='dashboard_light.png') }}" alt="GurmukhiOCR dashboard in light mode">
+            <figure class="hero-preview" aria-label="GurmukhiOCR side-by-side Punjabi OCR dashboard preview">
+                <img class="hero-preview-dark" src="{{ url_for('static', filename='dashboard_dark.png') }}" width="960" height="720" loading="eager" decoding="async" fetchpriority="high" alt="GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in dark mode">
+                <img class="hero-preview-light" src="{{ url_for('static', filename='dashboard_light.png') }}" width="960" height="720" loading="lazy" decoding="async" alt="GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in light mode">
             </figure>
         </section>
-        <!-- <p class="hero-highlight">20 pages / images included free, every month.</p> -->
 
         <section class="flow-section" aria-labelledby="flow-heading">
             <div class="flow-section-head">
                 <p class="flow-kicker">How it works</p>
-                <h2 class="flow-title" id="flow-heading">From file to finished text</h2>
-                <p class="flow-sub">Upload, OCR, refine, and export—without leaving your browser.</p>
+                <h2 class="flow-title" id="flow-heading">From scanned Punjabi file to editable text</h2>
+                <p class="flow-sub">Upload a PDF or image, run Gurmukhi OCR, refine the Unicode text, and export—without leaving your browser.</p>
             </div>
             <ol class="flow-steps">
                 <li class="flow-step">
@@ -1069,7 +1067,7 @@
                         </svg>
                     </div>
                     <h3>Upload</h3>
-                    <p>Add a PDF or image.</p>
+                    <p>Add a Punjabi PDF or scanned image for document OCR.</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1083,7 +1081,7 @@
                         </svg>
                     </div>
                     <h3>OCR</h3>
-                    <p>Google Cloud Vision OCR at <strong>92-99.3% accuracy</strong> on clean printed Gurmukhi.</p>
+                    <p>Google Cloud Vision OCR at <strong>92-99.3% accuracy</strong> on clean printed Gurmukhi—ideal for converting scanned Punjabi books and pages.</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1093,7 +1091,7 @@
                         </svg>
                     </div>
                     <h3>Review &amp; edit</h3>
-                    <p>Use our editor to see each page and fix text where you need to.</p>
+                    <p>Use the side-by-side editor to check each page and fix editable Unicode Punjabi text where needed.</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1104,7 +1102,7 @@
                         </svg>
                     </div>
                     <h3>Export</h3>
-                    <p>Download structured full-text (<strong>.txt</strong>).</p>
+                    <p>Download structured full-text (<strong>.txt</strong>) ready to search, copy, and reuse.</p>
                 </li>
             </ol>
         </section>
@@ -1113,10 +1111,15 @@
         <section class="pricing-section{% if pricing_page %} pricing-section--page{% endif %}" aria-labelledby="pricing-heading">
             <div class="pricing-section-head">
                 <p class="pricing-section-kicker">Plans</p>
-                <h2 class="pricing-section-title" id="pricing-heading">{% if pricing_page %}Pricing{% else %}Simple OCR credits{% endif %}</h2>
+                {% if pricing_page %}
+                <h1 class="pricing-section-title" id="pricing-heading">Pricing for Punjabi OCR credits</h1>
+                {% else %}
+                <h2 class="pricing-section-title" id="pricing-heading">Simple OCR credits</h2>
+                {% endif %}
                 <p class="pricing-section-sub">
-                    Get <strong>{{ monthly_free_credit_allowance }} free credits every month</strong><span class="payments-hidden">,
-                    or buy a one-time credit pack. Paid credits never expire.</span>
+                    Get <strong>{{ monthly_free_credit_allowance }} free credits every month</strong>,
+                    or buy a one-time OCR credit pack. Paid credits never expire.
+                    One credit = one PDF page or one image.
                 </p>
             </div>
             <div class="pricing-grid">
@@ -1133,17 +1136,17 @@
                     </ul>
                 </article>
 
-                <article class="pricing-tier pricing-tier--paid payments-hidden" aria-label="Lifetime page packs">
+                <article class="pricing-tier pricing-tier--paid" aria-label="Lifetime page packs">
                     <p class="pricing-tier-label">Buy once</p>
                     <p class="pricing-tier-price"><span class="amt">Credit packs</span><span class="per">paid credits never expire</span></p>
-                    <p class="pricing-tier-note">No subscription. No expiration.</p>
-                    <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account forever.</p>
+                    <p class="pricing-tier-note">No subscription. Digital OCR credits delivered to your account after checkout.</p>
+                    <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account.</p>
                     <div class="page-pack-options" aria-label="Choose a page pack">
                         {% for package in pricing_packages %}
                         <button class="page-pack-btn" type="button" data-stripe-price-id="{{ package.price_id }}">
                             <span class="page-pack-info">
-                                <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} credits</span>
-                                <span class="page-pack-rate">One-time purchase</span>
+                                <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} OCR credits</span>
+                                <span class="page-pack-rate">One-time · {{ "{:,}".format(package.credits) }} pages/images</span>
                             </span>
                             <span class="page-pack-price">
                                 <span class="page-pack-action">Buy →</span>
@@ -1170,7 +1173,8 @@
             </div>
             <p class="pricing-credit-note">
                 * Pages / images: 1 image = 1 credit. 1 page from a PDF = 1 image = 1 credit.
-                <span class="payments-hidden">Paid credits stay on your account forever.</span>
+                Paid credits stay on your account forever.
+                See our <a href="/refund">refund policy</a> and <a href="/terms">terms</a>.
             </p>
             <div class="pricing-cta">
                 <a class="btn btn-primary" id="pricingFreeCta" href="/signup">Use for Free</a>

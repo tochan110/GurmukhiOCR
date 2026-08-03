@@ -1,0 +1,24 @@
+{
+  "name": "GurmukhiOCR",
+  "short_name": "GurmukhiOCR",
+  "description": "Online Punjabi OCR and Gurmukhi OCR — convert scanned Punjabi PDFs and images into editable Unicode text.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07080c",
+  "theme_color": "#0e1018",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/static/gocr_logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/gocr_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{% extends "public_base.html" %}
+{% block content %}
+<div class="faq-item">
+    <h2>What is GurmukhiOCR?</h2>
+    <p>
+        GurmukhiOCR is an online <strong>Punjabi OCR</strong> / <strong>Gurmukhi OCR</strong> service.
+        It converts scanned Punjabi PDFs and images into editable Unicode text using Google Cloud Vision.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>What am I buying on the pricing page?</h2>
+    <p>
+        You can use <strong>free monthly OCR credits</strong>, or optionally purchase
+        <strong>one-time paid credit packs</strong>. Each credit generally covers OCR for
+        <strong>one PDF page or one image</strong>. Paid credits are added to your account after checkout
+        and do not expire from simple non-use. See <a href="/pricing">pricing</a>.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>Can I try the product before paying?</h2>
+    <p>
+        Yes. <a href="/signup">Sign up</a>, open the dashboard, upload a sample file, run OCR, review text,
+        and export using your free monthly credits. No credit card is required to test the core product.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>How are my files processed?</h2>
+    <p>
+        Uploads are stored with your account so you can reopen them. For OCR, a temporary copy may be sent
+        to Google Cloud Vision. Temporary processing objects are cleaned up after the OCR job finishes.
+        Details are in our <a href="/privacy">Privacy Policy</a>.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>How long do you keep my uploads?</h2>
+    <p>
+        Files and OCR results stay in your account until you delete them or request deletion.
+        Temporary Google Cloud processing copies used only for OCR are removed after the job completes.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>Are files encrypted?</h2>
+    <p>
+        Production website traffic uses HTTPS/TLS. Files are stored with cloud providers (Supabase and Google Cloud)
+        that provide industry-standard transport and provider-managed storage protections. Access in the app
+        requires signing in (and only your chosen collaborators if you share a file).
+    </p>
+</div>
+<div class="faq-item">
+    <h2>What is your refund policy?</h2>
+    <p>
+        Paid credit packs may be refundable within {{ business.refund_days }} days subject to usage limits
+        and the conditions in our <a href="/refund">Refund Policy</a>.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>How do I contact support?</h2>
+    <p>
+        Email
+        <a class="legal-inline-link js-contact-email" href="#" data-u="dGVhbQ==" data-d="Z3VybXVraGlvY3IuY29t">contact email</a>
+        or use the <a href="/contact">contact page</a>. We typically respond within {{ business.support_response }}.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>Can I convert a Punjabi PDF to editable text?</h2>
+    <p>
+        Yes. Upload a multi-page PDF, run OCR, review page by page, then export .txt.
+    </p>
+</div>
+<div class="faq-item">
+    <h2>Which languages are supported?</h2>
+    <p>
+        Gurmukhi / Punjabi is the primary focus. English and other Google Cloud Vision–supported languages
+        are handled when present in your files.
+    </p>
+</div>
+{% include "_contact_email_script.html" %}
+{% endblock %}

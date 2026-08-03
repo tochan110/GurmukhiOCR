@@ -1,0 +1,39 @@
+{% extends "public_base.html" %}
+{% block content %}
+<p>
+    Questions about GurmukhiOCR, billing, OCR credits, privacy, or deletion requests?
+    We read every message sent to support.
+</p>
+
+<h2>Email support</h2>
+<p>
+    <a class="legal-inline-link js-contact-email" href="#" data-u="dGVhbQ==" data-d="Z3VybXVraGlvY3IuY29t">contact email</a>
+</p>
+<p>
+    Typical response time: within <strong>{{ business.support_response }}</strong> on business days.
+    For faster help, include your account email and a short description of the issue.
+</p>
+
+<h2>Business</h2>
+<ul>
+    <li><strong>Brand:</strong> GurmukhiOCR</li>
+    <li><strong>Support email:</strong>
+        <a class="legal-inline-link js-contact-email" href="#" data-u="dGVhbQ==" data-d="Z3VybXVraGlvY3IuY29t">contact email</a>
+    </li>
+</ul>
+
+<h2>What we sell</h2>
+<p>
+    {{ business.product_summary }}
+    See <a href="/pricing">pricing</a> for free monthly credits and one-time paid credit packs, and
+    <a href="/refund">refund policy</a> for purchase refunds.
+</p>
+
+<h2>Try before you buy</h2>
+<p>
+    Create a free account at <a href="/signup">sign up</a>, open the dashboard, upload a sample PDF or
+    image, run OCR, and export text using your monthly free credits—no payment required to test the product.
+</p>
+
+{% include "_contact_email_script.html" %}
+{% endblock %}

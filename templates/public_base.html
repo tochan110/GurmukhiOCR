@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "_seo_head.html" %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg0: #07080c;
+            --bg1: #0e1018;
+            --stroke: rgba(255, 255, 255, 0.06);
+            --text: #e8eaef;
+            --muted: rgba(200, 206, 220, 0.72);
+            --faint: rgba(160, 168, 190, 0.45);
+            --accent: #6b8cff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { -webkit-font-smoothing: antialiased; }
+        body {
+            min-height: 100vh;
+            font-family: "DM Sans", system-ui, sans-serif;
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 50% -20%, rgba(107, 140, 255, 0.12), transparent 55%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+            display: flex;
+            flex-direction: column;
+        }
+        body.light-mode {
+            --stroke: rgba(0, 0, 0, 0.08);
+            --text: #14161c;
+            --muted: rgba(50, 55, 70, 0.78);
+            --faint: rgba(70, 78, 98, 0.55);
+            background: linear-gradient(180deg, #f6f7fb 0%, #e8eaf0 100%);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem 1.75rem;
+            border-bottom: 1px solid var(--stroke);
+        }
+        .nav-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            text-decoration: none;
+        }
+        .nav-brand-logo {
+            width: 1.55rem;
+            height: 1.55rem;
+            border-radius: 7px;
+            object-fit: contain;
+        }
+        .top-nav {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .top a:not(.nav-brand) {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+            text-decoration: none;
+        }
+        .top a:not(.nav-brand):hover,
+        .top a.nav-active { color: var(--text); }
+        .public-main {
+            width: 100%;
+            max-width: 44rem;
+            margin: 0 auto;
+            padding: 2.5rem 1.25rem 3.5rem;
+            flex: 1;
+        }
+        .public-main h1 {
+            font-size: clamp(1.6rem, 3vw, 2.1rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.85rem;
+        }
+        .public-main .lede {
+            color: var(--muted);
+            font-size: 1.02rem;
+            line-height: 1.55;
+            margin-bottom: 1.75rem;
+        }
+        .public-content p {
+            margin: 0 0 1rem;
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+        .public-content strong { color: var(--text); font-weight: 600; }
+        .public-content ul {
+            margin: 0 0 1rem 1.15rem;
+            color: var(--muted);
+            line-height: 1.55;
+            font-size: 0.95rem;
+        }
+        .public-content li { margin-bottom: 0.45rem; }
+        .public-content h2 {
+            font-size: 1.05rem;
+            font-weight: 650;
+            margin: 1.75rem 0 0.65rem;
+            color: var(--text);
+        }
+        .faq-item { margin-bottom: 1.25rem; }
+        .faq-item h2 {
+            margin: 0 0 0.4rem;
+            font-size: 1rem;
+        }
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--stroke);
+            border-radius: 999px;
+            padding: 0.45rem 0.95rem;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+            font-family: inherit;
+        }
+        body.light-mode .theme-toggle {
+            background: rgba(255, 255, 255, 0.75);
+        }
+    </style>
+    {% include "_legal_footer_styles.html" %}
+</head>
+<body>
+    <header class="top">
+        <a href="/" class="nav-brand">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="GurmukhiOCR logo">
+            <span>GurmukhiOCR</span>
+        </a>
+        <nav class="top-nav" aria-label="Main">
+            <a href="/pricing"{% if active_page == 'pricing' %} class="nav-active"{% endif %}>Pricing</a>
+            <a href="/about"{% if active_page == 'about' %} class="nav-active"{% endif %}>About</a>
+            <a href="/faq"{% if active_page == 'faq' %} class="nav-active"{% endif %}>FAQ</a>
+            <a href="/contact"{% if active_page == 'contact' %} class="nav-active"{% endif %}>Contact</a>
+            <a href="/login">Log in</a>
+            <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark" aria-label="Toggle light and dark theme">
+                <span id="themeIcon">🌙</span>
+                <span id="themeLabel">Dark</span>
+            </button>
+        </nav>
+    </header>
+    <main class="public-main">
+        <h1>{{ page_heading }}</h1>
+        {% if page_lede %}<p class="lede">{{ page_lede }}</p>{% endif %}
+        <div class="public-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+    {% include "_site_footer_legal.html" %}
+    <script>
+        (function () {
+            var body = document.body;
+            var icon = document.getElementById('themeIcon');
+            var label = document.getElementById('themeLabel');
+            var btn = document.getElementById('themeToggle');
+            function applyTheme(name) {
+                if (name === 'light') {
+                    body.classList.add('light-mode');
+                    if (icon) icon.textContent = '☀️';
+                    if (label) label.textContent = 'Light';
+                } else {
+                    body.classList.remove('light-mode');
+                    if (icon) icon.textContent = '🌙';
+                    if (label) label.textContent = 'Dark';
+                }
+            }
+            applyTheme(localStorage.getItem('theme') || 'dark');
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    var next = body.classList.contains('light-mode') ? 'dark' : 'light';
+                    localStorage.setItem('theme', next);
+                    applyTheme(next);
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard · GurmukhiOCR</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='gocr_logo.png') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='gocr_logo.png') }}">
+    {% include "_seo_head.html" %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+Gurmukhi:wght@500;600&display=swap" rel="stylesheet">
@@ -2475,7 +2473,7 @@
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
         <a href="/" class="nav-brand">
-            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="" aria-hidden="true">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="GurmukhiOCR logo">
             <span>GurmukhiOCR</span>
         </a>
         <nav class="top-nav" aria-label="Main">
@@ -2515,7 +2513,7 @@
                                 <span id="dash2PaidCredits">—</span> paid
                             </div>
                         </div>
-                        <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing" hidden>
+                        <a class="dash2-quota-more" id="dash2QuotaContactNav" href="/pricing">
                             Buy more credits →
                         </a>
                     </div>
@@ -2550,7 +2548,7 @@
                                     </span>
                                 </p>
                                 <p class="dash2-upload-quota-more-wrap">
-                                    <a class="dash2-quota-more" id="dash2QuotaContactUpload" href="/pricing" hidden>
+                                    <a class="dash2-quota-more" id="dash2QuotaContactUpload" href="/pricing">
                                         Buy more credits →
                                     </a>
                                 </p>
@@ -6617,7 +6615,7 @@
                                     ' credits, but you have ' +
                                     escapeHtml(have == null ? '0' : String(have)) +
                                     '. ' +
-                                    '<button type="button" class="dash2-quota-more dash2-upload-status-action" data-dash2-open-credits hidden>Need more credits?</button>'
+                                    '<button type="button" class="dash2-quota-more dash2-upload-status-action" data-dash2-open-credits>Need more credits?</button>'
                             );
                         } else {
                             errors.push(

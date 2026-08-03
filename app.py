@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, Response
+from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, Response, has_request_context
 from dotenv import load_dotenv
 from google.cloud import vision
 from google.oauth2 import service_account
@@ -207,6 +207,147 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = _is_production()
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
+# Public site origin for canonicals, sitemap, OG URLs, and auth redirects.
+PUBLIC_APP_URL = (
+    os.environ.get("PUBLIC_APP_URL") or os.environ.get("APP_BASE_URL") or ""
+).strip().rstrip("/")
+
+# Trust / legal identity shown on About, Contact, Privacy, Terms, Refund pages.
+# Brand-only for now (no separate legal-entity display).
+BUSINESS_PROFILE = {
+    "brand_name": "GurmukhiOCR",
+    "legal_name": "GurmukhiOCR",
+    "support_email": "team@gurmukhiocr.com",
+    "support_response": (os.environ.get("BUSINESS_SUPPORT_RESPONSE") or "1–2 business days").strip(),
+    "refund_days": int((os.environ.get("BUSINESS_REFUND_DAYS") or "14").strip() or "14"),
+    "refund_max_credits_used": int(
+        (os.environ.get("BUSINESS_REFUND_MAX_CREDITS_USED") or "20").strip() or "20"
+    ),
+    "liability_months": int((os.environ.get("BUSINESS_LIABILITY_MONTHS") or "12").strip() or "12"),
+    "product_summary": (
+        "GurmukhiOCR provides online Punjabi / Gurmukhi OCR: customers upload PDFs or images, "
+        "we run optical character recognition with Google Cloud Vision, customers review and edit "
+        "Unicode text in the browser, and export .txt. Free monthly OCR credits are included; "
+        "optional paid one-time packs add OCR credits (1 credit ≈ 1 page or image)."
+    ),
+}
+
+
+def get_public_app_base_url() -> str:
+    """Return the public site origin for the current environment."""
+    if PUBLIC_APP_URL:
+        return PUBLIC_APP_URL
+    if has_request_context():
+        proto = (
+            (request.headers.get("X-Forwarded-Proto") or request.scheme or "http")
+            .split(",")[0]
+            .strip()
+        )
+        host = (
+            (request.headers.get("X-Forwarded-Host") or request.host or "")
+            .split(",")[0]
+            .strip()
+        )
+        if host:
+            return f"{proto}://{host}".rstrip("/")
+        root = (request.url_root or "").rstrip("/")
+        if root:
+            return root
+    return "http://127.0.0.1:5000"
+
+
+def _seo_context(
+    *,
+    title: str,
+    description: str,
+    path: str,
+    robots: str | None = None,
+    json_ld: list | None = None,
+    page_heading: str | None = None,
+    page_lede: str | None = None,
+    active_page: str | None = None,
+) -> dict:
+    base = get_public_app_base_url()
+    path = path if path.startswith("/") else f"/{path}"
+    canonical = f"{base}{path}" if path != "/" else f"{base}/"
+    return {
+        "page_title": title,
+        "meta_description": description,
+        "canonical_url": canonical,
+        "app_base_url": base,
+        "robots_content": robots,
+        "json_ld": json_ld or [],
+        "og_image": f"{base}/static/dashboard_dark.png",
+        "page_heading": page_heading or title,
+        "page_lede": page_lede,
+        "active_page": active_page or "",
+    }
+
+
+def _homepage_json_ld(base: str) -> list[dict]:
+    org = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "GurmukhiOCR",
+        "url": f"{base}/",
+        "logo": f"{base}/static/gocr_logo.png",
+        "email": "team@gurmukhiocr.com",
+        "description": (
+            "Online Punjabi OCR and Gurmukhi OCR for converting scanned PDFs and "
+            "images into editable Unicode text."
+        ),
+    }
+    website = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "GurmukhiOCR",
+        "url": f"{base}/",
+        "description": (
+            "Punjabi OCR and Gurmukhi OCR tool to convert Punjabi PDFs and images "
+            "into editable text."
+        ),
+        "publisher": {"@type": "Organization", "name": "GurmukhiOCR"},
+    }
+    software = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "GurmukhiOCR",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": f"{base}/",
+        "image": f"{base}/static/dashboard_dark.png",
+        "description": (
+            "Free online Punjabi OCR and Gurmukhi OCR. Convert scanned Punjabi "
+            "PDFs and images into editable Unicode text with review tools and export."
+        ),
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "Free monthly OCR credits; paid packs available",
+        },
+        "featureList": [
+            "Punjabi OCR",
+            "Gurmukhi OCR",
+            "Punjabi PDF OCR",
+            "Punjabi image OCR",
+            "Document conversion to editable text",
+            "Side-by-side OCR editor",
+            "Free OCR credits",
+        ],
+    }
+    return [org, website, software]
+
+
+@app.context_processor
+def inject_public_app_urls():
+    base = get_public_app_base_url()
+    return {
+        "app_base_url": base,
+        "password_reset_redirect_url": f"{base}/reset-password",
+        "business": BUSINESS_PROFILE,
+    }
+
 
 @app.after_request
 def _cors_process(resp):
@@ -215,6 +356,27 @@ def _cors_process(resp):
         resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    return resp
+
+
+@app.after_request
+def _seo_robot_headers(resp):
+    """Send X-Robots-Tag on private / auth / API surfaces."""
+    path = request.path or ""
+    if (
+        path.startswith("/api/")
+        or path.startswith("/dashboard")
+        or path == "/process"
+        or path.startswith("/process/")
+        or path in (
+            "/login",
+            "/signup",
+            "/forgot-password",
+            "/reset-password",
+            "/setup-credentials",
+        )
+    ):
+        resp.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
     return resp
 
 
@@ -2961,6 +3123,14 @@ def require_google_ocr_key():
         "api_auth_status",
         "landing",
         "pricing_page",
+        "privacy_page",
+        "terms_page",
+        "about_page",
+        "faq_page",
+        "contact_page",
+        "refund_page",
+        "robots_txt",
+        "sitemap_xml",
         "login_page",
         "signup_page",
         "forgot_password_page",
@@ -3021,47 +3191,312 @@ def _public_pricing_context() -> dict:
     }
 
 
+@app.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    base = get_public_app_base_url()
+    body = "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /api/",
+            "Disallow: /dashboard",
+            "Disallow: /dashboard2",
+            "Disallow: /login",
+            "Disallow: /signup",
+            "Disallow: /forgot-password",
+            "Disallow: /reset-password",
+            "Disallow: /setup-credentials",
+            "Disallow: /process",
+            f"Sitemap: {base}/sitemap.xml",
+            "",
+        ]
+    )
+    return Response(body, mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/sitemap.xml", methods=["GET"])
+def sitemap_xml():
+    base = get_public_app_base_url()
+    # Public, indexable pages only (no auth / dashboard / API).
+    pages = [
+        ("/", "1.0", "weekly"),
+        ("/pricing", "0.8", "weekly"),
+        ("/about", "0.7", "monthly"),
+        ("/faq", "0.7", "monthly"),
+        ("/contact", "0.6", "monthly"),
+        ("/privacy", "0.4", "yearly"),
+        ("/terms", "0.4", "yearly"),
+        ("/refund", "0.4", "yearly"),
+    ]
+    urls = []
+    for path, priority, changefreq in pages:
+        loc = f"{base}{path}" if path != "/" else f"{base}/"
+        urls.append(
+            "  <url>\n"
+            f"    <loc>{loc}</loc>\n"
+            f"    <changefreq>{changefreq}</changefreq>\n"
+            f"    <priority>{priority}</priority>\n"
+            "  </url>"
+        )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(urls)
+        + "\n</urlset>\n"
+    )
+    return Response(xml, mimetype="application/xml; charset=utf-8")
+
+
 @app.route("/", methods=["GET"])
 def landing():
+    base = get_public_app_base_url()
+    seo = _seo_context(
+        title=(
+            "Punjabi OCR & Gurmukhi OCR — Convert Punjabi PDFs to Editable Text | GurmukhiOCR"
+        ),
+        description=(
+            "Free online Punjabi OCR and Gurmukhi OCR. Convert scanned Punjabi PDFs and "
+            "images into editable Unicode text. Review pages side by side and export .txt."
+        ),
+        path="/",
+        json_ld=_homepage_json_ld(base),
+    )
     return render_template(
         "landing.html",
         pricing_page=False,
         **_public_pricing_context(),
         **supabase_browser_config,
+        **seo,
     )
 
 
 @app.route("/pricing", methods=["GET"])
 def pricing_page():
+    seo = _seo_context(
+        title="OCR Credits & Pricing — Punjabi / Gurmukhi OCR | GurmukhiOCR",
+        description=(
+            "GurmukhiOCR pricing: free monthly Punjabi OCR credits, plus optional one-time "
+            "credit packs for Gurmukhi PDF and image OCR."
+        ),
+        path="/pricing",
+        active_page="pricing",
+    )
     return render_template(
         "landing.html",
         pricing_page=True,
         **_public_pricing_context(),
         **supabase_browser_config,
+        **seo,
     )
+
+
+@app.route("/privacy", methods=["GET"])
+def privacy_page():
+    seo = _seo_context(
+        title="Privacy Policy — GurmukhiOCR",
+        description=(
+            "Privacy policy for GurmukhiOCR: how uploads are processed with Google Cloud Vision, "
+            "how long files are kept, and how to request deletion."
+        ),
+        path="/privacy",
+        page_heading="Privacy policy",
+        page_lede="How GurmukhiOCR handles uploads, OCR processing, retention, and your account data.",
+        active_page="privacy",
+    )
+    return render_template("privacy.html", **seo)
+
+
+@app.route("/terms", methods=["GET"])
+def terms_page():
+    seo = _seo_context(
+        title="Terms of Service — GurmukhiOCR",
+        description=(
+            "Terms of service for using GurmukhiOCR Punjabi OCR, credit purchases, and document conversion."
+        ),
+        path="/terms",
+        page_heading="Terms of service",
+        page_lede="Rules and expectations for using the GurmukhiOCR service.",
+        active_page="terms",
+    )
+    return render_template("terms.html", **seo)
+
+
+@app.route("/refund", methods=["GET"])
+def refund_page():
+    seo = _seo_context(
+        title="Refund Policy — GurmukhiOCR",
+        description=(
+            "Refund policy for GurmukhiOCR OCR credit pack purchases, including the refund window "
+            "and how to request a refund."
+        ),
+        path="/refund",
+        page_heading="Refund policy",
+        page_lede="How refunds work for paid GurmukhiOCR OCR credit packs.",
+        active_page="refund",
+    )
+    return render_template("refund.html", **seo)
+
+
+@app.route("/contact", methods=["GET"])
+def contact_page():
+    seo = _seo_context(
+        title="Contact — GurmukhiOCR Support",
+        description=(
+            "Contact GurmukhiOCR support for billing, OCR credits, privacy requests, and product questions."
+        ),
+        path="/contact",
+        page_heading="Contact",
+        page_lede="Reach the GurmukhiOCR team for support, billing, and privacy requests.",
+        active_page="contact",
+    )
+    return render_template("contact.html", **seo)
+
+
+@app.route("/about", methods=["GET"])
+def about_page():
+    seo = _seo_context(
+        title="About GurmukhiOCR — Online Punjabi & Gurmukhi OCR",
+        description=(
+            "About GurmukhiOCR and the business behind our online Punjabi OCR and Gurmukhi OCR tool."
+        ),
+        path="/about",
+        page_heading="About GurmukhiOCR",
+        page_lede="Online Punjabi OCR and Gurmukhi OCR for scanned documents—plus who operates the service.",
+        active_page="about",
+        json_ld=[
+            {
+                "@context": "https://schema.org",
+                "@type": "AboutPage",
+                "name": "About GurmukhiOCR",
+                "url": f"{get_public_app_base_url()}/about",
+                "description": (
+                    "About the GurmukhiOCR Punjabi OCR and Gurmukhi OCR web application."
+                ),
+            }
+        ],
+    )
+    return render_template("about.html", **seo)
+
+
+@app.route("/faq", methods=["GET"])
+def faq_page():
+    base = get_public_app_base_url()
+    faq_entities = [
+        {
+            "@type": "Question",
+            "name": "What is GurmukhiOCR?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": (
+                    "GurmukhiOCR is an online Punjabi OCR and Gurmukhi OCR service that converts "
+                    "scanned Punjabi PDFs and images into editable Unicode text."
+                ),
+            },
+        },
+        {
+            "@type": "Question",
+            "name": "Can I convert a Punjabi PDF to editable text?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": (
+                    "Yes. Upload a multi-page PDF for Punjabi PDF OCR, review results page by page, "
+                    "then export the full text as a .txt file."
+                ),
+            },
+        },
+        {
+            "@type": "Question",
+            "name": "Does it support Punjabi image OCR?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": (
+                    "Yes. You can run Punjabi image OCR on common image formats as well as PDF pages."
+                ),
+            },
+        },
+    ]
+    seo = _seo_context(
+        title="FAQ — Punjabi OCR & Gurmukhi OCR | GurmukhiOCR",
+        description=(
+            "Frequently asked questions about Punjabi OCR, Gurmukhi OCR, PDF conversion, "
+            "free credits, and using GurmukhiOCR."
+        ),
+        path="/faq",
+        page_heading="Frequently asked questions",
+        page_lede="Quick answers about Punjabi OCR, Gurmukhi OCR, and using GurmukhiOCR.",
+        active_page="faq",
+        json_ld=[
+            {
+                "@context": "https://schema.org",
+                "@type": "FAQPage",
+                "mainEntity": faq_entities,
+                "url": f"{base}/faq",
+            }
+        ],
+    )
+    return render_template("faq.html", **seo)
 
 
 @app.route("/login", methods=["GET"])
 def login_page():
-    return render_template("login.html", active_page="login", **supabase_browser_config)
+    seo = _seo_context(
+        title="Log in — GurmukhiOCR",
+        description="Log in to GurmukhiOCR to run Punjabi OCR and manage your documents.",
+        path="/login",
+        robots="noindex, nofollow",
+        active_page="login",
+    )
+    return render_template(
+        "login.html",
+        active_page="login",
+        **supabase_browser_config,
+        **seo,
+    )
 
 
 @app.route("/signup", methods=["GET"])
 def signup_page():
-    return render_template("signup.html", active_page="signup", **supabase_browser_config)
+    seo = _seo_context(
+        title="Sign up — Free Punjabi OCR Credits | GurmukhiOCR",
+        description=(
+            "Create a free GurmukhiOCR account to convert Punjabi PDFs and images into editable text."
+        ),
+        path="/signup",
+        robots="noindex, nofollow",
+        active_page="signup",
+    )
+    return render_template(
+        "signup.html",
+        active_page="signup",
+        **supabase_browser_config,
+        **seo,
+    )
 
 
 @app.route("/forgot-password", methods=["GET"])
 def forgot_password_page():
-    return render_template("forgot_password.html", **supabase_browser_config)
+    seo = _seo_context(
+        title="Forgot password — GurmukhiOCR",
+        description="Reset your GurmukhiOCR account password.",
+        path="/forgot-password",
+        robots="noindex, nofollow",
+    )
+    return render_template("forgot_password.html", **supabase_browser_config, **seo)
 
 
 @app.route("/reset-password", methods=["GET"])
 def reset_password_page():
+    seo = _seo_context(
+        title="Reset password — GurmukhiOCR",
+        description="Choose a new password for your GurmukhiOCR account.",
+        path="/reset-password",
+        robots="noindex, nofollow",
+    )
     return render_template(
         "reset_password.html",
         password_recovery_page=True,
         **supabase_browser_config,
+        **seo,
     )
 
 
@@ -3072,7 +3507,13 @@ def dashboard_legacy_redirect():
 
 @app.route("/dashboard2", methods=["GET"])
 def dashboard2_page():
-    return render_template("dashboard2.html", **supabase_browser_config)
+    seo = _seo_context(
+        title="Dashboard — GurmukhiOCR",
+        description="GurmukhiOCR workspace for Punjabi OCR uploads and editing.",
+        path="/dashboard2",
+        robots="noindex, nofollow",
+    )
+    return render_template("dashboard2.html", **supabase_browser_config, **seo)
 
 
 @app.route("/api/me/pages", methods=["GET"])
