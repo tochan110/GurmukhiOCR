@@ -60,14 +60,16 @@ _CREDIT_BALANCE_SELECT = (
 _CREDIT_UPDATE_MAX_ATTEMPTS = 5
 
 # Stripe one-time Checkout: map each Price ID → credits granted.
-# This is the ONLY place credit pack sizes are defined (landing + /pricing render from it).
-PRICE_ID_TO_CREDITS = {
-    "price_1TuGJHRtZiy12tM4DFpU5YWF": 250,
-    "price_1TuGJHRtZiy12tM4r9Odrwh5": 1000,
-    "price_1TuGJHRtZiy12tM4LzJjQhfA": 8000,
-    "price_1TuGJHRtZiy12tM4OgjkuP7P": 32000,
-    "price_1TuGJHRtZiy12tM4xdc2Sjtc": 128000,
-}
+# This is the ONLY place credit packs are defined (landing + /pricing render from it).
+# amount_usd is display-only; Stripe Checkout uses the price_id amounts.
+PRICE_PACKAGES = [
+    {"price_id": "price_1TuGJHRtZiy12tM4DFpU5YWF", "credits": 250, "amount_usd": "5.00"},
+    {"price_id": "price_1TuGJHRtZiy12tM4LzJjQhfA", "credits": 1000, "amount_usd": "15.00"},
+    {"price_id": "price_1TuGJHRtZiy12tM4r9Odrwh5", "credits": 8000, "amount_usd": "50.00"},
+    {"price_id": "price_1TuGJHRtZiy12tM4OgjkuP7P", "credits": 32000, "amount_usd": "150.00"},
+    {"price_id": "price_1TuGJHRtZiy12tM4xdc2Sjtc", "credits": 128000, "amount_usd": "500.00"},
+]
+PRICE_ID_TO_CREDITS = {p["price_id"]: int(p["credits"]) for p in PRICE_PACKAGES}
 
 STRIPE_SECRET_KEY = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
@@ -3184,8 +3186,13 @@ def setup_credentials_redirect():
 def _public_pricing_context() -> dict:
     return {
         "pricing_packages": [
-            {"price_id": price_id, "credits": credits}
-            for price_id, credits in PRICE_ID_TO_CREDITS.items()
+            {
+                "price_id": p["price_id"],
+                "credits": int(p["credits"]),
+                "amount_usd": p["amount_usd"],
+                "price_label": f"${p['amount_usd']}",
+            }
+            for p in PRICE_PACKAGES
         ],
         "monthly_free_credit_allowance": PROFILE_PAGES_MONTHLY_ALLOWANCE,
     }
