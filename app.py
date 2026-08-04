@@ -36,6 +36,7 @@ from page_metadata import (
     normalize_metadata_patch,
     upsert_page_metadata,
 )
+from admin_panel import register_admin
 
 load_dotenv()
 
@@ -70,6 +71,15 @@ PRICE_PACKAGES = [
     {"price_id": "price_1TuGJHRtZiy12tM4xdc2Sjtc", "credits": 128000, "amount_usd": "500.00"},
 ]
 PRICE_ID_TO_CREDITS = {p["price_id"]: int(p["credits"]) for p in PRICE_PACKAGES}
+
+# Super-admin email allowlist (lowercase match). Env SUPERADMINS=a@x.com,b@y.com overrides.
+_SUPERADMINS_ENV = (os.environ.get("SUPERADMINS") or "").strip()
+if _SUPERADMINS_ENV:
+    SUPERADMINS = [e.strip() for e in _SUPERADMINS_ENV.split(",") if e.strip()]
+else:
+    SUPERADMINS = [
+        "ggill@sailboattalent.com",
+    ]
 
 STRIPE_SECRET_KEY = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
@@ -348,6 +358,8 @@ def inject_public_app_urls():
         "app_base_url": base,
         "password_reset_redirect_url": f"{base}/reset-password",
         "business": BUSINESS_PROFILE,
+        "supabase_url": supabase_url,
+        "supabase_publishable_key": supabase_publishable_key,
     }
 
 
@@ -1849,10 +1861,49 @@ def extract_text_with_locations(pdf_bytes, progress_callback=None, save_callback
     )
 
 
+def _is_superadmin_email(email: str | None) -> bool:
+    if not email:
+        return False
+    needle = email.strip().lower()
+    return needle in {e.strip().lower() for e in SUPERADMINS if e}
+
+
+def _admin_view_as_user_id_from_request() -> str | None:
+    """Return target user id when a verified superadmin sends X-Admin-View-As (GET only)."""
+    try:
+        from flask import has_request_context
+
+        if not has_request_context():
+            return None
+    except Exception:
+        return None
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        return None
+    view_as = (request.headers.get("X-Admin-View-As") or "").strip()
+    if not view_as:
+        return None
+    token = _bearer_token_from_request()
+    if not token:
+        return None
+    actor = _auth_user_from_access_token(token)
+    if not actor or not _is_superadmin_email(actor.get("email")):
+        return None
+    return view_as
+
+
 def supabase_access_token_to_user_id(access_token: str) -> str | None:
-    """Resolve Supabase Auth user id from a browser JWT (Bearer)."""
+    """Resolve Supabase Auth user id from a browser JWT (Bearer).
+
+    When a superadmin sends X-Admin-View-As on a safe/read request, returns that
+    target user id so read APIs can render the target account (read-only).
+    """
     user = _auth_user_from_access_token(access_token)
-    return user.get("id") if user else None
+    if not user:
+        return None
+    view_as = _admin_view_as_user_id_from_request()
+    if view_as:
+        return view_as
+    return user.get("id")
 
 
 def _auth_user_from_access_token(access_token: str) -> dict | None:
@@ -3121,6 +3172,22 @@ def require_google_ocr_key():
         return None
     if request.endpoint == "static":
         return None
+    # Super-admin read-only view-as: block all mutating requests that carry the header.
+    view_as = (request.headers.get("X-Admin-View-As") or "").strip()
+    if view_as and request.method not in ("GET", "HEAD", "OPTIONS"):
+        token = _bearer_token_from_request()
+        actor = _auth_user_from_access_token(token) if token else None
+        if actor and _is_superadmin_email(actor.get("email")):
+            return (
+                jsonify(
+                    {
+                        "error": "Read-only admin view. Mutations are disabled.",
+                        "error_type": "admin_readonly",
+                    }
+                ),
+                403,
+            )
+        return jsonify({"error": "Forbidden.", "error_type": "not_superadmin"}), 403
     exempt = {
         "api_auth_status",
         "landing",
@@ -3144,6 +3211,15 @@ def require_google_ocr_key():
         "api_ocr_status",
         "api_stripe_create_checkout_session",
         "api_stripe_webhook",
+        "admin.admin_dashboard_page",
+        "admin.admin_user_page",
+        "admin.api_admin_me",
+        "admin.api_admin_stats",
+        "admin.api_admin_users",
+        "admin.api_admin_user_detail",
+        "admin.api_admin_user_files",
+        "admin.api_admin_impersonate_start",
+        "admin.api_admin_impersonate_exit",
     }
     if request.endpoint in exempt:
         return None
@@ -3208,6 +3284,7 @@ def robots_txt():
             "Disallow: /api/",
             "Disallow: /dashboard",
             "Disallow: /dashboard2",
+            "Disallow: /admin",
             "Disallow: /login",
             "Disallow: /signup",
             "Disallow: /forgot-password",
@@ -6633,6 +6710,23 @@ def generate_text_file(bundle_id):
         return jsonify({"success": True, "message": "Text file generated successfully", "filename": filename})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+register_admin(
+    app,
+    {
+        "SUPERADMINS": SUPERADMINS,
+        "supabase_client": supabase_client,
+        "supabase_browser_config": supabase_browser_config,
+        "_seo_context": _seo_context,
+        "_bearer_token_from_request": _bearer_token_from_request,
+        "_auth_user_from_access_token": _auth_user_from_access_token,
+        "_storage_object_url": _storage_object_url,
+        "_storage_http_session": _storage_http_session,
+        "_storage_auth_headers": _storage_auth_headers,
+        "SUPABASE_STORAGE_BUCKET": SUPABASE_STORAGE_BUCKET,
+    },
+)
 
 
 if __name__ == "__main__":

@@ -73,6 +73,20 @@
         }
         .top a:not(.nav-brand):hover,
         .top a.nav-active { color: var(--text); }
+        .nav-auth-guest.is-hidden,
+        .nav-auth-user.is-hidden { display: none !important; }
+        .nav-logout-btn {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 0;
+        }
+        .nav-logout-btn:hover { color: var(--text); }
         .public-main {
             width: 100%;
             max-width: 44rem;
@@ -133,8 +147,10 @@
         }
     </style>
     {% include "_legal_footer_styles.html" %}
+    {% include "_nav_profile_styles.html" %}
 </head>
 <body>
+    <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
         <a href="/" class="nav-brand">
             <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="GurmukhiOCR logo">
@@ -145,11 +161,21 @@
             <a href="/about"{% if active_page == 'about' %} class="nav-active"{% endif %}>About</a>
             <a href="/faq"{% if active_page == 'faq' %} class="nav-active"{% endif %}>FAQ</a>
             <a href="/contact"{% if active_page == 'contact' %} class="nav-active"{% endif %}>Contact</a>
-            <a href="/login">Log in</a>
+            <span class="nav-auth-guest" id="navAuthGuest">
+                <a href="/login">Log in</a>
+                <a href="/signup">Sign up</a>
+            </span>
+            <span class="nav-auth-user is-hidden" id="navAuthUser">
+                <a href="/dashboard2">Dashboard</a>
+                <a href="/admin" class="nav-admin-link is-hidden" id="navAdminLink">Admin</a>
+                <span class="nav-superadmin-badge is-hidden" id="navSuperadminBadge" title="Super Admin account">Super Admin</span>
+                <button type="button" class="nav-logout-btn" id="navLogoutBtn">Log out</button>
+            </span>
             <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark" aria-label="Toggle light and dark theme">
                 <span id="themeIcon">🌙</span>
                 <span id="themeLabel">Dark</span>
             </button>
+            {% include "_nav_profile_fragment.html" %}
         </nav>
     </header>
     <main class="public-main">
@@ -187,5 +213,6 @@
             }
         })();
     </script>
+    {% include "_supabase_nav_session.html" %}
 </body>
 </html>

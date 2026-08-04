@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "_seo_head.html" %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg0: #07080c;
+            --bg1: #0e1018;
+            --stroke: rgba(255, 255, 255, 0.06);
+            --text: #e8eaef;
+            --muted: rgba(200, 206, 220, 0.72);
+            --accent: #6b8cff;
+            --card: rgba(255, 255, 255, 0.03);
+            --danger: #f0a8a8;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            font-family: "DM Sans", system-ui, sans-serif;
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 50% -20%, rgba(107, 140, 255, 0.12), transparent 55%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.1rem 1.5rem;
+            border-bottom: 1px solid var(--stroke);
+        }
+        .nav-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .nav-brand-logo { width: 1.5rem; height: 1.5rem; border-radius: 7px; object-fit: contain; }
+        .top-nav { display: flex; gap: 0.85rem; align-items: center; }
+        .top-nav a { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 0.92rem; }
+        .top-nav a:hover { color: var(--text); }
+        main { width: min(1100px, calc(100% - 2rem)); margin: 1.5rem auto 3rem; }
+        .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+        .back:hover { color: var(--text); }
+        h1 { margin: 0.75rem 0 0.25rem; letter-spacing: -0.04em; font-size: 1.5rem; }
+        .sub { color: var(--muted); margin-bottom: 1.25rem; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem;
+            margin-bottom: 1.25rem;
+        }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 14px;
+            padding: 1rem 1.1rem;
+        }
+        .panel h2 {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            margin-bottom: 0.75rem;
+        }
+        .kv { display: grid; grid-template-columns: 9rem 1fr; gap: 0.35rem 0.75rem; font-size: 0.92rem; }
+        .kv dt { color: var(--muted); }
+        .kv dd { font-weight: 600; word-break: break-all; }
+        .actions { display: flex; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+        .btn {
+            appearance: none;
+            border: 1px solid rgba(107, 140, 255, 0.45);
+            background: rgba(107, 140, 255, 0.16);
+            color: var(--text);
+            font: inherit;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 0.65rem 0.95rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+        .btn:hover { background: rgba(107, 140, 255, 0.28); }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .table-wrap {
+            overflow: auto;
+            border: 1px solid var(--stroke);
+            border-radius: 14px;
+            background: var(--card);
+            margin-bottom: 1.25rem;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--stroke); white-space: nowrap; }
+        th {
+            color: var(--muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        tr:last-child td { border-bottom: 0; }
+        .section-title { margin: 0 0 0.65rem; font-size: 1.05rem; letter-spacing: -0.03em; }
+        .error { color: var(--danger); margin: 1rem 0; }
+        .loading { color: var(--muted); }
+        .plan {
+            display: inline-block;
+            padding: 0.18rem 0.45rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .plan--paid { color: #9dffc2; background: rgba(80, 200, 130, 0.12); }
+    </style>
+</head>
+<body>
+    <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
+    <script type="application/json" id="admin-user-id">{{ user_id|tojson }}</script>
+    <header class="top">
+        <a href="/" class="nav-brand">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="">
+            <span>GurmukhiOCR</span>
+        </a>
+        <nav class="top-nav">
+            <a href="/admin">← Admin</a>
+            <a href="/dashboard2">Dashboard</a>
+        </nav>
+    </header>
+    <main>
+        <a class="back" href="/admin">← All users</a>
+        <h1 id="userTitle">User</h1>
+        <p class="sub" id="userSub">Loading…</p>
+        <p id="adminError" class="error" hidden></p>
+        <div class="actions">
+            <button type="button" class="btn" id="viewAsBtn" disabled>View as User</button>
+        </div>
+        <div class="grid">
+            <section class="panel">
+                <h2>Account</h2>
+                <dl class="kv" id="accountKv"></dl>
+            </section>
+            <section class="panel">
+                <h2>Usage &amp; credits</h2>
+                <dl class="kv" id="usageKv"></dl>
+            </section>
+        </div>
+        <h2 class="section-title">Recent Transactions</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Amount</th>
+                        <th>Credits</th>
+                        <th>Price ID</th>
+                    </tr>
+                </thead>
+                <tbody id="txBody"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+            </table>
+        </div>
+        <h2 class="section-title">Recent Files</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Uploaded</th>
+                        <th>Pages</th>
+                        <th>Size</th>
+                        <th>OCR Status</th>
+                    </tr>
+                </thead>
+                <tbody id="filesBody"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+            </table>
+        </div>
+        <h2 class="section-title">Recent OCR Jobs</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Status</th>
+                        <th>Stage</th>
+                        <th>Pages</th>
+                        <th>Uploaded</th>
+                    </tr>
+                </thead>
+                <tbody id="jobsBody"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        var cfg = JSON.parse(document.getElementById('supabase-config').textContent || '{}');
+        var userId = JSON.parse(document.getElementById('admin-user-id').textContent || 'null');
+        var supabase = createClient(cfg.url || '', cfg.publishableKey || '');
+        var errEl = document.getElementById('adminError');
+
+        function showError(msg) {
+            errEl.hidden = !msg;
+            errEl.textContent = msg || '';
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function fmtWhen(iso) {
+            if (!iso) return '—';
+            try {
+                return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            } catch (e) {
+                return String(iso);
+            }
+        }
+
+        function kv(el, rows) {
+            el.innerHTML = rows.map(function (r) {
+                return '<dt>' + escapeHtml(r[0]) + '</dt><dd>' + r[1] + '</dd>';
+            }).join('');
+        }
+
+        async function authHeaders() {
+            var sessionRes = await supabase.auth.getSession();
+            var token = sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+            if (!token) throw new Error('Sign in required.');
+            return { Authorization: 'Bearer ' + token };
+        }
+
+        (async function () {
+            try {
+                var headers = await authHeaders();
+                var me = await fetch('/api/admin/me', { headers: headers, credentials: 'same-origin' });
+                if (me.status === 401) {
+                    window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!me.ok) throw new Error('Not authorized as superadmin.');
+
+                var res = await fetch('/api/admin/users/' + encodeURIComponent(userId), {
+                    headers: headers,
+                    credentials: 'same-origin',
+                });
+                if (!res.ok) {
+                    var body = await res.json().catch(function () { return {}; });
+                    throw new Error(body.error || 'Failed to load user');
+                }
+                var data = await res.json();
+                var p = data.profile || {};
+                var u = data.usage || {};
+                document.getElementById('userTitle').textContent = p.name || p.email || 'User';
+                document.getElementById('userSub').textContent = (p.email || '') + ' · ' + (p.id || '');
+
+                var planHtml = '<span class="plan' + (p.plan === 'Paid' ? ' plan--paid' : '') + '">' +
+                    escapeHtml(p.plan || 'Free') + '</span>';
+                kv(document.getElementById('accountKv'), [
+                    ['Name', escapeHtml(p.name || '—')],
+                    ['Email', escapeHtml(p.email || '—')],
+                    ['User ID', escapeHtml(p.id || '—')],
+                    ['Username', escapeHtml(p.username || '—')],
+                    ['Created', escapeHtml(fmtWhen(p.created_at))],
+                    ['Last Login', escapeHtml(fmtWhen(p.last_login))],
+                    ['Plan', planHtml],
+                ]);
+                kv(document.getElementById('usageKv'), [
+                    ['Free credits left', escapeHtml(String(p.free_pages_remaining ?? '—'))],
+                    ['Paid credits left', escapeHtml(String(p.paid_pages_remaining ?? '—'))],
+                    ['Total Files', escapeHtml(String(u.files ?? '—'))],
+                    ['Images', escapeHtml(String(u.images ?? '—'))],
+                    ['PDFs', escapeHtml(String(u.pdfs ?? '—'))],
+                    ['Pages OCR\'d', escapeHtml(String(u.pages ?? '—'))],
+                    ['Storage Used', escapeHtml(u.storage_label || '—')],
+                ]);
+
+                var txBody = document.getElementById('txBody');
+                var txs = data.recent_transactions || [];
+                if (!txs.length) {
+                    txBody.innerHTML = '<tr><td colspan="5">No transactions</td></tr>';
+                } else {
+                    txBody.innerHTML = txs.map(function (t) {
+                        return '<tr>' +
+                            '<td>' + escapeHtml(fmtWhen(t.created_at)) + '</td>' +
+                            '<td>' + escapeHtml(t.status || '—') + '</td>' +
+                            '<td>' + escapeHtml(t.amount_label || '—') + '</td>' +
+                            '<td>' + escapeHtml(String(t.credits_granted ?? '—')) + '</td>' +
+                            '<td>' + escapeHtml(t.stripe_price_id || '—') + '</td>' +
+                            '</tr>';
+                    }).join('');
+                }
+
+                var filesBody = document.getElementById('filesBody');
+                var files = data.recent_files || [];
+                if (!files.length) {
+                    filesBody.innerHTML = '<tr><td colspan="5">No files</td></tr>';
+                } else {
+                    filesBody.innerHTML = files.map(function (f) {
+                        return '<tr>' +
+                            '<td>' + escapeHtml(f.filename) + '</td>' +
+                            '<td>' + escapeHtml(fmtWhen(f.uploaded)) + '</td>' +
+                            '<td>' + escapeHtml(String(f.pages ?? '—')) + '</td>' +
+                            '<td>' + escapeHtml(f.size_label || '—') + '</td>' +
+                            '<td>' + escapeHtml(f.ocr_status || '—') + '</td>' +
+                            '</tr>';
+                    }).join('');
+                }
+
+                var jobsBody = document.getElementById('jobsBody');
+                var jobs = data.recent_ocr_jobs || [];
+                if (!jobs.length) {
+                    jobsBody.innerHTML = '<tr><td colspan="5">No OCR jobs</td></tr>';
+                } else {
+                    jobsBody.innerHTML = jobs.map(function (j) {
+                        return '<tr>' +
+                            '<td>' + escapeHtml(j.filename) + '</td>' +
+                            '<td>' + escapeHtml(j.status || '—') + '</td>' +
+                            '<td>' + escapeHtml(j.stage || '—') + '</td>' +
+                            '<td>' + escapeHtml(String(j.pages ?? '—')) + '</td>' +
+                            '<td>' + escapeHtml(fmtWhen(j.uploaded)) + '</td>' +
+                            '</tr>';
+                    }).join('');
+                }
+
+                var btn = document.getElementById('viewAsBtn');
+                btn.disabled = false;
+                btn.addEventListener('click', async function () {
+                    btn.disabled = true;
+                    try {
+                        var start = await fetch('/api/admin/impersonate/' + encodeURIComponent(userId) + '/start', {
+                            method: 'POST',
+                            headers: headers,
+                            credentials: 'same-origin',
+                        });
+                        if (!start.ok) {
+                            var err = await start.json().catch(function () { return {}; });
+                            throw new Error(err.error || 'Could not start view-as');
+                        }
+                        var payload = await start.json();
+                        window.location.href = payload.dashboard_url || ('/dashboard2?admin_view=' + encodeURIComponent(userId));
+                    } catch (e) {
+                        showError(e.message || String(e));
+                        btn.disabled = false;
+                    }
+                });
+            } catch (e) {
+                showError(e.message || String(e));
+            }
+        })();
+    </script>
+</body>
+</html>

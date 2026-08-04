@@ -145,6 +145,32 @@
             var key = cfg.publishableKey || cfg.anonKey;
             if (!cfg.url || !key) return;
             var supabase = createClient(cfg.url, key);
+            function setSuperadminUi(isSuperadmin) {
+                var adminLink = document.getElementById('navAdminLink');
+                var badge = document.getElementById('navSuperadminBadge');
+                var profileLabel = document.getElementById('navProfileSuperadminLabel');
+                var profileAdminLink = document.getElementById('navProfileAdminLink');
+                [adminLink, badge, profileLabel, profileAdminLink].forEach(function (el) {
+                    if (!el) return;
+                    if (isSuperadmin) el.classList.remove('is-hidden');
+                    else el.classList.add('is-hidden');
+                });
+            }
+            async function refreshSuperadmin(session) {
+                setSuperadminUi(false);
+                if (!session) return;
+                try {
+                    var token = session.access_token;
+                    if (!token) return;
+                    var r = await fetch('/api/admin/me', {
+                        headers: { Authorization: 'Bearer ' + token },
+                        credentials: 'same-origin',
+                    });
+                    setSuperadminUi(r.ok);
+                } catch (e) {
+                    setSuperadminUi(false);
+                }
+            }
             function applyAuthNav(session) {
                 if (session) {
                     guest.classList.add('is-hidden');
@@ -164,6 +190,7 @@
                 if (heroOpenDashboardCta) {
                     heroOpenDashboardCta.setAttribute('href', session ? '/dashboard2' : '/signup');
                 }
+                void refreshSuperadmin(session);
             }
             supabase.auth.getSession().then(function (_ref) {
                 applyAuthNav(_ref.data && _ref.data.session);

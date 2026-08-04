@@ -2464,12 +2464,98 @@
         .dash2-help-fab svg {
             display: block;
         }
+
+        /* Super-admin read-only view-as */
+        .admin-view-banner {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 2000;
+            background: #7a4b00;
+            color: #fff8e8;
+            text-align: center;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            padding: 0.85rem 1rem;
+            border-bottom: 2px solid #ffb84d;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+        body.admin-readonly-view .admin-view-banner { display: block; }
+        .admin-view-banner-actions {
+            display: inline-flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 0.35rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .admin-view-banner a,
+        .admin-view-banner button {
+            color: #fff8e8;
+            background: rgba(0, 0, 0, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 8px;
+            padding: 0.35rem 0.7rem;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        body.admin-readonly-view #dash2EditBtn,
+        body.admin-readonly-view #dash2SaveBtn,
+        body.admin-readonly-view #dash2CancelBtn,
+        body.admin-readonly-view #dash2EditControls,
+        body.admin-readonly-view .dash2-pane--upload,
+        body.admin-readonly-view #dash2TabUpload,
+        body.admin-readonly-view #dash2QuotaContactNav,
+        body.admin-readonly-view #dash2QuotaContactUpload,
+        body.admin-readonly-view .dash2-upload-label,
+        body.admin-readonly-view #dash2BulkShare,
+        body.admin-readonly-view #dash2BulkTransfer,
+        body.admin-readonly-view #dash2ShareBtn,
+        body.admin-readonly-view #dash2TransferBtn,
+        body.admin-readonly-view #dash2ViewerRenameBtn,
+        body.admin-readonly-view .dash2-rename-btn,
+        body.admin-readonly-view [data-file-action="rename"],
+        body.admin-readonly-view [data-file-action="share"],
+        body.admin-readonly-view [data-file-action="transfer"],
+        body.admin-readonly-view #dash2ShareModal,
+        body.admin-readonly-view #dash2RenameModal,
+        body.admin-readonly-view #dash2TransferModal,
+        body.admin-readonly-view .nav-profile-username-form,
+        body.admin-readonly-view .nav-profile-password-form,
+        body.admin-readonly-view #navProfileUsernameToggle,
+        body.admin-readonly-view #navProfilePasswordToggle,
+        body.admin-readonly-view #dash2ImportBundleBtn,
+        body.admin-readonly-view label[for="dash2ImportBundleInput"],
+        body.admin-readonly-view #dash2ImportBundleInput {
+            opacity: 0.45;
+            pointer-events: none !important;
+            filter: grayscale(0.35);
+        }
+        body.admin-readonly-view .dash2-text-content {
+            -webkit-user-modify: read-only;
+            user-select: text;
+        }
+        body.admin-readonly-view .dash2-text-content--editable {
+            caret-color: transparent;
+            pointer-events: none;
+        }
     </style>
     {% include "_email_modal_styles.html" %}
     {% include "_legal_footer_styles.html" %}
     {% include "_nav_profile_styles.html" %}
 </head>
 <body>
+    <div class="admin-view-banner" id="adminViewBanner" role="status">
+        You are viewing this account as Super Admin (Read Only)
+        <div class="admin-view-banner-actions">
+            <a href="/admin" id="adminViewBackAdmin">Back to Admin</a>
+            <button type="button" id="adminViewExitBtn">Exit view</button>
+        </div>
+    </div>
     <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
     <header class="top">
         <a href="/" class="nav-brand">
@@ -2483,6 +2569,8 @@
             </span>
             <span class="nav-auth-user is-hidden" id="navAuthUser">
                 <a href="/dashboard2" class="nav-active">Dashboard</a>
+                <a href="/admin" class="nav-admin-link is-hidden" id="navAdminLink">Admin</a>
+                <span class="nav-superadmin-badge is-hidden" id="navSuperadminBadge" title="Super Admin account">Super Admin</span>
                 <button type="button" class="nav-logout-btn" id="navLogoutBtn">Log out</button>
             </span>
             <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">
@@ -3006,6 +3094,49 @@
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
+        var adminViewUserId = (function () {
+            try {
+                return new URLSearchParams(window.location.search).get('admin_view') || '';
+            } catch (e) {
+                return '';
+            }
+        })();
+        var adminReadonly = !!adminViewUserId;
+        if (adminReadonly) {
+            document.body.classList.add('admin-readonly-view');
+            var backAdmin = document.getElementById('adminViewBackAdmin');
+            if (backAdmin) {
+                backAdmin.href = '/admin/users/' + encodeURIComponent(adminViewUserId);
+            }
+            // Prefer files list over upload when troubleshooting.
+            setTimeout(function () {
+                var filesTab = document.getElementById('dash2TabFiles');
+                if (filesTab) filesTab.click();
+            }, 0);
+        }
+
+        var _nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+            init = init ? Object.assign({}, init) : {};
+            var url = typeof input === 'string' ? input : (input && input.url) || '';
+            var isAppApi =
+                typeof url === 'string' &&
+                (url.indexOf('/api/') === 0 ||
+                    url.indexOf('/process') === 0 ||
+                    url.indexOf(window.location.origin + '/api/') === 0 ||
+                    url.indexOf(window.location.origin + '/process') === 0);
+            var isAdminApi =
+                typeof url === 'string' &&
+                (url.indexOf('/api/admin/') === 0 ||
+                    url.indexOf(window.location.origin + '/api/admin/') === 0);
+            if (adminReadonly && isAppApi && !isAdminApi) {
+                var headers = new Headers(init.headers || (input && input.headers) || undefined);
+                headers.set('X-Admin-View-As', adminViewUserId);
+                init.headers = headers;
+            }
+            return _nativeFetch(input, init);
+        };
+
         function escapeHtml(s) {
             if (s == null) return '';
             return String(s)
@@ -3202,19 +3333,53 @@
                 return;
             }
 
-            var q = await supabase
-                .from('files')
-                .select('*')
-                .order('created_at', { ascending: false });
+            var rows = [];
+            if (adminReadonly) {
+                var sessionResAdmin = await supabase.auth.getSession();
+                var adminToken =
+                    sessionResAdmin.data &&
+                    sessionResAdmin.data.session &&
+                    sessionResAdmin.data.session.access_token;
+                if (!adminToken) {
+                    root.innerHTML =
+                        '<p class="dash2-files-error">Super Admin session required for view-as.</p>';
+                    setListShell(listShell, false);
+                    return;
+                }
+                var adminFilesRes = await fetch(
+                    '/api/admin/users/' + encodeURIComponent(adminViewUserId) + '/files',
+                    {
+                        headers: { Authorization: 'Bearer ' + adminToken },
+                        credentials: 'same-origin',
+                    }
+                );
+                if (!adminFilesRes.ok) {
+                    var errBody = await adminFilesRes.json().catch(function () {
+                        return {};
+                    });
+                    root.innerHTML =
+                        '<p class="dash2-files-error">' +
+                        escapeHtml(errBody.error || 'Could not load user files.') +
+                        '</p>';
+                    setListShell(listShell, false);
+                    return;
+                }
+                var adminFilesJson = await adminFilesRes.json();
+                rows = adminFilesJson.files || [];
+            } else {
+                var q = await supabase
+                    .from('files')
+                    .select('*')
+                    .order('created_at', { ascending: false });
 
-            if (q.error) {
-                root.innerHTML =
-                    '<p class="dash2-files-error">' + escapeHtml(q.error.message || String(q.error)) + '</p>';
-                setListShell(listShell, false);
-                return;
+                if (q.error) {
+                    root.innerHTML =
+                        '<p class="dash2-files-error">' + escapeHtml(q.error.message || String(q.error)) + '</p>';
+                    setListShell(listShell, false);
+                    return;
+                }
+                rows = q.data || [];
             }
-
-            var rows = q.data || [];
             if (!rows.length) {
                 root.innerHTML =
                     '<div class="dash2-files-list-inner"><p class="dash2-empty">No files in your library yet. Uploads will appear here once they are saved to Supabase.</p></div>';
@@ -3479,6 +3644,48 @@
             } catch (_gateErr) {
                 window.location.replace('/signup');
                 return;
+            }
+
+            if (adminReadonly) {
+                var exitBtn = document.getElementById('adminViewExitBtn');
+                if (exitBtn) {
+                    exitBtn.addEventListener('click', async function () {
+                        try {
+                            var sess = await supabase.auth.getSession();
+                            var token =
+                                sess.data && sess.data.session && sess.data.session.access_token;
+                            if (token) {
+                                await _nativeFetch(
+                                    '/api/admin/impersonate/' +
+                                        encodeURIComponent(adminViewUserId) +
+                                        '/exit',
+                                    {
+                                        method: 'POST',
+                                        headers: { Authorization: 'Bearer ' + token },
+                                        credentials: 'same-origin',
+                                    }
+                                );
+                            }
+                        } catch (e) {}
+                        window.location.href =
+                            '/admin/users/' + encodeURIComponent(adminViewUserId);
+                    });
+                }
+                // Verify caller is actually a superadmin before showing another user's workspace.
+                try {
+                    var gateSession = dash2Gate.data.session;
+                    var meRes = await _nativeFetch('/api/admin/me', {
+                        headers: { Authorization: 'Bearer ' + gateSession.access_token },
+                        credentials: 'same-origin',
+                    });
+                    if (!meRes.ok) {
+                        window.location.replace('/admin');
+                        return;
+                    }
+                } catch (e) {
+                    window.location.replace('/admin');
+                    return;
+                }
             }
 
             var quotaRow = document.getElementById('dash2QuotaRow');
@@ -5372,6 +5579,7 @@
                 };
 
                 function enterEditMode() {
+                    if (adminReadonly) return;
                     if (!fileId || !pageCache[currentPage]) return;
                     if (!fileAccess || !fileAccess.can_edit) return;
                     isEditMode = true;
