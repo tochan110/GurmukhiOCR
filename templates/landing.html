@@ -843,18 +843,22 @@
             text-decoration: none;
             font-family: inherit;
             text-align: left;
-            cursor: default;
+            cursor: pointer;
             transition: border-color 0.18s ease, background 0.18s ease;
         }
-        .page-pack-btn:hover {
+        .page-pack-btn:hover:not(:disabled):not(.page-pack-btn--unavailable) {
             border-color: rgba(120, 200, 255, 0.45);
             background: rgba(107, 140, 255, 0.18);
+        }
+        .page-pack-btn--unavailable {
+            cursor: default;
+            opacity: 0.72;
         }
         body.light-mode .page-pack-btn {
             border-color: rgba(74, 108, 220, 0.2);
             background: rgba(74, 108, 220, 0.08);
         }
-        body.light-mode .page-pack-btn:hover {
+        body.light-mode .page-pack-btn:hover:not(:disabled):not(.page-pack-btn--unavailable) {
             border-color: rgba(74, 108, 220, 0.34);
             background: rgba(74, 108, 220, 0.13);
         }
@@ -895,38 +899,6 @@
         }
         body.light-mode .page-pack-action {
             color: #3d5ccc;
-        }
-        .page-pack-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            align-items: stretch;
-            min-width: 6.5rem;
-        }
-        .page-pack-provider-btn {
-            appearance: none;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            background: rgba(0, 0, 0, 0.22);
-            color: var(--text);
-            font: inherit;
-            font-size: 0.78rem;
-            font-weight: 700;
-            border-radius: 8px;
-            padding: 0.4rem 0.55rem;
-            cursor: pointer;
-            text-align: center;
-        }
-        .page-pack-provider-btn:hover:not(:disabled) {
-            border-color: rgba(120, 200, 255, 0.45);
-            background: rgba(107, 140, 255, 0.2);
-        }
-        .page-pack-provider-btn:disabled {
-            opacity: 0.55;
-            cursor: wait;
-        }
-        body.light-mode .page-pack-provider-btn {
-            background: rgba(255, 255, 255, 0.7);
-            border-color: rgba(74, 108, 220, 0.22);
         }
         .page-pack-btn:disabled {
             opacity: 0.62;
@@ -1176,36 +1148,35 @@
                     <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account.</p>
                     <div class="page-pack-options" aria-label="Choose a page pack">
                         {% for package in pricing_packages %}
-                        <div class="page-pack-btn" role="group" aria-label="{{ package.price_label }} credit pack">
+                        {% if lemon_checkout_enabled and package.lemon_variant_id %}
+                        <button
+                            class="page-pack-btn"
+                            type="button"
+                            aria-label="Buy {{ package.price_label }} credit pack"
+                            data-checkout-provider="lemon"
+                            data-lemon-variant-id="{{ package.lemon_variant_id }}"
+                        >
                             <span class="page-pack-info">
                                 <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} OCR credits</span>
                                 <span class="page-pack-rate">One-time · {{ "{:,}".format(package.credits) }} pages/images</span>
                             </span>
                             <span class="page-pack-price">
                                 <span class="page-pack-amount">{{ package.price_label }}</span>
-                                <span class="page-pack-actions">
-                                    {% if stripe_checkout_enabled %}
-                                    <button
-                                        class="page-pack-provider-btn"
-                                        type="button"
-                                        data-checkout-provider="stripe"
-                                        data-stripe-price-id="{{ package.price_id }}"
-                                    >Buy with Stripe</button>
-                                    {% endif %}
-                                    {% if lemon_checkout_enabled and package.lemon_variant_id %}
-                                    <button
-                                        class="page-pack-provider-btn"
-                                        type="button"
-                                        data-checkout-provider="lemon"
-                                        data-lemon-variant-id="{{ package.lemon_variant_id }}"
-                                    >Buy with Lemon</button>
-                                    {% endif %}
-                                    {% if not stripe_checkout_enabled and not (lemon_checkout_enabled and package.lemon_variant_id) %}
-                                    <span class="page-pack-action">Checkout unavailable</span>
-                                    {% endif %}
-                                </span>
+                                <span class="page-pack-action">Buy Now</span>
+                            </span>
+                        </button>
+                        {% else %}
+                        <div class="page-pack-btn page-pack-btn--unavailable" aria-label="{{ package.price_label }} credit pack unavailable">
+                            <span class="page-pack-info">
+                                <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} OCR credits</span>
+                                <span class="page-pack-rate">One-time · {{ "{:,}".format(package.credits) }} pages/images</span>
+                            </span>
+                            <span class="page-pack-price">
+                                <span class="page-pack-amount">{{ package.price_label }}</span>
+                                <span class="page-pack-action">Checkout unavailable</span>
                             </span>
                         </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
                     <p class="pricing-checkout-status" id="pricingCheckoutStatus" aria-live="polite"></p>
@@ -1454,12 +1425,8 @@
 
             buttons.forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    var provider = (btn.getAttribute('data-checkout-provider') || '').trim();
-                    var id =
-                        provider === 'lemon'
-                            ? (btn.getAttribute('data-lemon-variant-id') || '').trim()
-                            : (btn.getAttribute('data-stripe-price-id') || '').trim();
-                    void startCheckout(provider, id);
+                    var id = (btn.getAttribute('data-lemon-variant-id') || '').trim();
+                    void startCheckout('lemon', id);
                 });
             });
         })();

@@ -119,6 +119,31 @@
             background: rgba(255, 255, 255, 0.06);
         }
         .plan--paid { color: #9dffc2; background: rgba(80, 200, 130, 0.12); }
+        .provider-pill {
+            display: inline-block;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .provider-pill--stripe {
+            color: #9dc0ff;
+            background: rgba(107, 140, 255, 0.16);
+        }
+        .provider-pill--lemon {
+            color: #ffe2a8;
+            background: rgba(255, 180, 80, 0.16);
+        }
+        .provider-pill--unknown {
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.78rem;
+        }
     </style>
 </head>
 <body>
@@ -159,13 +184,16 @@
                 <thead>
                     <tr>
                         <th>Date</th>
+                        <th>Provider</th>
+                        <th>Pack</th>
                         <th>Status</th>
                         <th>Amount</th>
                         <th>Credits</th>
-                        <th>Price ID</th>
+                        <th>Product ID</th>
+                        <th>Order / Session</th>
                     </tr>
                 </thead>
-                <tbody id="txBody"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+                <tbody id="txBody"><tr><td colspan="8" class="loading">Loading…</td></tr></tbody>
             </table>
         </div>
         <h2 class="section-title">Recent Files</h2>
@@ -290,15 +318,28 @@
                 var txBody = document.getElementById('txBody');
                 var txs = data.recent_transactions || [];
                 if (!txs.length) {
-                    txBody.innerHTML = '<tr><td colspan="5">No transactions</td></tr>';
+                    txBody.innerHTML = '<tr><td colspan="8">No transactions</td></tr>';
                 } else {
                     txBody.innerHTML = txs.map(function (t) {
+                        var provider = (t.provider || 'unknown').toLowerCase();
+                        var providerClass = 'provider-pill provider-pill--' +
+                            (provider === 'lemon' || provider === 'stripe' ? provider : 'unknown');
+                        var productId = t.product_id || t.lemon_variant_id || t.stripe_price_id || '—';
+                        var orderRef = '—';
+                        if (provider === 'lemon') {
+                            orderRef = t.lemon_order_id || t.lemon_payment_id || '—';
+                        } else if (provider === 'stripe') {
+                            orderRef = t.stripe_checkout_session_id || '—';
+                        }
                         return '<tr>' +
                             '<td>' + escapeHtml(fmtWhen(t.created_at)) + '</td>' +
+                            '<td><span class="' + providerClass + '">' + escapeHtml(provider) + '</span></td>' +
+                            '<td>' + escapeHtml(t.pack_label || '—') + '</td>' +
                             '<td>' + escapeHtml(t.status || '—') + '</td>' +
                             '<td>' + escapeHtml(t.amount_label || '—') + '</td>' +
                             '<td>' + escapeHtml(String(t.credits_granted ?? '—')) + '</td>' +
-                            '<td>' + escapeHtml(t.stripe_price_id || '—') + '</td>' +
+                            '<td class="mono">' + escapeHtml(productId) + '</td>' +
+                            '<td class="mono">' + escapeHtml(orderRef) + '</td>' +
                             '</tr>';
                     }).join('');
                 }

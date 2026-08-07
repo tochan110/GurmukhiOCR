@@ -108,7 +108,7 @@
         }
         .cards {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
@@ -174,6 +174,31 @@
         .error { color: var(--danger); margin: 1rem 0; }
         .loading { color: var(--muted); padding: 1rem 0; }
         .muted { color: var(--muted); }
+        .provider-pill {
+            display: inline-block;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .provider-pill--stripe {
+            color: #9dc0ff;
+            background: rgba(107, 140, 255, 0.16);
+        }
+        .provider-pill--lemon {
+            color: #ffe2a8;
+            background: rgba(255, 180, 80, 0.16);
+        }
+        .provider-pill--unknown {
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.78rem;
+        }
     </style>
 </head>
 <body>
@@ -219,6 +244,16 @@
                 <div class="card-value" id="statRevenue30">—</div>
                 <div class="card-note" id="statRevenue30Note">Completed payments in the last 30 days</div>
             </div>
+            <div class="card">
+                <div class="card-label">Stripe</div>
+                <div class="card-value" id="statStripe">—</div>
+                <div class="card-note" id="statStripeNote">—</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Lemon</div>
+                <div class="card-value" id="statLemon">—</div>
+                <div class="card-note" id="statLemonNote">—</div>
+            </div>
         </div>
         <h2 class="section-title">Recent transactions</h2>
         <div id="txLoading" class="loading">Loading…</div>
@@ -228,10 +263,13 @@
                     <tr>
                         <th>Date</th>
                         <th>User</th>
+                        <th>Provider</th>
+                        <th>Pack</th>
                         <th>Status</th>
                         <th>Amount</th>
                         <th>Credits</th>
-                        <th>Price ID</th>
+                        <th>Product ID</th>
+                        <th>Order / Session</th>
                     </tr>
                 </thead>
                 <tbody id="txBody"></tbody>
@@ -304,6 +342,10 @@
                 document.getElementById('statRevenue30').textContent = s.revenue_30d_label || '—';
                 document.getElementById('statRevenue30Note').textContent =
                     fmtNum(s.revenue_30d_transactions) + ' transactions in the last 30 days';
+                document.getElementById('statStripe').textContent = fmtNum(s.stripe_transactions);
+                document.getElementById('statStripeNote').textContent = s.stripe_amount_label || '—';
+                document.getElementById('statLemon').textContent = fmtNum(s.lemon_transactions);
+                document.getElementById('statLemonNote').textContent = s.lemon_amount_label || '—';
 
                 var body = document.getElementById('txBody');
                 var txs = s.recent_transactions || [];
@@ -320,13 +362,28 @@
                         ? '<a href="/admin/users/' + encodeURIComponent(uid) + '" style="color:var(--accent);text-decoration:none;font-weight:600;">' +
                           escapeHtml(uid.slice(0, 8)) + '…</a>'
                         : '—';
+                    var provider = (t.provider || 'unknown').toLowerCase();
+                    var providerClass = 'provider-pill provider-pill--' +
+                        (provider === 'lemon' || provider === 'stripe' ? provider : 'unknown');
+                    var productId = t.product_id || t.lemon_variant_id || t.stripe_price_id || '—';
+                    var orderRef = '—';
+                    if (provider === 'lemon') {
+                        orderRef = t.lemon_order_id || t.lemon_payment_id || '—';
+                    } else if (provider === 'stripe') {
+                        orderRef = t.stripe_checkout_session_id || '—';
+                    }
+                    var pack = t.pack_label || '—';
                     return '<tr>' +
                         '<td>' + escapeHtml(fmtWhen(t.created_at)) + '</td>' +
                         '<td>' + userCell + '</td>' +
+                        '<td><span class="' + providerClass + '">' + escapeHtml(provider) + '</span></td>' +
+                        '<td>' + escapeHtml(pack) + '</td>' +
                         '<td>' + escapeHtml(t.status || '—') + '</td>' +
                         '<td>' + escapeHtml(t.amount_label || '—') + '</td>' +
                         '<td>' + escapeHtml(String(t.credits_granted ?? '—')) + '</td>' +
-                        '<td>' + escapeHtml(t.stripe_price_id || '—') + '</td>' +
+                        '<td class="mono" title="' + escapeHtml(t.product_kind || '') + '">' +
+                          escapeHtml(productId) + '</td>' +
+                        '<td class="mono">' + escapeHtml(orderRef) + '</td>' +
                         '</tr>';
                 }).join('');
             } catch (e) {

@@ -3827,9 +3827,26 @@ def api_lemon_webhook():
         print(f"[lemon] webhook invalid JSON: {e}", file=sys.stderr, flush=True)
         return jsonify({"error": "Invalid payload."}), 400
 
+    event_name = ""
+    try:
+        event_name = str(((event.get("meta") or {}).get("event_name")) or "")
+    except Exception:
+        event_name = ""
+    print(f"[lemon] webhook received event={event_name!r}", file=sys.stderr, flush=True)
+
     order = extract_lemon_order_payload(event)
     if order is None:
+        print(f"[lemon] webhook ignored event={event_name!r}", file=sys.stderr, flush=True)
         return jsonify({"received": True, "ignored": True}), 200
+
+    print(
+        f"[lemon] webhook order_id={order.get('lemon_order_id')!r} "
+        f"variant_id={order.get('lemon_variant_id')!r} "
+        f"user_id={order.get('user_id')!r} "
+        f"amount_cents={order.get('amount_paid_cents')!r}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     try:
         ok, message, status = fulfill_lemon_order(
@@ -3841,6 +3858,7 @@ def api_lemon_webhook():
         )
         if status == 200:
             return jsonify({"received": True, "status": message}), 200
+        print(f"[lemon] fulfill failed status={status} message={message}", file=sys.stderr, flush=True)
         return jsonify({"error": message}), status
     except Exception as e:
         print(f"[lemon] webhook handler error: {e}", file=sys.stderr, flush=True)
@@ -6857,6 +6875,7 @@ register_admin(
         "_storage_http_session": _storage_http_session,
         "_storage_auth_headers": _storage_auth_headers,
         "SUPABASE_STORAGE_BUCKET": SUPABASE_STORAGE_BUCKET,
+        "PRICE_PACKAGES": PRICE_PACKAGES,
     },
 )
 

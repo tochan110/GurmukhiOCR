@@ -240,8 +240,10 @@ def fulfill_lemon_order(
                 return True, "already_processed", 200
         except Exception:
             pass
-        print(f"[lemon] payment insert failed: {e}", file=sys.stderr, flush=True)
-        return False, "Could not record payment.", 500
+        err_text = str(e)
+        print(f"[lemon] payment insert failed: {err_text}", file=sys.stderr, flush=True)
+        # Surface the DB reason so Lemon's Resend log is actionable.
+        return False, f"Could not record payment: {err_text}", 500
 
     ok, err, _balance = add_paid_credits(user_id, credits_granted)
     if not ok:

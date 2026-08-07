@@ -516,10 +516,7 @@ def _user_detail(user_id: str) -> dict | None:
         try:
             res = (
                 client.table("payments")
-                .select(
-                    "id,status,credits_granted,amount_paid_cents,currency,"
-                    "stripe_price_id,stripe_checkout_session_id,created_at"
-                )
+                .select(_PAYMENT_SELECT)
                 .eq("user_id", str(user_id))
                 .order("created_at", desc=True)
                 .limit(50)
@@ -529,38 +526,16 @@ def _user_detail(user_id: str) -> dict | None:
                 status = str(row.get("status") or "").lower()
                 if status in ("paid", "complete", "completed", "succeeded"):
                     has_payment = True
-                cents = row.get("amount_paid_cents")
-                try:
-                    cents_i = int(cents) if cents is not None else None
-                except (TypeError, ValueError):
-                    cents_i = None
-                amount_label = "—"
-                if cents_i is not None:
-                    cur = (row.get("currency") or "usd").upper()
-                    amount_label = f"${cents_i / 100:.2f} {cur}"
-                try:
-                    credits_g = int(row.get("credits_granted") or 0)
-                except (TypeError, ValueError):
-                    credits_g = 0
-                recent_transactions.append(
-                    {
-                        "id": row.get("id"),
-                        "status": row.get("status") or "—",
-                        "credits_granted": credits_g,
-                        "amount_paid_cents": cents_i,
-                        "amount_label": amount_label,
-                        "currency": row.get("currency") or "usd",
-                        "stripe_price_id": row.get("stripe_price_id"),
-                        "created_at": row.get("created_at"),
-                    }
-                )
+                recent_transactions.append(_serialize_payment_row(row))
         except Exception as e:
             print(f"[admin] user payments failed: {e}", file=sys.stderr, flush=True)
-            # Retry without created_at / amount columns if schema differs.
             try:
                 res = (
                     client.table("payments")
-                    .select("id,status,credits_granted,stripe_price_id")
+                    .select(
+                        "id,status,credits_granted,amount_paid_cents,currency,provider,"
+                        "stripe_price_id,lemon_order_id,lemon_variant_id,lemon_payment_id,created_at"
+                    )
                     .eq("user_id", str(user_id))
                     .limit(50)
                     .execute()
@@ -569,22 +544,7 @@ def _user_detail(user_id: str) -> dict | None:
                     status = str(row.get("status") or "").lower()
                     if status in ("paid", "complete", "completed", "succeeded"):
                         has_payment = True
-                    try:
-                        credits_g = int(row.get("credits_granted") or 0)
-                    except (TypeError, ValueError):
-                        credits_g = 0
-                    recent_transactions.append(
-                        {
-                            "id": row.get("id"),
-                            "status": row.get("status") or "—",
-                            "credits_granted": credits_g,
-                            "amount_paid_cents": None,
-                            "amount_label": "—",
-                            "currency": "usd",
-                            "stripe_price_id": row.get("stripe_price_id"),
-                            "created_at": None,
-                        }
-                    )
+                    recent_transactions.append(_serialize_payment_row(row))
             except Exception as e2:
                 print(f"[admin] user payments retry failed: {e2}", file=sys.stderr, flush=True)
 
@@ -697,6 +657,81 @@ def _fmt_money_cents(cents: int | None, currency: str = "USD") -> str:
     return f"${int(cents) / 100:,.2f} {cur}"
 
 
+def _infer_provider(row: dict) -> str:
+    explicit = str(row.get("provider") or "").strip().lower()
+    if explicit in ("stripe", "lemon"):
+        return explicit
+    if row.get("lemon_order_id") or row.get("lemon_variant_id") or row.get("lemon_payment_id"):
+        return "lemon"
+    if row.get("stripe_checkout_session_id") or row.get("stripe_price_id"):
+        return "stripe"
+    return "unknown"
+
+
+def _pack_meta_for_payment(row: dict) -> dict:
+    """Resolve pack label / amount from PRICE_PACKAGES using Stripe or Lemon IDs."""
+    packages = _c("PRICE_PACKAGES") if "PRICE_PACKAGES" in _CTX else []
+    provider = _infer_provider(row)
+    stripe_price = str(row.get("stripe_price_id") or "").strip() or None
+    lemon_variant = str(row.get("lemon_variant_id") or "").strip() or None
+    pack_label = None
+    pack_amount_usd = None
+    for p in packages or []:
+        if provider == "lemon" and lemon_variant and str(p.get("lemon_variant_id") or "") == lemon_variant:
+            pack_amount_usd = p.get("amount_usd")
+            pack_label = f"${pack_amount_usd}" if pack_amount_usd else None
+            break
+        if provider == "stripe" and stripe_price and str(p.get("price_id") or "") == stripe_price:
+            pack_amount_usd = p.get("amount_usd")
+            pack_label = f"${pack_amount_usd}" if pack_amount_usd else None
+            break
+    product_id = lemon_variant if provider == "lemon" else stripe_price
+    product_kind = "lemon_variant_id" if provider == "lemon" else "stripe_price_id"
+    return {
+        "provider": provider,
+        "stripe_price_id": stripe_price,
+        "stripe_checkout_session_id": (str(row.get("stripe_checkout_session_id") or "").strip() or None),
+        "lemon_order_id": (str(row.get("lemon_order_id") or "").strip() or None),
+        "lemon_payment_id": (str(row.get("lemon_payment_id") or "").strip() or None),
+        "lemon_variant_id": lemon_variant,
+        "product_id": product_id,
+        "product_kind": product_kind,
+        "pack_label": pack_label,
+        "pack_amount_usd": pack_amount_usd,
+    }
+
+
+def _serialize_payment_row(row: dict) -> dict:
+    meta = _pack_meta_for_payment(row)
+    try:
+        cents_i = int(row.get("amount_paid_cents")) if row.get("amount_paid_cents") is not None else None
+    except (TypeError, ValueError):
+        cents_i = None
+    try:
+        credits_g = int(row.get("credits_granted") or 0)
+    except (TypeError, ValueError):
+        credits_g = 0
+    currency = row.get("currency") or "usd"
+    return {
+        "id": row.get("id"),
+        "user_id": row.get("user_id"),
+        "status": row.get("status") or "—",
+        "credits_granted": credits_g,
+        "amount_paid_cents": cents_i,
+        "amount_label": _fmt_money_cents(cents_i, currency),
+        "currency": currency,
+        "created_at": row.get("created_at"),
+        **meta,
+    }
+
+
+_PAYMENT_SELECT = (
+    "id,user_id,status,credits_granted,amount_paid_cents,currency,provider,created_at,"
+    "stripe_price_id,stripe_checkout_session_id,stripe_payment_intent_id,"
+    "lemon_order_id,lemon_payment_id,lemon_variant_id"
+)
+
+
 def _list_payments() -> list[dict]:
     client = _c("supabase_client")
     if not client:
@@ -704,10 +739,7 @@ def _list_payments() -> list[dict]:
     try:
         res = (
             client.table("payments")
-            .select(
-                "id,user_id,status,credits_granted,amount_paid_cents,currency,"
-                "stripe_price_id,created_at"
-            )
+            .select(_PAYMENT_SELECT)
             .order("created_at", desc=True)
             .limit(5000)
             .execute()
@@ -718,7 +750,10 @@ def _list_payments() -> list[dict]:
         try:
             res = (
                 client.table("payments")
-                .select("id,user_id,status,credits_granted,amount_paid_cents,currency,stripe_price_id")
+                .select(
+                    "id,user_id,status,credits_granted,amount_paid_cents,currency,"
+                    "stripe_price_id,lemon_order_id,lemon_variant_id,provider"
+                )
                 .limit(5000)
                 .execute()
             )
@@ -734,17 +769,29 @@ def _finance_payload() -> dict:
     total_cents = 0
     currency = "USD"
     paying_users: set[str] = set()
+    stripe_count = 0
+    lemon_count = 0
+    stripe_cents = 0
+    lemon_cents = 0
     for p in completed:
         try:
             cents = int(p.get("amount_paid_cents") or 0)
         except (TypeError, ValueError):
             cents = 0
-        total_cents += max(0, cents)
+        cents = max(0, cents)
+        total_cents += cents
         if p.get("currency"):
             currency = str(p.get("currency")).upper()
         uid = str(p.get("user_id") or "")
         if uid:
             paying_users.add(uid)
+        provider = _infer_provider(p)
+        if provider == "lemon":
+            lemon_count += 1
+            lemon_cents += cents
+        elif provider == "stripe":
+            stripe_count += 1
+            stripe_cents += cents
 
     auth_users = _list_auth_users()
     users_count = len(auth_users) or 0
@@ -767,28 +814,7 @@ def _finance_payload() -> dict:
         except (TypeError, ValueError):
             pass
 
-    recent = []
-    for p in completed[:100]:
-        try:
-            cents_i = int(p.get("amount_paid_cents")) if p.get("amount_paid_cents") is not None else None
-        except (TypeError, ValueError):
-            cents_i = None
-        try:
-            credits_g = int(p.get("credits_granted") or 0)
-        except (TypeError, ValueError):
-            credits_g = 0
-        recent.append(
-            {
-                "id": p.get("id"),
-                "user_id": p.get("user_id"),
-                "status": p.get("status") or "—",
-                "credits_granted": credits_g,
-                "amount_paid_cents": cents_i,
-                "amount_label": _fmt_money_cents(cents_i, p.get("currency") or currency),
-                "created_at": p.get("created_at"),
-                "stripe_price_id": p.get("stripe_price_id"),
-            }
-        )
+    recent = [_serialize_payment_row(p) for p in completed[:100]]
 
     return {
         "total_transactions": len(completed),
@@ -803,6 +829,10 @@ def _finance_payload() -> dict:
         "revenue_30d_cents": month_cents,
         "revenue_30d_label": _fmt_money_cents(month_cents, currency),
         "revenue_30d_transactions": month_tx,
+        "stripe_transactions": stripe_count,
+        "lemon_transactions": lemon_count,
+        "stripe_amount_label": _fmt_money_cents(stripe_cents, currency),
+        "lemon_amount_label": _fmt_money_cents(lemon_cents, currency),
         "currency": currency,
         "recent_transactions": recent,
     }
