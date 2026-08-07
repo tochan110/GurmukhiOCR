@@ -213,6 +213,22 @@
             background: rgba(107, 140, 255, 0.18);
         }
         .top-nav a.is-active { color: var(--text); }
+        .status-pill {
+            display: inline-block;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: lowercase;
+        }
+        .status-pill--processing {
+            color: #ffe2a8;
+            background: rgba(255, 180, 80, 0.16);
+        }
+        .status-pill--pending {
+            color: #c7d4ff;
+            background: rgba(107, 140, 255, 0.16);
+        }
     </style>
 </head>
 <body>
@@ -245,8 +261,29 @@
             <div class="card"><div class="card-label">Active (30 days)</div><div class="card-value" id="statActive">—</div></div>
             <div class="card"><div class="card-label">New Users (7 days)</div><div class="card-value" id="statNewUsers">—</div></div>
             <div class="card"><div class="card-label">New Files (7 days)</div><div class="card-value" id="statNewFiles">—</div></div>
+            <div class="card"><div class="card-label">In Progress</div><div class="card-value" id="statProcessing">—</div></div>
         </div>
         <div class="toolbar">
+            <h2>Files in progress</h2>
+            <span class="muted" id="processingHint">Pending / processing uploads</span>
+        </div>
+        <div id="processingLoading" class="loading">Loading…</div>
+        <div class="table-wrap" id="processingTableWrap" hidden>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>User</th>
+                        <th>Status</th>
+                        <th>Stage</th>
+                        <th>Pages</th>
+                        <th>Started</th>
+                    </tr>
+                </thead>
+                <tbody id="processingBody"></tbody>
+            </table>
+        </div>
+        <div class="toolbar" style="margin-top:1.5rem">
             <h2>Users</h2>
             <input class="search" id="userSearch" type="search" placeholder="Search email, username, or name…" autocomplete="off">
         </div>
@@ -335,6 +372,39 @@
             document.getElementById('statActive').textContent = fmtNum(s.active_users);
             document.getElementById('statNewUsers').textContent = fmtNum(s.new_users_7d);
             document.getElementById('statNewFiles').textContent = fmtNum(s.new_files_7d);
+            document.getElementById('statProcessing').textContent = fmtNum(s.processing_count);
+
+            var procBody = document.getElementById('processingBody');
+            var procLoading = document.getElementById('processingLoading');
+            var procWrap = document.getElementById('processingTableWrap');
+            var files = s.processing_files || [];
+            procLoading.hidden = true;
+            if (!files.length) {
+                procWrap.hidden = true;
+                procLoading.hidden = false;
+                procLoading.textContent = 'No files currently pending or processing.';
+                return;
+            }
+            procWrap.hidden = false;
+            procBody.innerHTML = files.map(function (f) {
+                var uid = f.user_id ? String(f.user_id) : '';
+                var userCell = uid
+                    ? '<a href="/admin/users/' + encodeURIComponent(uid) + '" style="color:var(--accent);text-decoration:none;font-weight:600;">' +
+                      escapeHtml(f.email || uid.slice(0, 8)) + '</a>'
+                    : escapeHtml(f.email || '—');
+                var statusClass =
+                    String(f.status || '').toLowerCase() === 'processing'
+                        ? 'status-pill status-pill--processing'
+                        : 'status-pill status-pill--pending';
+                return '<tr>' +
+                    '<td>' + escapeHtml(f.filename || '—') + '</td>' +
+                    '<td>' + userCell + '</td>' +
+                    '<td><span class="' + statusClass + '">' + escapeHtml(f.status || '—') + '</span></td>' +
+                    '<td>' + escapeHtml(f.stage || '—') + '</td>' +
+                    '<td>' + fmtNum(f.pages) + '</td>' +
+                    '<td>' + escapeHtml(fmtWhen(f.created_at)) + '</td>' +
+                    '</tr>';
+            }).join('');
         }
 
         async function loadUsers(headers, search) {

@@ -426,6 +426,7 @@ def _stats_payload() -> dict:
             print(f"[admin] stats files query failed: {e}", file=sys.stderr, flush=True)
 
     storage = _sum_storage_bytes(paths, max_objects=400)
+    processing_files = _processing_files_rows(auth_users=auth_users)
     return {
         "users": users_count,
         "files": files_count,
@@ -435,7 +436,70 @@ def _stats_payload() -> dict:
         "active_users": active,
         "new_users_7d": new_users_7d,
         "new_files_7d": new_files_7d,
+        "processing_count": len(processing_files),
+        "processing_files": processing_files,
     }
+
+
+def _processing_files_rows(*, auth_users: list[dict] | None = None) -> list[dict]:
+    """Files currently pending/processing, newest first."""
+    client = _c("supabase_client")
+    if not client:
+        return []
+    try:
+        res = (
+            client.table("files")
+            .select(
+                "id,user_id,file_name,status,credits_used,created_at,job_metadata"
+            )
+            .in_("status", ["processing", "pending"])
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+    except Exception as e:
+        print(f"[admin] processing files query failed: {e}", file=sys.stderr, flush=True)
+        return []
+
+    email_by_id: dict[str, str] = {}
+    for au in auth_users if auth_users is not None else _list_auth_users():
+        uid = str(au.get("id") or "")
+        if uid:
+            email_by_id[uid] = (au.get("email") or "").strip() or "—"
+
+    out: list[dict] = []
+    for row in rows:
+        job = row.get("job_metadata")
+        if isinstance(job, str):
+            try:
+                import json
+
+                job = json.loads(job)
+            except Exception:
+                job = None
+        if not isinstance(job, dict):
+            job = {}
+        uid = str(row.get("user_id") or "")
+        try:
+            pages = max(0, int(row.get("credits_used") or 0))
+        except (TypeError, ValueError):
+            pages = 0
+        status = (row.get("status") or "—").strip() or "—"
+        stage = (job.get("stage") or job.get("status") or "").strip() or None
+        out.append(
+            {
+                "id": row.get("id"),
+                "user_id": uid or None,
+                "email": email_by_id.get(uid) or "—",
+                "filename": row.get("file_name") or "—",
+                "status": status,
+                "stage": stage,
+                "pages": pages,
+                "created_at": row.get("created_at"),
+            }
+        )
+    return out
 
 
 def _user_detail(user_id: str) -> dict | None:
