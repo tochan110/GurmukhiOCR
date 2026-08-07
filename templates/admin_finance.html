@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "_seo_head.html" %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg0: #07080c;
+            --bg1: #0e1018;
+            --stroke: rgba(255, 255, 255, 0.06);
+            --text: #e8eaef;
+            --muted: rgba(200, 206, 220, 0.72);
+            --faint: rgba(160, 168, 190, 0.45);
+            --accent: #6b8cff;
+            --danger: #f0a8a8;
+            --card: rgba(255, 255, 255, 0.03);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { -webkit-font-smoothing: antialiased; }
+        body {
+            min-height: 100vh;
+            font-family: "DM Sans", system-ui, sans-serif;
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 50% -20%, rgba(107, 140, 255, 0.12), transparent 55%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.1rem 1.5rem;
+            border-bottom: 1px solid var(--stroke);
+        }
+        .nav-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+        .nav-brand-logo {
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 7px;
+            object-fit: contain;
+        }
+        .top-nav { display: flex; gap: 0.85rem; align-items: center; flex-wrap: wrap; }
+        .top-nav a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+        .top-nav a:hover,
+        .top-nav a.is-active { color: var(--text); }
+        .badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #ffd28a;
+            background: rgba(255, 180, 80, 0.12);
+            border: 1px solid rgba(255, 180, 80, 0.28);
+            padding: 0.28rem 0.55rem;
+            border-radius: 999px;
+        }
+        main {
+            width: min(1180px, calc(100% - 2rem));
+            margin: 1.5rem auto 3rem;
+        }
+        h1 {
+            font-size: 1.55rem;
+            letter-spacing: -0.04em;
+            margin-bottom: 0.35rem;
+        }
+        .sub {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 1.35rem;
+        }
+        .admin-tabs {
+            display: inline-flex;
+            gap: 0.35rem;
+            padding: 0.25rem;
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.18);
+            margin-bottom: 1.25rem;
+        }
+        .admin-tabs a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 0.5rem 0.9rem;
+            border-radius: 9px;
+        }
+        .admin-tabs a.is-active {
+            color: var(--text);
+            background: rgba(107, 140, 255, 0.18);
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 960px) {
+            .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 14px;
+            padding: 1rem 1.05rem;
+        }
+        .card-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.45rem;
+        }
+        .card-value {
+            font-size: 1.45rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+        .card-note {
+            margin-top: 0.4rem;
+            color: var(--faint);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+        .section-title {
+            margin: 0 0 0.65rem;
+            font-size: 1.05rem;
+            letter-spacing: -0.03em;
+        }
+        .table-wrap {
+            overflow: auto;
+            border: 1px solid var(--stroke);
+            border-radius: 14px;
+            background: var(--card);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.75rem 0.85rem;
+            border-bottom: 1px solid var(--stroke);
+            white-space: nowrap;
+        }
+        th {
+            color: var(--muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        tr:last-child td { border-bottom: 0; }
+        .error { color: var(--danger); margin: 1rem 0; }
+        .loading { color: var(--muted); padding: 1rem 0; }
+        .muted { color: var(--muted); }
+    </style>
+</head>
+<body>
+    <script type="application/json" id="supabase-config">{{ {"url": supabase_url|default(""), "publishableKey": supabase_publishable_key|default("")} | tojson }}</script>
+    <header class="top">
+        <a href="/" class="nav-brand">
+            <img class="nav-brand-logo" src="{{ url_for('static', filename='gocr_logo.png') }}" alt="">
+            <span>GurmukhiOCR</span>
+        </a>
+        <nav class="top-nav">
+            <span class="badge">Super Admin</span>
+            <a href="/dashboard2">Dashboard</a>
+            <a href="/admin">Overview</a>
+            <a href="/admin/finance" class="is-active">Finance</a>
+        </nav>
+    </header>
+    <main>
+        <h1>Finance</h1>
+        <p class="sub">Payment totals and recent revenue. Signed in as <span id="adminEmail" class="muted">…</span></p>
+        <div class="admin-tabs" aria-label="Admin sections">
+            <a href="/admin">Overview</a>
+            <a href="/admin/finance" class="is-active">Finance</a>
+        </div>
+        <p id="adminError" class="error" hidden></p>
+        <div class="cards">
+            <div class="card">
+                <div class="card-label">Total Transactions</div>
+                <div class="card-value" id="statTx">—</div>
+                <div class="card-note">Completed payments</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Total Amount Paid</div>
+                <div class="card-value" id="statTotal">—</div>
+                <div class="card-note" id="statPayingNote">—</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Avg Rev / User</div>
+                <div class="card-value" id="statArpu">—</div>
+                <div class="card-note" id="statArppuNote">—</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Revenue Last 30 Days</div>
+                <div class="card-value" id="statRevenue30">—</div>
+                <div class="card-note" id="statRevenue30Note">Completed payments in the last 30 days</div>
+            </div>
+        </div>
+        <h2 class="section-title">Recent transactions</h2>
+        <div id="txLoading" class="loading">Loading…</div>
+        <div class="table-wrap" id="txWrap" hidden>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Status</th>
+                        <th>Amount</th>
+                        <th>Credits</th>
+                        <th>Price ID</th>
+                    </tr>
+                </thead>
+                <tbody id="txBody"></tbody>
+            </table>
+        </div>
+    </main>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        var cfg = JSON.parse(document.getElementById('supabase-config').textContent || '{}');
+        var supabase = createClient(cfg.url || '', cfg.publishableKey || '');
+        var errEl = document.getElementById('adminError');
+
+        function showError(msg) {
+            errEl.hidden = !msg;
+            errEl.textContent = msg || '';
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function fmtWhen(iso) {
+            if (!iso) return '—';
+            try {
+                return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            } catch (e) {
+                return String(iso);
+            }
+        }
+
+        function fmtNum(n) {
+            if (n == null) return '—';
+            return Number(n).toLocaleString();
+        }
+
+        async function authHeaders() {
+            var sessionRes = await supabase.auth.getSession();
+            var token = sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+            if (!token) throw new Error('Sign in required.');
+            return { Authorization: 'Bearer ' + token };
+        }
+
+        (async function () {
+            try {
+                var headers = await authHeaders();
+                var me = await fetch('/api/admin/me', { headers: headers, credentials: 'same-origin' });
+                if (me.status === 401) {
+                    window.location.href = '/login?next=' + encodeURIComponent('/admin/finance');
+                    return;
+                }
+                if (!me.ok) throw new Error('Not authorized as superadmin.');
+                var meData = await me.json();
+                document.getElementById('adminEmail').textContent = meData.email || '—';
+
+                var res = await fetch('/api/admin/finance', { headers: headers, credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Failed to load finance stats');
+                var s = await res.json();
+                document.getElementById('statTx').textContent = fmtNum(s.total_transactions);
+                document.getElementById('statTotal').textContent = s.total_amount_label || '—';
+                document.getElementById('statPayingNote').textContent =
+                    fmtNum(s.paying_users) + ' paying users · ' + fmtNum(s.total_users) + ' total users';
+                document.getElementById('statArpu').textContent = s.avg_rev_per_user_label || '—';
+                document.getElementById('statArppuNote').textContent =
+                    'Per paying user: ' + (s.avg_rev_per_paying_user_label || '—');
+                document.getElementById('statRevenue30').textContent = s.revenue_30d_label || '—';
+                document.getElementById('statRevenue30Note').textContent =
+                    fmtNum(s.revenue_30d_transactions) + ' transactions in the last 30 days';
+
+                var body = document.getElementById('txBody');
+                var txs = s.recent_transactions || [];
+                document.getElementById('txLoading').hidden = true;
+                if (!txs.length) {
+                    document.getElementById('txLoading').hidden = false;
+                    document.getElementById('txLoading').textContent = 'No completed payments yet.';
+                    return;
+                }
+                document.getElementById('txWrap').hidden = false;
+                body.innerHTML = txs.map(function (t) {
+                    var uid = t.user_id ? String(t.user_id) : '';
+                    var userCell = uid
+                        ? '<a href="/admin/users/' + encodeURIComponent(uid) + '" style="color:var(--accent);text-decoration:none;font-weight:600;">' +
+                          escapeHtml(uid.slice(0, 8)) + '…</a>'
+                        : '—';
+                    return '<tr>' +
+                        '<td>' + escapeHtml(fmtWhen(t.created_at)) + '</td>' +
+                        '<td>' + userCell + '</td>' +
+                        '<td>' + escapeHtml(t.status || '—') + '</td>' +
+                        '<td>' + escapeHtml(t.amount_label || '—') + '</td>' +
+                        '<td>' + escapeHtml(String(t.credits_granted ?? '—')) + '</td>' +
+                        '<td>' + escapeHtml(t.stripe_price_id || '—') + '</td>' +
+                        '</tr>';
+                }).join('');
+            } catch (e) {
+                document.getElementById('txLoading').hidden = true;
+                showError(e.message || String(e));
+            }
+        })();
+    </script>
+</body>
+</html>

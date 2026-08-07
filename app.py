@@ -37,6 +37,12 @@ from page_metadata import (
     upsert_page_metadata,
 )
 from admin_panel import register_admin
+from lemon_squeezy import (
+    create_lemon_checkout_url,
+    extract_lemon_order_payload,
+    fulfill_lemon_order,
+    verify_lemon_signature,
+)
 
 load_dotenv()
 
@@ -60,17 +66,47 @@ _CREDIT_BALANCE_SELECT = (
 )
 _CREDIT_UPDATE_MAX_ATTEMPTS = 5
 
-# Stripe one-time Checkout: map each Price ID → credits granted.
+# Stripe + Lemon one-time Checkout: map each pack → credits granted.
 # This is the ONLY place credit packs are defined (landing + /pricing render from it).
-# amount_usd is display-only; Stripe Checkout uses the price_id amounts.
+# amount_usd is display-only; Stripe uses price_id, Lemon uses lemon_variant_id.
 PRICE_PACKAGES = [
-    {"price_id": "price_1TuGJHRtZiy12tM4DFpU5YWF", "credits": 250, "amount_usd": "5.00"},
-    {"price_id": "price_1TuGJHRtZiy12tM4LzJjQhfA", "credits": 1000, "amount_usd": "15.00"},
-    {"price_id": "price_1TuGJHRtZiy12tM4r9Odrwh5", "credits": 8000, "amount_usd": "50.00"},
-    {"price_id": "price_1TuGJHRtZiy12tM4OgjkuP7P", "credits": 32000, "amount_usd": "150.00"},
-    {"price_id": "price_1TuGJHRtZiy12tM4xdc2Sjtc", "credits": 128000, "amount_usd": "500.00"},
+    {
+        "price_id": "price_1TuGJHRtZiy12tM4DFpU5YWF",
+        "lemon_variant_id": "1990774",
+        "credits": 250,
+        "amount_usd": "5.00",
+    },
+    {
+        "price_id": "price_1TuGJHRtZiy12tM4LzJjQhfA",
+        "lemon_variant_id": "1990775",
+        "credits": 1000,
+        "amount_usd": "15.00",
+    },
+    {
+        "price_id": "price_1TuGJHRtZiy12tM4r9Odrwh5",
+        "lemon_variant_id": "1990769",
+        "credits": 8000,
+        "amount_usd": "50.00",
+    },
+    {
+        "price_id": "price_1TuGJHRtZiy12tM4OgjkuP7P",
+        "lemon_variant_id": "1990776",
+        "credits": 32000,
+        "amount_usd": "150.00",
+    },
+    {
+        "price_id": "price_1TuGJHRtZiy12tM4xdc2Sjtc",
+        "lemon_variant_id": "1990777",
+        "credits": 128000,
+        "amount_usd": "500.00",
+    },
 ]
 PRICE_ID_TO_CREDITS = {p["price_id"]: int(p["credits"]) for p in PRICE_PACKAGES}
+LEMON_VARIANT_ID_TO_CREDITS = {
+    str(p["lemon_variant_id"]): int(p["credits"])
+    for p in PRICE_PACKAGES
+    if p.get("lemon_variant_id")
+}
 
 # Super-admin email allowlist (lowercase match). Env SUPERADMINS=a@x.com,b@y.com overrides.
 _SUPERADMINS_ENV = (os.environ.get("SUPERADMINS") or "").strip()
@@ -83,6 +119,10 @@ else:
 
 STRIPE_SECRET_KEY = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
+
+LEMON_SQUEEZY_API_KEY = (os.environ.get("LEMON_SQUEEZY_API_KEY") or "").strip()
+LEMON_SQUEEZY_STORE_ID = (os.environ.get("LEMON_SQUEEZY_STORE_ID") or "").strip()
+LEMON_SQUEEZY_WEBHOOK_SECRET = (os.environ.get("LEMON_SQUEEZY_WEBHOOK_SECRET") or "").strip()
 
 SUPABASE_STORAGE_BUCKET = "gbucket"
 SUPABASE_JSON_BUCKET = (os.environ.get("SUPABASE_JSON_BUCKET") or SUPABASE_STORAGE_BUCKET).strip()
@@ -3211,10 +3251,14 @@ def require_google_ocr_key():
         "api_ocr_status",
         "api_stripe_create_checkout_session",
         "api_stripe_webhook",
+        "api_lemon_create_checkout",
+        "api_lemon_webhook",
         "admin.admin_dashboard_page",
         "admin.admin_user_page",
+        "admin.admin_finance_page",
         "admin.api_admin_me",
         "admin.api_admin_stats",
+        "admin.api_admin_finance",
         "admin.api_admin_users",
         "admin.api_admin_user_detail",
         "admin.api_admin_user_files",
@@ -3264,6 +3308,7 @@ def _public_pricing_context() -> dict:
         "pricing_packages": [
             {
                 "price_id": p["price_id"],
+                "lemon_variant_id": str(p.get("lemon_variant_id") or ""),
                 "credits": int(p["credits"]),
                 "amount_usd": p["amount_usd"],
                 "price_label": f"${p['amount_usd']}",
@@ -3271,6 +3316,10 @@ def _public_pricing_context() -> dict:
             for p in PRICE_PACKAGES
         ],
         "monthly_free_credit_allowance": PROFILE_PAGES_MONTHLY_ALLOWANCE,
+        "lemon_checkout_enabled": bool(
+            LEMON_SQUEEZY_API_KEY and LEMON_SQUEEZY_STORE_ID
+        ),
+        "stripe_checkout_enabled": bool(STRIPE_SECRET_KEY),
     }
 
 
@@ -3713,6 +3762,88 @@ def api_stripe_webhook():
         return jsonify({"error": message}), status
     except Exception as e:
         print(f"[stripe] webhook handler error: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"error": "Webhook handler failed."}), 500
+
+
+@app.route("/api/lemon/create-checkout", methods=["POST"])
+def api_lemon_create_checkout():
+    """Create a Lemon Squeezy Checkout URL for a configured variant (additive to Stripe)."""
+    token = _bearer_token_from_request()
+    if not token:
+        return jsonify({"error": "Missing Authorization bearer token."}), 401
+    user_id = supabase_access_token_to_user_id(token)
+    if not user_id:
+        return jsonify({"error": "Invalid or expired token."}), 401
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 400
+    if not LEMON_SQUEEZY_API_KEY or not LEMON_SQUEEZY_STORE_ID:
+        return jsonify({"error": "Lemon Squeezy is not configured on the server."}), 503
+
+    body = request.get_json(silent=True) or {}
+    variant_id = str(body.get("variant_id") or body.get("lemon_variant_id") or "").strip()
+    if not variant_id or variant_id not in LEMON_VARIANT_ID_TO_CREDITS:
+        return jsonify({"error": "Invalid variant_id.", "error_type": "invalid_variant"}), 400
+
+    credits = int(LEMON_VARIANT_ID_TO_CREDITS[variant_id])
+    email = _auth_email_from_access_token(token)
+    redirect_url = url_for("dashboard2_page", _external=True) + "?checkout=success"
+    try:
+        checkout_url = create_lemon_checkout_url(
+            api_key=LEMON_SQUEEZY_API_KEY,
+            store_id=LEMON_SQUEEZY_STORE_ID,
+            variant_id=variant_id,
+            user_id=str(user_id),
+            redirect_url=redirect_url,
+            email=email,
+        )
+        print(
+            f"[lemon] checkout created user_id={user_id} "
+            f"variant_id={variant_id} credits={credits}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return jsonify({"checkout_url": checkout_url})
+    except Exception as e:
+        print(f"[lemon] create-checkout failed: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Could not create Lemon Squeezy checkout."}), 500
+
+
+@app.route("/api/lemon/webhook", methods=["POST"])
+def api_lemon_webhook():
+    """Lemon Squeezy webhook: grant paid credits on paid order events (idempotent)."""
+    if not LEMON_SQUEEZY_WEBHOOK_SECRET:
+        return jsonify({"error": "Lemon webhook is not configured."}), 503
+
+    payload = request.get_data(cache=False, as_text=False)
+    signature = request.headers.get("X-Signature") or ""
+    if not verify_lemon_signature(payload, signature, LEMON_SQUEEZY_WEBHOOK_SECRET):
+        print("[lemon] webhook signature verification failed", file=sys.stderr, flush=True)
+        return jsonify({"error": "Invalid signature."}), 400
+
+    try:
+        event = json.loads(payload.decode("utf-8"))
+    except Exception as e:
+        print(f"[lemon] webhook invalid JSON: {e}", file=sys.stderr, flush=True)
+        return jsonify({"error": "Invalid payload."}), 400
+
+    order = extract_lemon_order_payload(event)
+    if order is None:
+        return jsonify({"received": True, "ignored": True}), 200
+
+    try:
+        ok, message, status = fulfill_lemon_order(
+            supabase_client=supabase_client,
+            order=order,
+            variant_id_to_credits=LEMON_VARIANT_ID_TO_CREDITS,
+            add_paid_credits=add_paid_credits,
+            is_unique_violation=_is_unique_violation,
+        )
+        if status == 200:
+            return jsonify({"received": True, "status": message}), 200
+        return jsonify({"error": message}), status
+    except Exception as e:
+        print(f"[lemon] webhook handler error: {e}", file=sys.stderr, flush=True)
         traceback.print_exc(file=sys.stderr)
         return jsonify({"error": "Webhook handler failed."}), 500
 
@@ -4998,6 +5129,7 @@ def _fulfill_checkout_session(session_obj) -> tuple[bool, str, int]:
 
     payment_row = {
         "user_id": user_id,
+        "provider": "stripe",
         "stripe_checkout_session_id": checkout_session_id,
         "stripe_payment_intent_id": payment_intent_id,
         "stripe_price_id": price_id,

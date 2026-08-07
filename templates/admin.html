@@ -87,11 +87,14 @@
         }
         .cards {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
-        @media (max-width: 960px) {
+        @media (max-width: 1100px) {
+            .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 720px) {
             .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         .card {
@@ -188,6 +191,28 @@
             font-size: 0.95rem;
         }
         .loading { color: var(--muted); padding: 1rem 0; }
+        .admin-tabs {
+            display: inline-flex;
+            gap: 0.35rem;
+            padding: 0.25rem;
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.18);
+            margin-bottom: 1.25rem;
+        }
+        .admin-tabs a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 0.5rem 0.9rem;
+            border-radius: 9px;
+        }
+        .admin-tabs a.is-active {
+            color: var(--text);
+            background: rgba(107, 140, 255, 0.18);
+        }
+        .top-nav a.is-active { color: var(--text); }
     </style>
 </head>
 <body>
@@ -200,12 +225,17 @@
         <nav class="top-nav">
             <span class="badge">Super Admin</span>
             <a href="/dashboard2">Dashboard</a>
-            <a href="/admin">Admin</a>
+            <a href="/admin" class="is-active">Overview</a>
+            <a href="/admin/finance">Finance</a>
         </nav>
     </header>
     <main>
         <h1>Super Admin</h1>
         <p class="sub">Read-only overview of users and OCR usage. Signed in as <span id="adminEmail" class="muted">…</span></p>
+        <div class="admin-tabs" aria-label="Admin sections">
+            <a href="/admin" class="is-active">Overview</a>
+            <a href="/admin/finance">Finance</a>
+        </div>
         <p id="adminError" class="error" hidden></p>
         <div class="cards" id="statCards">
             <div class="card"><div class="card-label">Total Users</div><div class="card-value" id="statUsers">—</div></div>
@@ -213,6 +243,8 @@
             <div class="card"><div class="card-label">Total OCR Pages</div><div class="card-value" id="statPages">—</div></div>
             <div class="card"><div class="card-label">Total Storage</div><div class="card-value" id="statStorage">—</div></div>
             <div class="card"><div class="card-label">Active (30 days)</div><div class="card-value" id="statActive">—</div></div>
+            <div class="card"><div class="card-label">New Users (7 days)</div><div class="card-value" id="statNewUsers">—</div></div>
+            <div class="card"><div class="card-label">New Files (7 days)</div><div class="card-value" id="statNewFiles">—</div></div>
         </div>
         <div class="toolbar">
             <h2>Users</h2>
@@ -301,6 +333,8 @@
             document.getElementById('statPages').textContent = fmtNum(s.pages);
             document.getElementById('statStorage').textContent = s.storage_label || fmtNum(s.storage);
             document.getElementById('statActive').textContent = fmtNum(s.active_users);
+            document.getElementById('statNewUsers').textContent = fmtNum(s.new_users_7d);
+            document.getElementById('statNewFiles').textContent = fmtNum(s.new_files_7d);
         }
 
         async function loadUsers(headers, search) {

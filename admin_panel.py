@@ -390,19 +390,25 @@ def _stats_payload() -> dict:
     auth_users = _list_auth_users()
     users_count = len(auth_users)
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=30)
+    cutoff_30 = now - timedelta(days=30)
+    cutoff_7 = now - timedelta(days=7)
     active = 0
+    new_users_7d = 0
     for au in auth_users:
-        ts = _parse_ts(au.get("last_sign_in_at"))
-        if ts and ts >= cutoff:
+        ts_login = _parse_ts(au.get("last_sign_in_at"))
+        if ts_login and ts_login >= cutoff_30:
             active += 1
+        ts_created = _parse_ts(au.get("created_at"))
+        if ts_created and ts_created >= cutoff_7:
+            new_users_7d += 1
 
     files_count = 0
     pages_total = 0
+    new_files_7d = 0
     paths: list[str] = []
     if client:
         try:
-            res = client.table("files").select("id,credits_used,original_file_path").execute()
+            res = client.table("files").select("id,credits_used,original_file_path,created_at").execute()
             rows = getattr(res, "data", None) or []
             files_count = len(rows)
             for row in rows:
@@ -413,6 +419,9 @@ def _stats_payload() -> dict:
                 p = row.get("original_file_path")
                 if p:
                     paths.append(p)
+                created = _parse_ts(row.get("created_at"))
+                if created and created >= cutoff_7:
+                    new_files_7d += 1
         except Exception as e:
             print(f"[admin] stats files query failed: {e}", file=sys.stderr, flush=True)
 
@@ -424,6 +433,8 @@ def _stats_payload() -> dict:
         "storage": storage,
         "storage_label": _fmt_bytes(storage),
         "active_users": active,
+        "new_users_7d": new_users_7d,
+        "new_files_7d": new_files_7d,
     }
 
 
@@ -611,6 +622,128 @@ def _user_detail(user_id: str) -> dict | None:
     }
 
 
+def _payment_status_ok(status: str | None) -> bool:
+    return str(status or "").lower() in ("paid", "complete", "completed", "succeeded")
+
+
+def _fmt_money_cents(cents: int | None, currency: str = "USD") -> str:
+    if cents is None:
+        return "—"
+    cur = (currency or "USD").upper()
+    return f"${int(cents) / 100:,.2f} {cur}"
+
+
+def _list_payments() -> list[dict]:
+    client = _c("supabase_client")
+    if not client:
+        return []
+    try:
+        res = (
+            client.table("payments")
+            .select(
+                "id,user_id,status,credits_granted,amount_paid_cents,currency,"
+                "stripe_price_id,created_at"
+            )
+            .order("created_at", desc=True)
+            .limit(5000)
+            .execute()
+        )
+        return list(getattr(res, "data", None) or [])
+    except Exception as e:
+        print(f"[admin] payments list failed: {e}", file=sys.stderr, flush=True)
+        try:
+            res = (
+                client.table("payments")
+                .select("id,user_id,status,credits_granted,amount_paid_cents,currency,stripe_price_id")
+                .limit(5000)
+                .execute()
+            )
+            return list(getattr(res, "data", None) or [])
+        except Exception as e2:
+            print(f"[admin] payments list retry failed: {e2}", file=sys.stderr, flush=True)
+            return []
+
+
+def _finance_payload() -> dict:
+    payments = _list_payments()
+    completed = [p for p in payments if _payment_status_ok(p.get("status"))]
+    total_cents = 0
+    currency = "USD"
+    paying_users: set[str] = set()
+    for p in completed:
+        try:
+            cents = int(p.get("amount_paid_cents") or 0)
+        except (TypeError, ValueError):
+            cents = 0
+        total_cents += max(0, cents)
+        if p.get("currency"):
+            currency = str(p.get("currency")).upper()
+        uid = str(p.get("user_id") or "")
+        if uid:
+            paying_users.add(uid)
+
+    auth_users = _list_auth_users()
+    users_count = len(auth_users) or 0
+    arpu_cents = int(round(total_cents / users_count)) if users_count else 0
+    arppu_cents = (
+        int(round(total_cents / len(paying_users))) if paying_users else 0
+    )
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    month_cents = 0
+    month_tx = 0
+    for p in completed:
+        ts = _parse_ts(p.get("created_at"))
+        if ts is None or ts < cutoff:
+            continue
+        month_tx += 1
+        try:
+            month_cents += max(0, int(p.get("amount_paid_cents") or 0))
+        except (TypeError, ValueError):
+            pass
+
+    recent = []
+    for p in completed[:100]:
+        try:
+            cents_i = int(p.get("amount_paid_cents")) if p.get("amount_paid_cents") is not None else None
+        except (TypeError, ValueError):
+            cents_i = None
+        try:
+            credits_g = int(p.get("credits_granted") or 0)
+        except (TypeError, ValueError):
+            credits_g = 0
+        recent.append(
+            {
+                "id": p.get("id"),
+                "user_id": p.get("user_id"),
+                "status": p.get("status") or "—",
+                "credits_granted": credits_g,
+                "amount_paid_cents": cents_i,
+                "amount_label": _fmt_money_cents(cents_i, p.get("currency") or currency),
+                "created_at": p.get("created_at"),
+                "stripe_price_id": p.get("stripe_price_id"),
+            }
+        )
+
+    return {
+        "total_transactions": len(completed),
+        "total_amount_cents": total_cents,
+        "total_amount_label": _fmt_money_cents(total_cents, currency),
+        "paying_users": len(paying_users),
+        "total_users": users_count,
+        "avg_rev_per_user_cents": arpu_cents,
+        "avg_rev_per_user_label": _fmt_money_cents(arpu_cents, currency),
+        "avg_rev_per_paying_user_cents": arppu_cents,
+        "avg_rev_per_paying_user_label": _fmt_money_cents(arppu_cents, currency),
+        "revenue_30d_cents": month_cents,
+        "revenue_30d_label": _fmt_money_cents(month_cents, currency),
+        "revenue_30d_transactions": month_tx,
+        "currency": currency,
+        "recent_transactions": recent,
+    }
+
+
 @admin_bp.route("/admin", methods=["GET"])
 def admin_dashboard_page():
     seo = _c("_seo_context")(
@@ -621,6 +754,23 @@ def admin_dashboard_page():
     )
     return render_template(
         "admin.html",
+        admin_active="overview",
+        **_c("supabase_browser_config"),
+        **seo,
+    )
+
+
+@admin_bp.route("/admin/finance", methods=["GET"])
+def admin_finance_page():
+    seo = _c("_seo_context")(
+        title="Admin Finance — GurmukhiOCR",
+        description="Internal super admin finance overview.",
+        path="/admin/finance",
+        robots="noindex, nofollow",
+    )
+    return render_template(
+        "admin_finance.html",
+        admin_active="finance",
         **_c("supabase_browser_config"),
         **seo,
     )
@@ -637,6 +787,7 @@ def admin_user_page(user_id: str):
     return render_template(
         "admin_user.html",
         user_id=user_id,
+        admin_active="overview",
         **_c("supabase_browser_config"),
         **seo,
     )
@@ -659,6 +810,17 @@ def api_admin_stats():
         return jsonify({"error": "Supabase not configured."}), 503
     write_audit(admin["email"], "Viewed dashboard")
     return jsonify(_stats_payload())
+
+
+@admin_bp.route("/api/admin/finance", methods=["GET"])
+def api_admin_finance():
+    admin, err = require_superadmin()
+    if err:
+        return err
+    if not _c("supabase_client"):
+        return jsonify({"error": "Supabase not configured."}), 503
+    write_audit(admin["email"], "Viewed finance")
+    return jsonify(_finance_payload())
 
 
 @admin_bp.route("/api/admin/users", methods=["GET"])

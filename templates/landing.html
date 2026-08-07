@@ -843,11 +843,10 @@
             text-decoration: none;
             font-family: inherit;
             text-align: left;
-            cursor: pointer;
-            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+            cursor: default;
+            transition: border-color 0.18s ease, background 0.18s ease;
         }
         .page-pack-btn:hover {
-            transform: translateY(-1px);
             border-color: rgba(120, 200, 255, 0.45);
             background: rgba(107, 140, 255, 0.18);
         }
@@ -896,6 +895,38 @@
         }
         body.light-mode .page-pack-action {
             color: #3d5ccc;
+        }
+        .page-pack-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            align-items: stretch;
+            min-width: 6.5rem;
+        }
+        .page-pack-provider-btn {
+            appearance: none;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.22);
+            color: var(--text);
+            font: inherit;
+            font-size: 0.78rem;
+            font-weight: 700;
+            border-radius: 8px;
+            padding: 0.4rem 0.55rem;
+            cursor: pointer;
+            text-align: center;
+        }
+        .page-pack-provider-btn:hover:not(:disabled) {
+            border-color: rgba(120, 200, 255, 0.45);
+            background: rgba(107, 140, 255, 0.2);
+        }
+        .page-pack-provider-btn:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+        body.light-mode .page-pack-provider-btn {
+            background: rgba(255, 255, 255, 0.7);
+            border-color: rgba(74, 108, 220, 0.22);
         }
         .page-pack-btn:disabled {
             opacity: 0.62;
@@ -1145,16 +1176,36 @@
                     <p class="page-pack-intro">Everything in the free tier, plus credits that stay on your account.</p>
                     <div class="page-pack-options" aria-label="Choose a page pack">
                         {% for package in pricing_packages %}
-                        <button class="page-pack-btn" type="button" data-stripe-price-id="{{ package.price_id }}">
+                        <div class="page-pack-btn" role="group" aria-label="{{ package.price_label }} credit pack">
                             <span class="page-pack-info">
                                 <span class="page-pack-pages">{{ "{:,}".format(package.credits) }} OCR credits</span>
                                 <span class="page-pack-rate">One-time · {{ "{:,}".format(package.credits) }} pages/images</span>
                             </span>
                             <span class="page-pack-price">
                                 <span class="page-pack-amount">{{ package.price_label }}</span>
-                                <span class="page-pack-action">Buy →</span>
+                                <span class="page-pack-actions">
+                                    {% if stripe_checkout_enabled %}
+                                    <button
+                                        class="page-pack-provider-btn"
+                                        type="button"
+                                        data-checkout-provider="stripe"
+                                        data-stripe-price-id="{{ package.price_id }}"
+                                    >Buy with Stripe</button>
+                                    {% endif %}
+                                    {% if lemon_checkout_enabled and package.lemon_variant_id %}
+                                    <button
+                                        class="page-pack-provider-btn"
+                                        type="button"
+                                        data-checkout-provider="lemon"
+                                        data-lemon-variant-id="{{ package.lemon_variant_id }}"
+                                    >Buy with Lemon</button>
+                                    {% endif %}
+                                    {% if not stripe_checkout_enabled and not (lemon_checkout_enabled and package.lemon_variant_id) %}
+                                    <span class="page-pack-action">Checkout unavailable</span>
+                                    {% endif %}
+                                </span>
                             </span>
-                        </button>
+                        </div>
                         {% endfor %}
                     </div>
                     <p class="pricing-checkout-status" id="pricingCheckoutStatus" aria-live="polite"></p>
@@ -1266,8 +1317,10 @@
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
         (async function () {
-            var PENDING_PRICE_KEY = 'pendingStripePriceId';
-            var buttons = Array.from(document.querySelectorAll('[data-stripe-price-id]'));
+            var PENDING_CHECKOUT_KEY = 'pendingCheckout';
+            var buttons = Array.from(
+                document.querySelectorAll('[data-checkout-provider]')
+            );
             var statusEl = document.getElementById('pricingCheckoutStatus');
             var freeCta = document.getElementById('pricingFreeCta');
             var cfgEl = document.getElementById('supabase-config');
@@ -1301,13 +1354,13 @@
             var params = new URLSearchParams(window.location.search);
             if (params.get('checkout') === 'cancelled') {
                 try {
-                    sessionStorage.removeItem(PENDING_PRICE_KEY);
+                    sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
                 } catch (_cancelClearErr) {}
                 setStatus('Checkout cancelled. Choose a pack when you are ready.');
             }
 
-            async function startCheckout(priceId) {
-                if (!priceId) return;
+            async function startCheckout(provider, id) {
+                if (!provider || !id) return;
                 setBusy(true);
                 setStatus('Starting secure checkout…');
                 try {
@@ -1315,20 +1368,32 @@
                     var session = sessionRes.data && sessionRes.data.session;
                     if (!session || !session.access_token) {
                         try {
-                            sessionStorage.setItem(PENDING_PRICE_KEY, priceId);
+                            sessionStorage.setItem(
+                                PENDING_CHECKOUT_KEY,
+                                JSON.stringify({ provider: provider, id: id })
+                            );
                         } catch (_storageErr) {}
                         window.location.href =
                             '/login?next=' + encodeURIComponent('/pricing');
                         return;
                     }
-                    var res = await fetch('/api/stripe/create-checkout-session', {
+
+                    var endpoint =
+                        provider === 'lemon'
+                            ? '/api/lemon/create-checkout'
+                            : '/api/stripe/create-checkout-session';
+                    var body =
+                        provider === 'lemon'
+                            ? { variant_id: id }
+                            : { price_id: id };
+                    var res = await fetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             Authorization: 'Bearer ' + session.access_token,
                         },
                         credentials: 'same-origin',
-                        body: JSON.stringify({ price_id: priceId }),
+                        body: JSON.stringify(body),
                     });
                     var data = await res.json().catch(function () {
                         return {};
@@ -1342,9 +1407,13 @@
                         throw new Error('Checkout URL missing from server response.');
                     }
                     try {
-                        sessionStorage.removeItem(PENDING_PRICE_KEY);
+                        sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
                     } catch (_clearErr) {}
-                    setStatus('Redirecting to Stripe…');
+                    setStatus(
+                        provider === 'lemon'
+                            ? 'Redirecting to Lemon Squeezy…'
+                            : 'Redirecting to Stripe…'
+                    );
                     window.location.href = data.checkout_url;
                 } catch (err) {
                     setStatus(String((err && err.message) || err), true);
@@ -1360,21 +1429,37 @@
                     freeCta.textContent = 'Open Dashboard';
                 }
                 if (session) {
-                    var pendingPriceId = '';
+                    var pendingRaw = '';
                     try {
-                        pendingPriceId = sessionStorage.getItem(PENDING_PRICE_KEY) || '';
+                        pendingRaw = sessionStorage.getItem(PENDING_CHECKOUT_KEY) || '';
                     } catch (_pendingErr) {}
-                    if (pendingPriceId) {
-                        await startCheckout(pendingPriceId);
-                        return;
+                    if (pendingRaw) {
+                        var pending = null;
+                        try {
+                            pending = JSON.parse(pendingRaw);
+                        } catch (_parseErr) {
+                            pending = null;
+                        }
+                        // Legacy: bare Stripe price id string from older flows.
+                        if (!pending && typeof pendingRaw === 'string' && pendingRaw.indexOf('price_') === 0) {
+                            pending = { provider: 'stripe', id: pendingRaw };
+                        }
+                        if (pending && pending.provider && pending.id) {
+                            await startCheckout(pending.provider, pending.id);
+                            return;
+                        }
                     }
                 }
             } catch (_sessionErr) {}
 
             buttons.forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    var priceId = (btn.getAttribute('data-stripe-price-id') || '').trim();
-                    void startCheckout(priceId);
+                    var provider = (btn.getAttribute('data-checkout-provider') || '').trim();
+                    var id =
+                        provider === 'lemon'
+                            ? (btn.getAttribute('data-lemon-variant-id') || '').trim()
+                            : (btn.getAttribute('data-stripe-price-id') || '').trim();
+                    void startCheckout(provider, id);
                 });
             });
         })();
