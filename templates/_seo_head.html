@@ -2,6 +2,7 @@
    Required context: page_title, meta_description, canonical_url, app_base_url
    Optional: og_type, og_image, robots_content, twitter_card, json_ld (list of dicts)
 #}
+{% include "_gtag.html" %}
 <title>{{ page_title|default('GurmukhiOCR') }}</title>
 <meta name="description" content="{{ meta_description|default('Online Punjabi OCR and Gurmukhi OCR for scanned PDFs and images.') }}">
 <link rel="canonical" href="{{ canonical_url }}">

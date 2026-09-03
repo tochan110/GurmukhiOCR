@@ -116,6 +116,12 @@ def _storage_object_size(path: str | None) -> int | None:
 
 
 def _sum_storage_bytes(paths: list[str], *, max_objects: int = 250) -> int:
+    sizes = _sizes_for_paths(paths, max_objects=max_objects)
+    return int(sum(sizes.values()))
+
+
+def _sizes_for_paths(paths: list[str], *, max_objects: int = 250) -> dict[str, int]:
+    """Return {path: bytes} for unique storage paths (HEAD Content-Length)."""
     uniq = []
     seen = set()
     for p in paths:
@@ -126,14 +132,14 @@ def _sum_storage_bytes(paths: list[str], *, max_objects: int = 250) -> int:
         uniq.append(p)
         if len(uniq) >= max_objects:
             break
-    total = 0
+    out: dict[str, int] = {}
     if not uniq:
-        return 0
+        return out
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
-        for size in pool.map(_storage_object_size, uniq):
+        for path, size in zip(uniq, pool.map(_storage_object_size, uniq)):
             if size:
-                total += size
-    return total
+                out[path] = int(size)
+    return out
 
 
 def _list_auth_users() -> list[dict]:
@@ -172,19 +178,39 @@ def _list_auth_users() -> list[dict]:
             if isinstance(u, dict):
                 users.append(u)
             else:
-                users.append(
-                    {
-                        "id": getattr(u, "id", None),
-                        "email": getattr(u, "email", None),
-                        "created_at": getattr(u, "created_at", None),
-                        "last_sign_in_at": getattr(u, "last_sign_in_at", None),
-                        "user_metadata": getattr(u, "user_metadata", None) or {},
-                    }
-                )
+                users.append(_auth_user_to_dict(u))
         if len(batch) < per_page:
             break
         page += 1
     return users
+
+
+def _auth_user_to_dict(user) -> dict:
+    """Normalize a Supabase Auth user object/dict for admin payloads."""
+    if isinstance(user, dict):
+        return user
+    return {
+        "id": getattr(user, "id", None),
+        "email": getattr(user, "email", None),
+        "created_at": getattr(user, "created_at", None),
+        "last_sign_in_at": getattr(user, "last_sign_in_at", None),
+        "email_confirmed_at": getattr(user, "email_confirmed_at", None),
+        "confirmed_at": getattr(user, "confirmed_at", None),
+        "user_metadata": getattr(user, "user_metadata", None) or {},
+    }
+
+
+def _email_verified_fields(auth_user: dict | None) -> dict:
+    """Return email_verified + email_confirmed_at from Supabase Auth fields."""
+    au = auth_user or {}
+    confirmed_at = au.get("email_confirmed_at") or au.get("confirmed_at")
+    if isinstance(confirmed_at, str):
+        confirmed_at = confirmed_at.strip() or None
+    verified = bool(confirmed_at)
+    return {
+        "email_verified": verified,
+        "email_confirmed_at": confirmed_at,
+    }
 
 
 def _auth_user_by_id(user_id: str) -> dict | None:
@@ -196,15 +222,7 @@ def _auth_user_by_id(user_id: str) -> dict | None:
         user = getattr(res, "user", None) or res
         if user is None:
             return None
-        if isinstance(user, dict):
-            return user
-        return {
-            "id": getattr(user, "id", None),
-            "email": getattr(user, "email", None),
-            "created_at": getattr(user, "created_at", None),
-            "last_sign_in_at": getattr(user, "last_sign_in_at", None),
-            "user_metadata": getattr(user, "user_metadata", None) or {},
-        }
+        return _auth_user_to_dict(user)
     except Exception as e:
         print(f"[admin] get_user_by_id failed: {e}", file=sys.stderr, flush=True)
         return None
@@ -292,7 +310,7 @@ def _file_kind(file_name: str | None, path: str | None = None) -> str:
     return "other"
 
 
-def _users_payload(*, search: str | None = None) -> list[dict]:
+def _users_payload(*, search: str | None = None, include_storage: bool = False) -> list[dict]:
     auth_users = _list_auth_users()
     profiles = _profiles_by_id()
     client = _c("supabase_client")
@@ -356,7 +374,7 @@ def _users_payload(*, search: str | None = None) -> list[dict]:
             if q not in hay:
                 continue
         stats = file_stats.get(uid) or {"files": 0, "pages": 0, "paths": [], "images": 0, "pdfs": 0}
-        # Skip per-user storage HEADs on the list endpoint (too slow); detail page computes size.
+        verified = _email_verified_fields(au)
         rows_out.append(
             {
                 "id": uid,
@@ -369,9 +387,12 @@ def _users_payload(*, search: str | None = None) -> list[dict]:
                 "images": int(stats.get("images") or 0),
                 "pdfs": int(stats.get("pdfs") or 0),
                 "storage_bytes": None,
-                "storage_label": "—",
+                "storage_label": None,
+                "_paths": list(stats.get("paths") or []) if include_storage else [],
                 "last_login": au.get("last_sign_in_at"),
                 "created_at": au.get("created_at") or (profile or {}).get("created_at"),
+                "email_verified": verified["email_verified"],
+                "email_confirmed_at": verified["email_confirmed_at"],
                 "paid_pages_remaining": int((profile or {}).get("paid_pages_remaining") or 0)
                 if profile
                 else 0,
@@ -380,6 +401,21 @@ def _users_payload(*, search: str | None = None) -> list[dict]:
                 else 0,
             }
         )
+
+    if include_storage:
+        all_paths: list[str] = []
+        for row in rows_out:
+            all_paths.extend(row.get("_paths") or [])
+        size_map = _sizes_for_paths(all_paths, max_objects=2000)
+        for row in rows_out:
+            total = 0
+            for path in row.pop("_paths", []) or []:
+                total += int(size_map.get(path) or 0)
+            row["storage_bytes"] = total
+            row["storage_label"] = _fmt_bytes(total)
+    else:
+        for row in rows_out:
+            row.pop("_paths", None)
 
     rows_out.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
     return rows_out
@@ -606,6 +642,7 @@ def _user_detail(user_id: str) -> dict | None:
 
     storage = _sum_storage_bytes(paths, max_objects=200)
     name = _display_name(auth_user, profile)
+    verified = _email_verified_fields(auth_user)
     return {
         "profile": {
             "id": str(user_id),
@@ -614,6 +651,8 @@ def _user_detail(user_id: str) -> dict | None:
             "username": ((profile or {}).get("username") or None),
             "created_at": auth_user.get("created_at") or (profile or {}).get("created_at"),
             "last_login": auth_user.get("last_sign_in_at"),
+            "email_verified": verified["email_verified"],
+            "email_confirmed_at": verified["email_confirmed_at"],
             "plan": _plan_label(profile, has_payment=has_payment),
             "free_pages_remaining": int((profile or {}).get("free_pages_remaining") or 0)
             if profile
@@ -925,8 +964,13 @@ def api_admin_users():
     if not _c("supabase_client"):
         return jsonify({"error": "Supabase not configured."}), 503
     search = (request.args.get("search") or "").strip()
-    users = _users_payload(search=search or None)
-    return jsonify({"users": users})
+    include_storage = str(request.args.get("include_storage") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    users = _users_payload(search=search or None, include_storage=include_storage)
+    return jsonify({"users": users, "storage_included": include_storage})
 
 
 @admin_bp.route("/api/admin/users/<user_id>", methods=["GET"])

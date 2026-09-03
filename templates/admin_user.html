@@ -119,6 +119,21 @@
             background: rgba(255, 255, 255, 0.06);
         }
         .plan--paid { color: #9dffc2; background: rgba(80, 200, 130, 0.12); }
+        .verify-pill {
+            display: inline-block;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .verify-pill--yes {
+            color: #9dffc2;
+            background: rgba(80, 200, 130, 0.12);
+        }
+        .verify-pill--no {
+            color: #ffb4b4;
+            background: rgba(255, 90, 90, 0.12);
+        }
         .provider-pill {
             display: inline-block;
             padding: 0.18rem 0.5rem;
@@ -296,9 +311,14 @@
 
                 var planHtml = '<span class="plan' + (p.plan === 'Paid' ? ' plan--paid' : '') + '">' +
                     escapeHtml(p.plan || 'Free') + '</span>';
+                var verifiedHtml = p.email_verified
+                    ? '<span class="verify-pill verify-pill--yes">' +
+                      escapeHtml(fmtWhen(p.email_confirmed_at)) + '</span>'
+                    : '<span class="verify-pill verify-pill--no">Unverified</span>';
                 kv(document.getElementById('accountKv'), [
                     ['Name', escapeHtml(p.name || '—')],
                     ['Email', escapeHtml(p.email || '—')],
+                    ['Email Verified', verifiedHtml],
                     ['User ID', escapeHtml(p.id || '—')],
                     ['Username', escapeHtml(p.username || '—')],
                     ['Created', escapeHtml(fmtWhen(p.created_at))],

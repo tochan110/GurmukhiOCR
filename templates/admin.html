@@ -229,6 +229,40 @@
             color: #c7d4ff;
             background: rgba(107, 140, 255, 0.16);
         }
+        .verify-pill {
+            display: inline-block;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .verify-pill--yes {
+            color: #9dffc2;
+            background: rgba(80, 200, 130, 0.12);
+        }
+        .verify-pill--no {
+            color: #ffb4b4;
+            background: rgba(255, 90, 90, 0.12);
+        }
+        th.storage-th {
+            cursor: pointer;
+            color: var(--accent);
+            user-select: none;
+        }
+        th.storage-th:hover { text-decoration: underline; }
+        th.storage-th.is-loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        th.storage-th.is-loaded {
+            color: var(--muted);
+            cursor: default;
+            text-decoration: none;
+        }
+        .storage-cell--pending {
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
     </style>
 </head>
 <body>
@@ -294,12 +328,19 @@
                     <tr>
                         <th>Name</th>
                         <th>Email</th>
+                        <th>Email Verified</th>
                         <th>Plan</th>
                         <th>Free</th>
                         <th>Paid</th>
                         <th>Files</th>
                         <th>Pages</th>
-                        <th>Storage</th>
+                        <th
+                            class="storage-th"
+                            id="storageTh"
+                            title="Click to load per-user storage sizes"
+                            tabindex="0"
+                            role="button"
+                        >Storage ▸</th>
                         <th>Last Login</th>
                         <th>Created At</th>
                     </tr>
@@ -317,6 +358,9 @@
         var searchEl = document.getElementById('userSearch');
         var searchTimer = null;
         var accessToken = null;
+        var storageLoaded = false;
+        var storageLoading = false;
+        var adminHeaders = null;
 
         function showError(msg) {
             errEl.hidden = !msg;
@@ -335,6 +379,33 @@
         function fmtNum(n) {
             if (n == null) return '—';
             return Number(n).toLocaleString();
+        }
+
+        function updateStorageTh() {
+            var th = document.getElementById('storageTh');
+            if (!th) return;
+            th.classList.toggle('is-loading', !!storageLoading);
+            th.classList.toggle('is-loaded', !!storageLoaded && !storageLoading);
+            if (storageLoading) {
+                th.textContent = 'Storage…';
+                th.title = 'Loading storage sizes…';
+            } else if (storageLoaded) {
+                th.textContent = 'Storage';
+                th.title = 'Storage sizes loaded';
+            } else {
+                th.textContent = 'Storage ▸';
+                th.title = 'Click to load per-user storage sizes';
+            }
+        }
+
+        function storageCellHtml(u) {
+            if (storageLoading && !storageLoaded) {
+                return '<span class="storage-cell--pending">…</span>';
+            }
+            if (u.storage_label != null && u.storage_label !== '') {
+                return escapeHtml(u.storage_label);
+            }
+            return '<span class="storage-cell--pending" title="Click Storage column header to load">—</span>';
         }
 
         async function authHeaders() {
@@ -407,26 +478,38 @@
             }).join('');
         }
 
-        async function loadUsers(headers, search) {
-            var url = '/api/admin/users';
-            if (search) url += '?search=' + encodeURIComponent(search);
+        async function loadUsers(headers, search, includeStorage) {
+            var params = [];
+            if (search) params.push('search=' + encodeURIComponent(search));
+            if (includeStorage) params.push('include_storage=1');
+            var url = '/api/admin/users' + (params.length ? ('?' + params.join('&')) : '');
             var res = await fetch(url, { headers: headers, credentials: 'same-origin' });
             if (!res.ok) throw new Error('Failed to load users');
             var data = await res.json();
+            if (includeStorage) {
+                storageLoaded = !!data.storage_included;
+                storageLoading = false;
+                updateStorageTh();
+            }
             var body = document.getElementById('usersBody');
             body.innerHTML = '';
             (data.users || []).forEach(function (u) {
                 var tr = document.createElement('tr');
+                var verifiedHtml = u.email_verified
+                    ? '<span class="verify-pill verify-pill--yes" title="email_confirmed_at">' +
+                      escapeHtml(fmtWhen(u.email_confirmed_at)) + '</span>'
+                    : '<span class="verify-pill verify-pill--no">Unverified</span>';
                 tr.innerHTML =
                     '<td>' + escapeHtml(u.name || '—') + '</td>' +
                     '<td>' + escapeHtml(u.email || '—') + '</td>' +
+                    '<td>' + verifiedHtml + '</td>' +
                     '<td><span class="plan' + (u.plan === 'Paid' ? ' plan--paid' : '') + '">' +
                     escapeHtml(u.plan || 'Free') + '</span></td>' +
                     '<td>' + fmtNum(u.free_pages_remaining) + '</td>' +
                     '<td>' + fmtNum(u.paid_pages_remaining) + '</td>' +
                     '<td>' + fmtNum(u.files) + '</td>' +
                     '<td>' + fmtNum(u.pages) + '</td>' +
-                    '<td>' + escapeHtml(u.storage_label || '—') + '</td>' +
+                    '<td class="storage-cell">' + storageCellHtml(u) + '</td>' +
                     '<td>' + escapeHtml(fmtWhen(u.last_login)) + '</td>' +
                     '<td>' + escapeHtml(fmtWhen(u.created_at)) + '</td>';
                 tr.addEventListener('click', function () {
@@ -443,6 +526,22 @@
             }
         }
 
+        async function loadStorageColumn() {
+            if (storageLoaded || storageLoading || !adminHeaders) return;
+            storageLoading = true;
+            updateStorageTh();
+            document.querySelectorAll('.storage-cell').forEach(function (td) {
+                td.innerHTML = '<span class="storage-cell--pending">…</span>';
+            });
+            try {
+                await loadUsers(adminHeaders, searchEl.value.trim(), true);
+            } catch (e) {
+                storageLoading = false;
+                updateStorageTh();
+                showError(e.message || String(e));
+            }
+        }
+
         function escapeHtml(s) {
             return String(s == null ? '' : s)
                 .replace(/&/g, '&amp;')
@@ -453,9 +552,23 @@
 
         (async function () {
             try {
-                var headers = await ensureAdmin();
-                await loadStats(headers);
-                await loadUsers(headers, '');
+                adminHeaders = await ensureAdmin();
+                updateStorageTh();
+                await loadStats(adminHeaders);
+                await loadUsers(adminHeaders, '', false);
+                var storageTh = document.getElementById('storageTh');
+                if (storageTh) {
+                    storageTh.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        void loadStorageColumn();
+                    });
+                    storageTh.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            void loadStorageColumn();
+                        }
+                    });
+                }
                 searchEl.addEventListener('input', function () {
                     clearTimeout(searchTimer);
                     searchTimer = setTimeout(async function () {
@@ -463,7 +576,7 @@
                             document.getElementById('usersLoading').hidden = false;
                             document.getElementById('usersLoading').textContent = 'Searching…';
                             document.getElementById('usersTableWrap').hidden = true;
-                            await loadUsers(headers, searchEl.value.trim());
+                            await loadUsers(adminHeaders, searchEl.value.trim(), storageLoaded);
                         } catch (e) {
                             showError(e.message || String(e));
                         }

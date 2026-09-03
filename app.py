@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, Response, has_request_context
+from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, Response, has_request_context, abort
 from dotenv import load_dotenv
 from google.cloud import vision
 from google.oauth2 import service_account
@@ -107,6 +107,23 @@ LEMON_VARIANT_ID_TO_CREDITS = {
     for p in PRICE_PACKAGES
     if p.get("lemon_variant_id")
 }
+
+# Public language-focused landing pages (same product UI; language-specific SEO/copy).
+# Main "/" stays Punjabi/Gurmukhi branded. Paths: /{slug}-ocr
+# `script` is set only when the writing system name differs from the language name
+# (same pattern as Punjabi & Gurmukhi on the home page).
+LANGUAGE_LANDING_PAGES = [
+    {"slug": "hindi", "name": "Hindi", "script": "Devanagari"},
+    {"slug": "malayalam", "name": "Malayalam"},
+    {"slug": "tamil", "name": "Tamil"},
+    {"slug": "telugu", "name": "Telugu"},
+    {"slug": "kannada", "name": "Kannada"},
+    {"slug": "bengali", "name": "Bengali"},
+    {"slug": "gujarati", "name": "Gujarati"},
+    {"slug": "marathi", "name": "Marathi", "script": "Devanagari"},
+    # Urdu hidden for now — Vision OCR quality not strong enough to advertise.
+]
+LANGUAGE_LANDING_BY_SLUG = {p["slug"]: p for p in LANGUAGE_LANDING_PAGES}
 
 # Super-admin email allowlist (lowercase match). Env SUPERADMINS=a@x.com,b@y.com overrides.
 _SUPERADMINS_ENV = (os.environ.get("SUPERADMINS") or "").strip()
@@ -389,6 +406,152 @@ def _homepage_json_ld(base: str) -> list[dict]:
         ],
     }
     return [org, website, software]
+
+
+def _language_landing_chips(*, current_slug: str | None = None) -> list[dict]:
+    """Chip list for hero language coverage (Punjabi home + dedicated language pages)."""
+    chips = [
+        {
+            "name": "Punjabi",
+            "href": "/",
+            "slug": "punjabi",
+            "current": current_slug in (None, "punjabi"),
+        }
+    ]
+    for p in LANGUAGE_LANDING_PAGES:
+        chips.append(
+            {
+                "name": p["name"],
+                "href": f"/{p['slug']}-ocr",
+                "slug": p["slug"],
+                "current": current_slug == p["slug"],
+            }
+        )
+    return chips
+
+
+def _language_landing_copy(*, name: str, slug: str, script: str | None = None) -> dict:
+    """Marketing copy for a language-focused landing (same product, focused SEO)."""
+    script = (script or "").strip() or None
+    # Mirror home: "Punjabi & Gurmukhi OCR" when script name differs from language.
+    if script and script.lower() != name.lower():
+        hero_h1 = f"{name} & {script} OCR"
+        scan_focus = script
+        ocr_label = f"{script} OCR"
+        free_script = script
+    else:
+        hero_h1 = f"{name} OCR"
+        scan_focus = name
+        ocr_label = f"{name} OCR"
+        free_script = name
+    return {
+        "slug": slug,
+        "name": name,
+        "script": script,
+        "hero_h1": hero_h1,
+        "hero_subtitle": f"Convert scanned {name} PDFs and images into editable Unicode text.",
+        "hero_desc_html": (
+            f"Online <strong>{name} PDF OCR</strong> and <strong>{name} image OCR</strong> powered by "
+            f"Google Cloud Vision—built for {scan_focus} scans, books, and everyday documents. "
+            "English and other Vision-supported languages are detected automatically when present."
+        ),
+        "cta_label": f"Start free {name} OCR",
+        "preview_aria": f"GurmukhiOCR side-by-side {name} OCR dashboard preview",
+        "preview_alt_dark": (
+            f"GurmukhiOCR dashboard showing {name} OCR text beside a scanned PDF page in dark mode"
+        ),
+        "preview_alt_light": (
+            f"GurmukhiOCR dashboard showing {name} OCR text beside a scanned PDF page in light mode"
+        ),
+        "flow_title": f"From scanned {name} file to editable text",
+        "flow_sub": (
+            f"Upload a PDF or image, run {ocr_label}, refine the Unicode text, and export—"
+            "without leaving your browser."
+        ),
+        "flow_upload": f"Add a {name} PDF or scanned image for document OCR.",
+        "flow_ocr_html": (
+            f"Google Cloud Vision OCR at <strong>92-99.3% accuracy</strong> on clean printed "
+            f"{scan_focus}—ideal for converting scanned {name} books and pages."
+        ),
+        "flow_edit": (
+            f"Use the side-by-side editor to check each page and fix editable Unicode {name} text "
+            "where needed."
+        ),
+        "pricing_title": f"Pricing for {name} OCR credits",
+        "free_langs_bullet": (
+            f"{free_script}, English and all languages supported by Google Cloud Vision, "
+            "detected automatically and OCR'd"
+        ),
+        "chips": _language_landing_chips(current_slug=slug),
+    }
+
+
+def _home_landing_copy() -> dict:
+    """Default Punjabi / Gurmukhi home landing copy."""
+    return {
+        "slug": "punjabi",
+        "name": "Punjabi",
+        "hero_h1": "Punjabi & Gurmukhi OCR",
+        "hero_subtitle": "Convert scanned Punjabi PDFs and images into editable Unicode text.",
+        "hero_desc_html": (
+            "Online <strong>Punjabi PDF OCR</strong> and <strong>Punjabi image OCR</strong> powered by "
+            "Google Cloud Vision—built for Gurmukhi scans, books, and everyday documents. "
+            "English and other Vision-supported languages are detected automatically when present."
+        ),
+        "cta_label": "Start free Punjabi OCR",
+        "preview_aria": "GurmukhiOCR side-by-side Punjabi OCR dashboard preview",
+        "preview_alt_dark": (
+            "GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in dark mode"
+        ),
+        "preview_alt_light": (
+            "GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in light mode"
+        ),
+        "flow_title": "From scanned Punjabi file to editable text",
+        "flow_sub": (
+            "Upload a PDF or image, run Gurmukhi OCR, refine the Unicode text, and export—"
+            "without leaving your browser."
+        ),
+        "flow_upload": "Add a Punjabi PDF or scanned image for document OCR.",
+        "flow_ocr_html": (
+            "Google Cloud Vision OCR at <strong>92-99.3% accuracy</strong> on clean printed Gurmukhi—"
+            "ideal for converting scanned Punjabi books and pages."
+        ),
+        "flow_edit": (
+            "Use the side-by-side editor to check each page and fix editable Unicode Punjabi text "
+            "where needed."
+        ),
+        "pricing_title": "Pricing for Punjabi OCR credits",
+        "free_langs_bullet": (
+            "Gurmukhi, English and all languages supported by Google Cloud Vision, "
+            "detected automatically OCR'd"
+        ),
+        "chips": _language_landing_chips(current_slug="punjabi"),
+    }
+
+
+def _language_page_json_ld(
+    base: str, *, name: str, path: str, script: str | None = None
+) -> list[dict]:
+    script = (script or "").strip() or None
+    label = f"{name} OCR & {script} OCR" if script and script.lower() != name.lower() else f"{name} OCR"
+    desc = (
+        f"Free online {label}. Convert scanned {name} PDFs and images into "
+        "editable Unicode text with review tools and export."
+    )
+    return [
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": f"GurmukhiOCR — {label}",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": f"{base}{path}",
+            "image": f"{base}/static/dashboard_dark.png",
+            "description": desc,
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+            "publisher": {"@type": "Organization", "name": "GurmukhiOCR", "url": f"{base}/"},
+        }
+    ]
 
 
 @app.context_processor
@@ -3361,6 +3524,8 @@ def sitemap_xml():
         ("/terms", "0.4", "yearly"),
         ("/refund", "0.4", "yearly"),
     ]
+    for lang in LANGUAGE_LANDING_PAGES:
+        pages.append((f"/{lang['slug']}-ocr", "0.8", "weekly"))
     urls = []
     for path, priority, changefreq in pages:
         loc = f"{base}{path}" if path != "/" else f"{base}/"
@@ -3397,6 +3562,44 @@ def landing():
     return render_template(
         "landing.html",
         pricing_page=False,
+        lp=_home_landing_copy(),
+        **_public_pricing_context(),
+        **supabase_browser_config,
+        **seo,
+    )
+
+
+@app.route("/<slug>-ocr", methods=["GET"])
+def language_landing(slug: str):
+    lang = LANGUAGE_LANDING_BY_SLUG.get((slug or "").strip().lower())
+    if not lang:
+        abort(404)
+    name = lang["name"]
+    script = (lang.get("script") or "").strip() or None
+    path = f"/{lang['slug']}-ocr"
+    base = get_public_app_base_url()
+    if script and script.lower() != name.lower():
+        seo_title = f"{name} OCR & {script} OCR — Convert {name} PDFs to Editable Text | GurmukhiOCR"
+        seo_desc = (
+            f"Free online {name} OCR and {script} OCR. Convert scanned {name} PDFs and "
+            "images into editable Unicode text. Review pages side by side and export .txt."
+        )
+    else:
+        seo_title = f"{name} OCR — Convert {name} PDFs to Editable Text | GurmukhiOCR"
+        seo_desc = (
+            f"Free online {name} OCR. Convert scanned {name} PDFs and images into "
+            "editable Unicode text. Review pages side by side and export .txt."
+        )
+    seo = _seo_context(
+        title=seo_title,
+        description=seo_desc,
+        path=path,
+        json_ld=_language_page_json_ld(base, name=name, path=path, script=script),
+    )
+    return render_template(
+        "landing.html",
+        pricing_page=False,
+        lp=_language_landing_copy(name=name, slug=lang["slug"], script=script),
         **_public_pricing_context(),
         **supabase_browser_config,
         **seo,
@@ -3417,6 +3620,7 @@ def pricing_page():
     return render_template(
         "landing.html",
         pricing_page=True,
+        lp=_home_landing_copy(),
         **_public_pricing_context(),
         **supabase_browser_config,
         **seo,

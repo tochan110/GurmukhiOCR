@@ -312,10 +312,27 @@
             font-weight: 600;
             line-height: 1.2;
         }
+        .language-chip-list a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .language-chip-list a:hover {
+            color: var(--text);
+        }
+        .language-chip-list li.is-current {
+            border-color: rgba(107, 140, 255, 0.5);
+            background: rgba(107, 140, 255, 0.2);
+            color: var(--text);
+        }
         body.light-mode .language-chip-list li {
             border-color: rgba(74, 108, 220, 0.16);
             background: rgba(74, 108, 220, 0.08);
             color: rgba(50, 55, 70, 0.78);
+        }
+        body.light-mode .language-chip-list li.is-current {
+            border-color: rgba(74, 108, 220, 0.4);
+            background: rgba(74, 108, 220, 0.16);
+            color: var(--text);
         }
         .hero-cta-block {
             display: flex;
@@ -1019,48 +1036,39 @@
         <section class="hero-layout" aria-labelledby="hero-heading">
             <div class="hero-copy">
                 <h1 class="gurmukhi" id="hero-heading">
-                    Punjabi &amp; Gurmukhi OCR
+                    {{ lp.hero_h1 }}
                 </h1>
-                <h2 class="hero-subtitle">Convert scanned Punjabi PDFs and images into editable Unicode text.</h2>
-                <p class="desc">
-                    Online <strong>Punjabi PDF OCR</strong> and <strong>Punjabi image OCR</strong> powered by
-                    Google Cloud Vision—built for Gurmukhi scans, books, and everyday documents.
-                    English and other Vision-supported languages are detected automatically when present.
-                </p>
+                <h2 class="hero-subtitle">{{ lp.hero_subtitle }}</h2>
+                <p class="desc">{{ lp.hero_desc_html|safe }}</p>
                 <div class="language-coverage" aria-label="Supported language examples">
                     <p class="language-coverage-label">Covers languages including</p>
                     <ul class="language-chip-list">
-                        <li>Punjabi</li>
-                        <li>Hindi</li>
-                        <li>Malayalam</li>
-                        <li>Tamil</li>
-                        <li>Telugu</li>
-                        <li>Kannada</li>
-                        <li>Bengali</li>
-                        <li>Gujarati</li>
-                        <li>Marathi</li>
-                        <li>Urdu</li>
+                        {% for chip in lp.chips %}
+                        <li{% if chip.current %} class="is-current"{% endif %}>
+                            <a href="{{ chip.href }}">{{ chip.name }}</a>
+                        </li>
+                        {% endfor %}
                     </ul>
                 </div>
 
                 <div class="hero-cta-block">
                     <div class="cta-row">
-                        <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">Start free Punjabi OCR</a>
+                        <a class="btn btn-primary" id="heroOpenDashboardCta" href="/signup">{{ lp.cta_label }}</a>
                     </div>
                     <p class="cta-microcopy">Free monthly credits. No credit card required.</p>
                 </div>
             </div>
-            <figure class="hero-preview" aria-label="GurmukhiOCR side-by-side Punjabi OCR dashboard preview">
-                <img class="hero-preview-dark" src="{{ url_for('static', filename='dashboard_dark.png') }}" width="960" height="720" loading="eager" decoding="async" fetchpriority="high" alt="GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in dark mode">
-                <img class="hero-preview-light" src="{{ url_for('static', filename='dashboard_light.png') }}" width="960" height="720" loading="lazy" decoding="async" alt="GurmukhiOCR dashboard showing Punjabi OCR text beside a scanned PDF page in light mode">
+            <figure class="hero-preview" aria-label="{{ lp.preview_aria }}">
+                <img class="hero-preview-dark" src="{{ url_for('static', filename='dashboard_dark.png') }}" width="960" height="720" loading="eager" decoding="async" fetchpriority="high" alt="{{ lp.preview_alt_dark }}">
+                <img class="hero-preview-light" src="{{ url_for('static', filename='dashboard_light.png') }}" width="960" height="720" loading="lazy" decoding="async" alt="{{ lp.preview_alt_light }}">
             </figure>
         </section>
 
         <section class="flow-section" aria-labelledby="flow-heading">
             <div class="flow-section-head">
                 <p class="flow-kicker">How it works</p>
-                <h2 class="flow-title" id="flow-heading">From scanned Punjabi file to editable text</h2>
-                <p class="flow-sub">Upload a PDF or image, run Gurmukhi OCR, refine the Unicode text, and export—without leaving your browser.</p>
+                <h2 class="flow-title" id="flow-heading">{{ lp.flow_title }}</h2>
+                <p class="flow-sub">{{ lp.flow_sub }}</p>
             </div>
             <ol class="flow-steps">
                 <li class="flow-step">
@@ -1072,7 +1080,7 @@
                         </svg>
                     </div>
                     <h3>Upload</h3>
-                    <p>Add a Punjabi PDF or scanned image for document OCR.</p>
+                    <p>{{ lp.flow_upload }}</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1086,7 +1094,7 @@
                         </svg>
                     </div>
                     <h3>OCR</h3>
-                    <p>Google Cloud Vision OCR at <strong>92-99.3% accuracy</strong> on clean printed Gurmukhi—ideal for converting scanned Punjabi books and pages.</p>
+                    <p>{{ lp.flow_ocr_html|safe }}</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1096,7 +1104,7 @@
                         </svg>
                     </div>
                     <h3>Review &amp; edit</h3>
-                    <p>Use the side-by-side editor to check each page and fix editable Unicode Punjabi text where needed.</p>
+                    <p>{{ lp.flow_edit }}</p>
                 </li>
                 <li class="flow-step">
                     <div class="flow-icon" aria-hidden="true">
@@ -1117,7 +1125,7 @@
             <div class="pricing-section-head">
                 <p class="pricing-section-kicker">Plans</p>
                 {% if pricing_page %}
-                <h1 class="pricing-section-title" id="pricing-heading">Pricing for Punjabi OCR credits</h1>
+                <h1 class="pricing-section-title" id="pricing-heading">{{ lp.pricing_title }}</h1>
                 {% else %}
                 <h2 class="pricing-section-title" id="pricing-heading">Simple OCR credits</h2>
                 {% endif %}
@@ -1136,7 +1144,7 @@
                         <li><strong>{{ monthly_free_credit_allowance }} pages or images</strong> free each month</li>
                         <li>Full OCR quality on supported files (Image or PDF)</li>
                         <li>Full capabilities of our side-by-side editor</li>
-                        <li>Gurmukhi, English and all languages supported by Google Cloud Vision, detected automatically OCR'd</li>
+                        <li>{{ lp.free_langs_bullet }}</li>
                         <li>Compiled full text exported as .txt file</li>
                     </ul>
                 </article>
